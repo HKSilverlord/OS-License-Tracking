@@ -27,7 +27,7 @@ function App() {
   
   const [session, setSession] = useState<any>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [currentPeriod, setCurrentPeriod] = useState('2024-H2'); // Default to data period
+  const [currentPeriod, setCurrentPeriod] = useState(''); // Will be set by init
   const [availablePeriods, setAvailablePeriods] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -72,10 +72,8 @@ function App() {
         const periods = await dbService.getPeriods();
         setAvailablePeriods(periods);
         if (periods.length > 0) {
-            // Check if currentPeriod is in availablePeriods, if not set to first
-            if (!periods.includes(currentPeriod)) {
-               setCurrentPeriod(periods[0]);
-            }
+            // Default to the most recent period (first in the list as it's sorted desc)
+            setCurrentPeriod(periods[0]);
         }
     };
     if (session) {
