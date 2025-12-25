@@ -17,6 +17,7 @@ dist-ssr
 *.doc
 *.txt
 *.env
+*.sql
 
 # Editor directories and files
 .vscode/*
@@ -31,5 +32,6 @@ dist-ssr
 
 # Data & DB
 data/
-# db/ is removed from here to allow schema push
+db/*.sql
+os_tracking_app.jsx
 
