@@ -1,7 +1,7 @@
 -- Create a history table to store previous versions of records
-create table public.record_history (
+create table if not exists public.record_history (
   id uuid primary key default gen_random_uuid(),
-  record_id uuid references public.records(id) on delete cascade,
+  record_id uuid references public.monthly_records(id) on delete cascade,
   project_id uuid,
   period_label text,
   year integer,
@@ -14,8 +14,14 @@ create table public.record_history (
 
 -- Enable RLS for history
 alter table public.record_history enable row level security;
-create policy "Enable read access for authenticated users"
-  on public.record_history for select to authenticated using (true);
+
+do $$
+begin
+  if not exists (select 1 from pg_policies where policyname = 'Enable read access for authenticated users') then
+    create policy "Enable read access for authenticated users"
+      on public.record_history for select to authenticated using (true);
+  end if;
+end $$;
 
 -- Create a function to handle the history logging
 create or replace function handle_record_history()
@@ -34,7 +40,12 @@ end;
 $$ language plpgsql;
 
 -- Create the trigger
-create trigger on_record_update
-  after update on public.records
-  for each row
-  execute function handle_record_history();
+do $$
+begin
+  if not exists (select 1 from pg_trigger where tgname = 'on_record_update') then
+    create trigger on_record_update
+      after update on public.monthly_records
+      for each row
+      execute function handle_record_history();
+  end if;
+end $$;

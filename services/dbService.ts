@@ -54,10 +54,19 @@ export const dbService = {
     if (error) throw error;
   },
 
+  async deleteProjects(ids: string[]) {
+    const { error } = await supabase
+      .from('projects')
+      .delete()
+      .in('id', ids);
+
+    if (error) throw error;
+  },
+
   // --- Records ---
   async getRecords(periodLabel: string) {
     const { data, error } = await supabase
-      .from('records')
+      .from('monthly_records')
       .select('*')
       .eq('period_label', periodLabel);
 
@@ -67,7 +76,7 @@ export const dbService = {
 
   async getAllRecords(year: number) {
     const { data, error } = await supabase
-      .from('records')
+      .from('monthly_records')
       .select('*')
       .eq('year', year);
 
@@ -89,8 +98,8 @@ export const dbService = {
     };
 
     const { data, error } = await supabase
-      .from('records')
-      .upsert(payload, { onConflict: 'project_id,year,month' })
+      .from('monthly_records')
+      .upsert(payload, { onConflict: 'project_id,period_label,year,month' })
       .select()
       .single();
 
@@ -102,7 +111,7 @@ export const dbService = {
   async getDashboardStats(year: number) {
     // Fetch records and join with projects to get unit_price
     const { data, error } = await supabase
-      .from('records')
+      .from('monthly_records')
       .select('*, projects(unit_price)')
       .eq('year', year);
 
@@ -110,7 +119,6 @@ export const dbService = {
 
     // Transform to match the expected shape: 
     // { ...record, projects: { unit_price: x } }
-    // Supabase returns projects as an object (singular) because of the FK
     return (data || []).map((r: any) => ({
       ...r,
       projects: {
@@ -122,7 +130,7 @@ export const dbService = {
   async getRecordYears() {
     // Get unique years from records
     const { data, error } = await supabase
-      .from('records')
+      .from('monthly_records')
       .select('year');
     
     if (error) return []; // Return empty on error or handle it
@@ -143,9 +151,13 @@ export const dbService = {
   },
 
   async addPeriod(label: string) {
+    // Need to parse year and half from label "YYYY-HX"
+    const [yearStr, half] = label.split('-');
+    const year = parseInt(yearStr);
+
     const { error } = await supabase
       .from('periods')
-      .insert({ label });
+      .insert({ label, year, half });
       
     if (error && error.code !== '23505') { // Ignore unique violation
       throw error;
@@ -158,27 +170,42 @@ export const dbService = {
   async getSettings() {
     const { data, error } = await supabase
       .from('settings')
-      .select('key, value');
+      .select('*')
+      .eq('label', 'default')
+      .single();
 
-    if (error) return DEFAULT_SETTINGS;
+    if (error || !data) return DEFAULT_SETTINGS;
 
-    const settingsObj: any = { ...DEFAULT_SETTINGS };
-    data?.forEach((item: any) => {
-      settingsObj[item.key] = item.value;
-    });
-
-    return settingsObj;
+    // Map DB columns to app keys
+    return {
+      exchangeRate: data.exchange_rate,
+      licenseComputers: data.license_computers,
+      licensePerComputer: data.license_per_computer
+    };
   },
 
   async saveSettings(settings: any) {
-    // Upsert each setting
-    const promises = Object.keys(settings).map(key => {
-      return supabase
-        .from('settings')
-        .upsert({ key, value: settings[key] });
-    });
+    // First get current to merge
+    const current = await this.getSettings();
+    const merged = { ...current, ...settings };
+    
+    const { data, error } = await supabase
+      .from('settings')
+      .upsert({ 
+        label: 'default',
+        exchange_rate: merged.exchangeRate,
+        license_computers: merged.licenseComputers,
+        license_per_computer: merged.licensePerComputer
+      }, { onConflict: 'label' })
+      .select()
+      .single();
 
-    await Promise.all(promises);
-    return this.getSettings();
+    if (error) throw error;
+    
+    return {
+      exchangeRate: data.exchange_rate,
+      licenseComputers: data.license_computers,
+      licensePerComputer: data.license_per_computer
+    };
   }
 };
