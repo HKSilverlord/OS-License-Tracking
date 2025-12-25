@@ -4,13 +4,14 @@ import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-ro
 import { Auth } from './components/Auth';
 import { Dashboard } from './components/Dashboard';
 import { TrackingView } from './components/TrackingView';
+import { TotalView } from './components/TotalView';
 import { dbService } from './services/dbService';
-import { getCurrentPeriod } from './utils/helpers';
 import { exportToExcel } from './services/exportService';
-import { LayoutDashboard, Table, Plus, LogOut, Download, Menu, X, Search, CalendarPlus, Languages } from 'lucide-react';
+import { LayoutDashboard, Table, Plus, LogOut, Download, Menu, X, Search, CalendarPlus, Languages, BarChart3 } from 'lucide-react';
 import { ProjectStatus } from './types';
 import { DEFAULT_UNIT_PRICE } from './constants';
 import { useLanguage } from './contexts/LanguageContext';
+import { supabase } from './lib/supabase';
 
 function App() {
   const { t, language, toggleLanguage } = useLanguage();
@@ -23,7 +24,8 @@ function App() {
   const nextLanguage: keyof typeof languageLabels = language === 'ja' ? 'en' : language === 'en' ? 'vn' : 'ja';
   const languageLabel = languageLabels[language as keyof typeof languageLabels];
   const languageShort = languageShortMap[language as keyof typeof languageShortMap];
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  
+  const [session, setSession] = useState<any>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [currentPeriod, setCurrentPeriod] = useState('2024-H2'); // Default to data period
   const [availablePeriods, setAvailablePeriods] = useState<string[]>([]);
@@ -50,22 +52,41 @@ function App() {
     { value: 'Other', label: t('project.type.other') },
   ];
 
-  // Init Data
+  // Auth & Init Data
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   useEffect(() => {
     const init = async () => {
         const periods = await dbService.getPeriods();
         setAvailablePeriods(periods);
-        // Force default to 2024-H2 if available to match the seed data
-        if (periods.includes('2024-H2')) {
-            setCurrentPeriod('2024-H2');
-        } else if (periods.length > 0) {
-            setCurrentPeriod(periods[0]);
+        if (periods.length > 0) {
+            // Check if currentPeriod is in availablePeriods, if not set to first
+            if (!periods.includes(currentPeriod)) {
+               setCurrentPeriod(periods[0]);
+            }
         }
     };
-    if (isLoggedIn) {
+    if (session) {
         init();
     }
-  }, [isLoggedIn]);
+  }, [session]);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+  };
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,7 +101,7 @@ function App() {
         software: 'AutoCAD',
         unit_price: DEFAULT_UNIT_PRICE
       });
-      // Force reload to update views
+      // Force reload to update views - consider context or state management for cleaner update
       window.location.reload();
     } catch (err) {
       alert(t('alerts.projectCreateError'));
@@ -91,10 +112,15 @@ function App() {
   const handleCreatePeriod = async (e: React.FormEvent) => {
       e.preventDefault();
       const label = `${newPeriodInput.year}-${newPeriodInput.type}`;
-      const updated = await dbService.addPeriod(label);
-      setAvailablePeriods(updated);
-      setCurrentPeriod(label);
-      setIsPeriodModalOpen(false);
+      try {
+        const updated = await dbService.addPeriod(label);
+        setAvailablePeriods(updated);
+        setCurrentPeriod(label);
+        setIsPeriodModalOpen(false);
+      } catch (e) {
+        console.error(e);
+        alert('Failed to create period');
+      }
   };
 
   const handleExport = async () => {
@@ -115,7 +141,9 @@ function App() {
     }
   };
 
-  if (!isLoggedIn) return <Auth onLogin={() => setIsLoggedIn(true)} />;
+  if (!session) return <Auth />;
+
+  const currentYear = parseInt(currentPeriod.split('-')[0]) || new Date().getFullYear();
 
   return (
     <Router>
@@ -129,18 +157,19 @@ function App() {
           <nav className="flex-1 px-4 space-y-2">
             <NavLink to="/" icon={LayoutDashboard} label={t('nav.dashboard')} />
             <NavLink to="/tracking" icon={Table} label={t('nav.tracking')} />
+            <NavLink to="/total" icon={BarChart3} label={t('nav.totalView', 'Yearly View')} />
           </nav>
           <div className="p-4 border-t border-slate-700">
             <div className="flex items-center mb-4 px-2">
               <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-sm font-bold">
-                A
+                {session.user.email?.charAt(0).toUpperCase()}
               </div>
               <div className="ml-3">
-                <p className="text-sm font-medium truncate w-32">{t('app.adminUser')}</p>
+                <p className="text-sm font-medium truncate w-32">{session.user.email}</p>
               </div>
             </div>
             <button 
-              onClick={() => setIsLoggedIn(false)}
+              onClick={handleSignOut}
               className="flex items-center w-full px-2 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors"
             >
               <LogOut className="w-4 h-4 mr-3" />
@@ -163,7 +192,8 @@ function App() {
              <nav className="space-y-4">
                 <Link to="/" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.dashboard')}</Link>
                 <Link to="/tracking" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.tracking')}</Link>
-                <button onClick={() => setIsLoggedIn(false)} className="block w-full text-left py-3 text-red-400">{t('nav.signOut')}</button>
+                <Link to="/total" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.totalView', 'Yearly View')}</Link>
+                <button onClick={handleSignOut} className="block w-full text-left py-3 text-red-400">{t('nav.signOut')}</button>
              </nav>
           </div>
         )}
@@ -250,6 +280,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/tracking" element={<TrackingView currentPeriodLabel={currentPeriod} searchQuery={searchQuery} />} />
+              <Route path="/total" element={<TotalView currentYear={currentYear} />} />
             </Routes>
           </div>
         </main>

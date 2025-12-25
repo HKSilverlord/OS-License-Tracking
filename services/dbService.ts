@@ -1,197 +1,184 @@
+import { supabase } from '../lib/supabase';
 import { Project, MonthlyRecord } from '../types';
-import { getSeedData } from '../utils/periodData';
-
-// Keys for LocalStorage - Updated to v4 to force new data load
-const STORAGE_KEYS = {
-  PROJECTS: 'os_projects_v4',
-  RECORDS: 'os_records_v4',
-  PERIODS: 'os_periods_v4',
-  SETTINGS: 'os_settings_v4'
-};
 
 const DEFAULT_SETTINGS = {
   exchangeRate: 165,
   licenseComputers: 7,
-  // Rounded per-seat cost from 17,620,000 / 7
   licensePerComputer: 2517143
 };
-
-const SEED_FROM_SPEC = getSeedData();
-
-// Helper to simulate delay for "async" feel
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Initialize LocalStorage if empty
-const initializeData = () => {
-  if (!localStorage.getItem(STORAGE_KEYS.PROJECTS)) {
-    localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(SEED_FROM_SPEC.projects));
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.PERIODS)) {
-    localStorage.setItem(STORAGE_KEYS.PERIODS, JSON.stringify(SEED_FROM_SPEC.periods));
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.RECORDS)) {
-    localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(SEED_FROM_SPEC.records));
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.SETTINGS)) {
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(DEFAULT_SETTINGS));
-  }
-};
-
-initializeData();
 
 export const dbService = {
   // --- Projects ---
   async getProjects() {
-    await delay(150);
-    const data = localStorage.getItem(STORAGE_KEYS.PROJECTS);
-    return data ? JSON.parse(data) as Project[] : [];
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .order('created_at', { ascending: true });
+    
+    if (error) {
+      console.error('Error fetching projects:', error);
+      throw error;
+    }
+    return data as Project[];
   },
 
   async createProject(project: Omit<Project, 'id' | 'created_at'>) {
-    await delay(150);
-    const projects = await this.getProjects();
-    const newProject: Project = {
-      ...project,
-      id: Math.random().toString(36).substr(2, 9),
-      created_at: new Date().toISOString()
-    };
-    projects.push(newProject);
-    localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
-    return newProject;
+    const { data, error } = await supabase
+      .from('projects')
+      .insert(project)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as Project;
   },
 
   async updateProject(id: string, updates: Partial<Project>) {
-    await delay(100);
-    const projects = await this.getProjects();
-    const index = projects.findIndex(p => p.id === id);
-    if (index === -1) throw new Error('Project not found');
-    
-    projects[index] = { ...projects[index], ...updates };
-    localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
-    return projects[index];
+    const { data, error } = await supabase
+      .from('projects')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as Project;
   },
 
   async deleteProject(id: string) {
-    return this.deleteProjects([id]);
-  },
+    const { error } = await supabase
+      .from('projects')
+      .delete()
+      .eq('id', id);
 
-  async deleteProjects(ids: string[]) {
-    if (!ids.length) return;
-    await delay(100);
-
-    // Remove projects
-    const projects = await this.getProjects();
-    const filteredProjects = projects.filter(p => !ids.includes(p.id));
-    localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(filteredProjects));
-
-    // Remove related records
-    const recordData = localStorage.getItem(STORAGE_KEYS.RECORDS);
-    if (recordData) {
-      const allRecords = JSON.parse(recordData) as MonthlyRecord[];
-      const remaining = allRecords.filter(r => !ids.includes(r.project_id));
-      localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(remaining));
-    }
+    if (error) throw error;
   },
 
   // --- Records ---
   async getRecords(periodLabel: string) {
-    await delay(150);
-    const data = localStorage.getItem(STORAGE_KEYS.RECORDS);
-    const allRecords = data ? JSON.parse(data) as MonthlyRecord[] : [];
-    return allRecords.filter(r => r.period_label === periodLabel);
+    const { data, error } = await supabase
+      .from('records')
+      .select('*')
+      .eq('period_label', periodLabel);
+
+    if (error) throw error;
+    return data as MonthlyRecord[];
   },
 
   async getAllRecords(year: number) {
-    await delay(150);
-    const data = localStorage.getItem(STORAGE_KEYS.RECORDS);
-    const allRecords = data ? JSON.parse(data) as MonthlyRecord[] : [];
-    return allRecords.filter(r => r.year === year);
+    const { data, error } = await supabase
+      .from('records')
+      .select('*')
+      .eq('year', year);
+
+    if (error) throw error;
+    return data as MonthlyRecord[];
   },
 
   async upsertRecord(record: Partial<MonthlyRecord> & { project_id: string, year: number, month: number }) {
-    const data = localStorage.getItem(STORAGE_KEYS.RECORDS);
-    let allRecords = data ? JSON.parse(data) as MonthlyRecord[] : [];
+    // Ensure period_label exists
+    const period_label = record.period_label || `${record.year}-${record.month <= 6 ? 'H1' : 'H2'}`;
     
-    const index = allRecords.findIndex(r => 
-      r.project_id === record.project_id && 
-      r.year === record.year && 
-      r.month === record.month &&
-      r.period_label === record.period_label
-    );
+    const payload = {
+      project_id: record.project_id,
+      year: record.year,
+      month: record.month,
+      period_label: period_label,
+      planned_hours: record.planned_hours ?? 0,
+      actual_hours: record.actual_hours ?? 0
+    };
 
-    let resultRecord: MonthlyRecord;
+    const { data, error } = await supabase
+      .from('records')
+      .upsert(payload, { onConflict: 'project_id,year,month' })
+      .select()
+      .single();
 
-    if (index >= 0) {
-      allRecords[index] = { ...allRecords[index], ...record };
-      resultRecord = allRecords[index];
-    } else {
-      resultRecord = {
-        id: Math.random().toString(36).substr(2, 9),
-        project_id: record.project_id,
-        year: record.year,
-        month: record.month,
-        period_label: record.period_label || `${record.year}-${record.month <= 6 ? 'H1' : 'H2'}`,
-        planned_hours: record.planned_hours || 0,
-        actual_hours: record.actual_hours || 0,
-        ...record
-      } as MonthlyRecord;
-      allRecords.push(resultRecord);
-    }
-
-    localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(allRecords));
-    return resultRecord;
+    if (error) throw error;
+    return data as MonthlyRecord;
   },
 
   // --- Dashboard ---
   async getDashboardStats(year: number) {
-    const records = await this.getAllRecords(year);
-    const projects = await this.getProjects();
-    const projectMap = new Map<string, Project>();
-    projects.forEach(p => projectMap.set(p.id, p));
+    // Fetch records and join with projects to get unit_price
+    const { data, error } = await supabase
+      .from('records')
+      .select('*, projects(unit_price)')
+      .eq('year', year);
 
-    return records.map(r => ({
+    if (error) throw error;
+
+    // Transform to match the expected shape: 
+    // { ...record, projects: { unit_price: x } }
+    // Supabase returns projects as an object (singular) because of the FK
+    return (data || []).map((r: any) => ({
       ...r,
       projects: {
-        unit_price: projectMap.get(r.project_id)?.unit_price || 0
+        unit_price: r.projects?.unit_price || 0
       }
     }));
   },
 
   async getRecordYears() {
-    await delay(50);
-    const data = localStorage.getItem(STORAGE_KEYS.RECORDS);
-    const allRecords = data ? JSON.parse(data) as MonthlyRecord[] : [];
-    const years = Array.from(new Set(allRecords.map(r => r.year))).sort((a, b) => b - a);
-    return years;
+    // Get unique years from records
+    const { data, error } = await supabase
+      .from('records')
+      .select('year');
+    
+    if (error) return []; // Return empty on error or handle it
+
+    const years = Array.from(new Set(data?.map((r: any) => r.year) || [])).sort((a: any, b: any) => b - a);
+    return years as number[];
   },
 
   // --- Periods ---
   async getPeriods() {
-    const data = localStorage.getItem(STORAGE_KEYS.PERIODS);
-    return data ? JSON.parse(data) as string[] : SEED_FROM_SPEC.periods;
+    const { data, error } = await supabase
+      .from('periods')
+      .select('label')
+      .order('label', { ascending: false });
+
+    if (error) return [];
+    return data.map((p: any) => p.label);
   },
 
   async addPeriod(label: string) {
-    const periods = await this.getPeriods();
-    if (!periods.includes(label)) {
-      periods.push(label);
-      periods.sort().reverse(); 
-      localStorage.setItem(STORAGE_KEYS.PERIODS, JSON.stringify(periods));
+    const { error } = await supabase
+      .from('periods')
+      .insert({ label });
+      
+    if (error && error.code !== '23505') { // Ignore unique violation
+      throw error;
     }
-    return periods;
+    
+    return this.getPeriods();
   },
 
-  // --- Settings (Exchange Rate) ---
+  // --- Settings ---
   async getSettings() {
-    const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-    const parsed = data ? JSON.parse(data) : {};
-    return { ...DEFAULT_SETTINGS, ...parsed };
+    const { data, error } = await supabase
+      .from('settings')
+      .select('key, value');
+
+    if (error) return DEFAULT_SETTINGS;
+
+    const settingsObj: any = { ...DEFAULT_SETTINGS };
+    data?.forEach((item: any) => {
+      settingsObj[item.key] = item.value;
+    });
+
+    return settingsObj;
   },
 
   async saveSettings(settings: any) {
-    const current = await this.getSettings();
-    const updated = { ...DEFAULT_SETTINGS, ...current, ...settings };
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(updated));
-    return updated;
+    // Upsert each setting
+    const promises = Object.keys(settings).map(key => {
+      return supabase
+        .from('settings')
+        .upsert({ key, value: settings[key] });
+    });
+
+    await Promise.all(promises);
+    return this.getSettings();
   }
 };

@@ -1,11 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../constants';
 
-const url = SUPABASE_URL || 'https://placeholder-project.supabase.co';
-const key = SUPABASE_ANON_KEY || 'placeholder-key';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('Supabase credentials missing. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment.');
 }
 
-export const supabase = createClient(url, key);
+export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '');

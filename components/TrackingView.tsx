@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Project, MonthlyRecord, PeriodType } from '../types';
 import { dbService } from '../services/dbService';
 import { getMonthsForPeriod, formatCurrency } from '../utils/helpers';
@@ -16,19 +15,24 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   const [projects, setProjects] = useState<Project[]>([]);
   const [records, setRecords] = useState<Record<string, MonthlyRecord[]>>({}); // Key: ProjectId
   const [loading, setLoading] = useState(true);
-  const [savingId, setSavingId] = useState<string | null>(null);
+  const [savingStatus, setSavingStatus] = useState<Record<string, boolean>>({}); // Key: `${projectId}-${month}-${field}`
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleting, setDeleting] = useState(false);
+
+  // Debounce refs
+  const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({});
 
   const [yearStr, typeStr] = currentPeriodLabel.split('-');
   const year = parseInt(yearStr);
   const periodType = typeStr as PeriodType;
   const months = useMemo(() => getMonthsForPeriod(year, periodType), [year, periodType]);
+  
   const formatMonthLabel = useCallback((month: number) => {
     if (language === 'ja') return `${month}月`;
     if (language === 'vn') return `Tháng ${month}`;
     return new Date(2000, month - 1).toLocaleString('en-US', { month: 'short' });
   }, [language]);
+
   const filteredProjects = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return projects;
@@ -37,6 +41,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
       p.code.toLowerCase().includes(query)
     );
   }, [projects, searchQuery]);
+
   const allFilteredSelected = filteredProjects.length > 0 && filteredProjects.every(p => selectedIds.includes(p.id));
   const hasSelection = selectedIds.length > 0;
 
@@ -49,7 +54,6 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
       ]);
       setProjects(projectsData);
       
-      // Group records by project ID
       const groupedRecords: Record<string, MonthlyRecord[]> = {};
       recordsData.forEach(r => {
         if (!groupedRecords[r.project_id]) groupedRecords[r.project_id] = [];
@@ -68,7 +72,30 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
     fetchData();
   }, [fetchData]);
 
-  const handleValueChange = async (
+  const saveRecord = async (projectId: string, month: number, field: 'planned_hours' | 'actual_hours', value: number) => {
+    const key = `${projectId}-${month}-${field}`;
+    setSavingStatus(prev => ({ ...prev, [key]: true }));
+    
+    try {
+      await dbService.upsertRecord({
+        project_id: projectId,
+        period_label: currentPeriodLabel,
+        year,
+        month,
+        [field]: value
+      });
+    } catch (err) {
+      console.error("Save failed", err);
+    } finally {
+      setSavingStatus(prev => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+  };
+
+  const handleValueChange = (
     projectId: string, 
     month: number, 
     field: 'planned_hours' | 'actual_hours', 
@@ -97,20 +124,16 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
       return { ...prev, [projectId]: projectRecords };
     });
 
-    setSavingId(`${projectId}-${month}-${field}`);
-    try {
-      await dbService.upsertRecord({
-        project_id: projectId,
-        period_label: currentPeriodLabel,
-        year,
-        month,
-        [field]: numValue
-      });
-    } catch (err) {
-      console.error("Save failed", err);
-    } finally {
-      setSavingId(null);
+    // Debounce Save
+    const key = `${projectId}-${month}-${field}`;
+    if (debounceTimers.current[key]) {
+      clearTimeout(debounceTimers.current[key]);
     }
+
+    debounceTimers.current[key] = setTimeout(() => {
+      saveRecord(projectId, month, field, numValue);
+      delete debounceTimers.current[key];
+    }, 800); // Autosave after 800ms of inactivity
   };
 
   const toggleSelect = (projectId: string) => {
@@ -158,27 +181,21 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
     return <div className="flex justify-center items-center h-64"><Loader2 className="animate-spin h-8 w-8 text-blue-600"/></div>;
   }
 
-  // Sticky Positioning Constants
-  // Left Columns Widths: Select (16/64px), Code (28/112px), Name (48/192px), Price (24/96px)
+  // Sticky Positioning
   const LEFT_SELECT_WIDTH = 64;
-  const LEFT_1_WIDTH = 112; 
-  const LEFT_2_WIDTH = 192;
-  const LEFT_3_WIDTH = 96;
+  const LEFT_CODE_WIDTH = 112; 
+  const LEFT_NAME_WIDTH = 192;
+  const LEFT_PRICE_WIDTH = 96;
   
-  // Right Columns Widths: Rev Act (28/112px), Rev Plan (28/112px), Hrs Act (24/96px), Hrs Plan (24/96px)
-  const RIGHT_1_WIDTH = 112; 
-  const RIGHT_2_WIDTH = 112;
-  const RIGHT_3_WIDTH = 96;
-  const RIGHT_4_WIDTH = 96;
+  const RIGHT_TOTAL_HRS_WIDTH = 96;
+  const RIGHT_TOTAL_REV_WIDTH = 112;
 
-  // CSS for Sticky Columns
   const stickyLeftClass = "sticky left-0 bg-white z-20 border-r shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]";
   const stickyLeftHeaderClass = "sticky left-0 bg-gray-50 z-30 border-r shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]";
   
   const stickyRightClass = "sticky right-0 bg-white z-20 border-l shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)]";
   const stickyRightHeaderClass = "sticky right-0 bg-gray-50 z-30 border-l shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)]";
 
-  // Header needs higher Z-index than cells
   const stickyHeaderZ = "z-40";
   const stickyCornerZ = "z-50";
 
@@ -209,6 +226,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
             </button>
           </div>
         </div>
+        
         <table className="min-w-max border-separate border-spacing-0">
           <thead className="bg-gray-50 sticky top-0 z-40">
             <tr>
@@ -220,26 +238,24 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                   checked={allFilteredSelected}
                   onChange={toggleSelectAll}
                   disabled={filteredProjects.length === 0}
-                  title={t('tracker.select')}
                 />
               </th>
-              <th scope="col" style={{left: `${LEFT_SELECT_WIDTH}px`, width: `${LEFT_1_WIDTH}px`}} className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>{t('tracker.code')}</th>
-              <th scope="col" style={{left: `${LEFT_SELECT_WIDTH + LEFT_1_WIDTH}px`, width: `${LEFT_2_WIDTH}px`}} className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>{t('tracker.projectName')}</th>
-              <th scope="col" style={{left: `${LEFT_SELECT_WIDTH + LEFT_1_WIDTH + LEFT_2_WIDTH}px`, width: `${LEFT_3_WIDTH}px`}} className={`px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>{t('tracker.unitPrice')}</th>
+              <th scope="col" style={{left: `${LEFT_SELECT_WIDTH}px`, width: `${LEFT_CODE_WIDTH}px`}} className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>{t('tracker.code')}</th>
+              <th scope="col" style={{left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px`}} className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>{t('tracker.projectName')}</th>
+              <th scope="col" style={{left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH + LEFT_NAME_WIDTH}px`, width: `${LEFT_PRICE_WIDTH}px`}} className={`px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>{t('tracker.unitPrice')}</th>
               
+              <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16 border-b border-r bg-gray-50">Type</th>
+
               {/* Scrollable Month Columns */}
               {months.map(m => (
-                <th key={m} scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-32 border-b border-l border-gray-200 ${stickyHeaderZ}`}>
-                  {formatMonthLabel(m)}<br/>
-                  <span className="text-[10px] text-gray-400">{t('tracker.monthSubLabel')}</span>
+                <th key={m} scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-24 border-b border-r border-gray-200 ${stickyHeaderZ}`}>
+                  {formatMonthLabel(m)}
                 </th>
               ))}
 
               {/* Frozen Right Columns (Totals) */}
-              <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider border-l border-b bg-blue-50/90 ${stickyRightHeaderClass} ${stickyCornerZ}`} style={{right: `${RIGHT_1_WIDTH + RIGHT_2_WIDTH + RIGHT_3_WIDTH}px`, width: `${RIGHT_4_WIDTH}px`}}>{t('tracker.totalHrsPlan')}</th>
-              <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider border-l border-b bg-green-50/90 ${stickyRightHeaderClass} ${stickyCornerZ}`} style={{right: `${RIGHT_1_WIDTH + RIGHT_2_WIDTH}px`, width: `${RIGHT_3_WIDTH}px`}}>{t('tracker.totalHrsActual')}</th>
-              <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider border-l border-b bg-blue-50/90 ${stickyRightHeaderClass} ${stickyCornerZ}`} style={{right: `${RIGHT_1_WIDTH}px`, width: `${RIGHT_2_WIDTH}px`}}>{t('tracker.revenuePlan')}</th>
-              <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider border-l border-b bg-green-50/90 ${stickyRightHeaderClass} ${stickyCornerZ}`} style={{right: 0, width: `${RIGHT_1_WIDTH}px`}}>{t('tracker.revenueActual')}</th>
+              <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider border-l border-b bg-gray-100 ${stickyRightHeaderClass} ${stickyCornerZ}`} style={{right: `${RIGHT_TOTAL_REV_WIDTH}px`, width: `${RIGHT_TOTAL_HRS_WIDTH}px`}}>Total Hrs</th>
+              <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider border-l border-b bg-gray-100 ${stickyRightHeaderClass} ${stickyCornerZ}`} style={{right: 0, width: `${RIGHT_TOTAL_REV_WIDTH}px`}}>Revenue</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -251,83 +267,107 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
               const totalActualRev = totalActualHrs * project.unit_price;
 
               return (
-                <tr key={project.id} className="hover:bg-gray-50 group">
-                  {/* Frozen Left Cells */}
-                  <td style={{left: 0, width: `${LEFT_SELECT_WIDTH}px`}} className={`px-3 py-3 whitespace-nowrap text-sm text-gray-500 ${stickyLeftClass}`}>
-                    <div className="flex items-center gap-2">
-                      <input 
-                        type="checkbox" 
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded"
-                        checked={selectedIds.includes(project.id)}
-                        onChange={() => toggleSelect(project.id)}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteProjects([project.id])}
-                        disabled={deleting}
-                        className="text-red-500 hover:text-red-700 disabled:opacity-60"
-                        title={t('tracker.deleteSingle')}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                  <td style={{left: `${LEFT_SELECT_WIDTH}px`, width: `${LEFT_1_WIDTH}px`}} className={`px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900 ${stickyLeftClass}`}>{project.code}</td>
-                  <td style={{left: `${LEFT_SELECT_WIDTH + LEFT_1_WIDTH}px`, width: `${LEFT_2_WIDTH}px`}} className={`px-3 py-4 whitespace-nowrap text-sm text-gray-500 ${stickyLeftClass}`} title={project.name}>
-                      <div className="truncate w-40">{project.name}</div>
-                  </td>
-                  <td style={{left: `${LEFT_SELECT_WIDTH + LEFT_1_WIDTH + LEFT_2_WIDTH}px`, width: `${LEFT_3_WIDTH}px`}} className={`px-3 py-4 whitespace-nowrap text-sm text-gray-500 text-center ${stickyLeftClass}`}>{project.unit_price.toLocaleString()}</td>
-                  
-                  {/* Month Cells */}
-                  {months.map(m => {
-                    const record = projRecords.find(r => r.month === m);
-                    const plan = record?.planned_hours ?? 0;
-                    const actual = record?.actual_hours ?? 0;
-                    const isSavingP = savingId === `${project.id}-${m}-planned_hours`;
-                    const isSavingA = savingId === `${project.id}-${m}-actual_hours`;
+                <React.Fragment key={project.id}>
+                  {/* ROW 1: Plan */}
+                  <tr className="hover:bg-gray-50 group">
+                    <td rowSpan={2} style={{left: 0, width: `${LEFT_SELECT_WIDTH}px`}} className={`px-3 py-3 text-center ${stickyLeftClass} align-top`}>
+                      <div className="flex items-center justify-center h-full gap-2">
+                         <input 
+                            type="checkbox" 
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded"
+                            checked={selectedIds.includes(project.id)}
+                            onChange={() => toggleSelect(project.id)}
+                         />
+                         <button
+                            type="button"
+                            onClick={() => handleDeleteProjects([project.id])}
+                            disabled={deleting}
+                            className="text-red-500 hover:text-red-700"
+                         >
+                            <Trash2 className="w-4 h-4" />
+                         </button>
+                      </div>
+                    </td>
+                    <td rowSpan={2} style={{left: `${LEFT_SELECT_WIDTH}px`, width: `${LEFT_CODE_WIDTH}px`}} className={`px-3 py-3 text-sm font-medium text-gray-900 ${stickyLeftClass} align-top`}>
+                       {project.code}
+                    </td>
+                    <td rowSpan={2} style={{left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px`}} className={`px-3 py-3 text-sm text-gray-500 ${stickyLeftClass} align-top`}>
+                       <div className="truncate w-44" title={project.name}>{project.name}</div>
+                    </td>
+                    <td rowSpan={2} style={{left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH + LEFT_NAME_WIDTH}px`, width: `${LEFT_PRICE_WIDTH}px`}} className={`px-3 py-3 text-sm text-gray-500 text-center ${stickyLeftClass} align-top`}>
+                       {project.unit_price.toLocaleString()}
+                    </td>
+                    
+                    {/* Plan Label */}
+                    <td className="px-2 py-2 text-xs font-semibold text-gray-500 text-center border-r border-b bg-slate-50">
+                      {t('tracker.planShort', 'Plan')}
+                    </td>
 
-                    return (
-                      <td key={m} className="px-1 py-2 whitespace-nowrap border-l border-gray-100 align-middle">
-                        <div className="flex space-x-1">
-                          <div className="relative flex-1">
-                             <input 
+                    {/* Plan Inputs */}
+                    {months.map(m => {
+                      const record = projRecords.find(r => r.month === m);
+                      const plan = record?.planned_hours ?? 0;
+                      const isSaving = savingStatus[`${project.id}-${m}-planned_hours`];
+
+                      return (
+                        <td key={`p-${m}`} className="px-1 py-1 border-r border-b relative">
+                           <input 
                               type="number"
-                              className="w-full text-xs border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500 text-right px-1 py-1 bg-blue-50/30 focus:bg-white transition-colors"
+                              className="w-full text-xs border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500 text-right px-1 py-1 bg-white focus:bg-blue-50 transition-colors"
                               value={plan === 0 ? '' : plan}
                               placeholder="-"
                               onChange={(e) => handleValueChange(project.id, m, 'planned_hours', e.target.value)}
-                            />
-                            {isSavingP && <Save className="w-2 h-2 absolute top-1 right-1 text-blue-500 animate-pulse" />}
-                          </div>
-                          <div className="relative flex-1">
-                            <input 
-                              type="number" 
-                              className={`w-full text-xs border-gray-300 rounded focus:ring-green-500 focus:border-green-500 text-right px-1 py-1 transition-colors ${actual > 0 ? 'bg-green-50 font-medium border-green-200' : 'bg-white'}`}
-                              value={actual === 0 ? '' : actual}
-                              placeholder="-"
-                              onChange={(e) => handleValueChange(project.id, m, 'actual_hours', e.target.value)}
-                            />
-                             {isSavingA && <Save className="w-2 h-2 absolute top-1 right-1 text-green-500 animate-pulse" />}
-                          </div>
-                        </div>
-                      </td>
-                    );
-                  })}
+                           />
+                           {isSaving && <Save className="w-2 h-2 absolute top-1 right-1 text-blue-500 animate-pulse" />}
+                        </td>
+                      );
+                    })}
 
-                  {/* Frozen Right Cells (Totals) */}
-                  <td style={{right: `${RIGHT_1_WIDTH + RIGHT_2_WIDTH + RIGHT_3_WIDTH}px`}} className={`px-2 py-4 whitespace-nowrap text-sm font-medium text-gray-600 text-right bg-blue-50/50 ${stickyRightClass}`}>
-                      {totalPlannedHrs > 0 ? totalPlannedHrs.toLocaleString() : '-'}
-                  </td>
-                  <td style={{right: `${RIGHT_1_WIDTH + RIGHT_2_WIDTH}px`}} className={`px-2 py-4 whitespace-nowrap text-sm font-bold text-gray-900 text-right bg-green-50/50 ${stickyRightClass}`}>
-                      {totalActualHrs > 0 ? totalActualHrs.toLocaleString() : '-'}
-                  </td>
-                  <td style={{right: `${RIGHT_1_WIDTH}px`}} className={`px-2 py-4 whitespace-nowrap text-xs text-gray-500 text-right bg-blue-50/50 ${stickyRightClass}`}>
-                      {totalPlannedRev > 0 ? formatCurrency(totalPlannedRev) : '-'}
-                  </td>
-                  <td style={{right: 0}} className={`px-2 py-4 whitespace-nowrap text-xs font-bold text-gray-900 text-right bg-green-50/50 ${stickyRightClass}`}>
-                      {totalActualRev > 0 ? formatCurrency(totalActualRev) : '-'}
-                  </td>
-                </tr>
+                    {/* Plan Totals */}
+                    <td style={{right: `${RIGHT_TOTAL_REV_WIDTH}px`}} className={`px-2 py-2 text-xs font-medium text-gray-600 text-right border-l border-b bg-gray-50 ${stickyRightClass}`}>
+                        {totalPlannedHrs > 0 ? totalPlannedHrs.toLocaleString() : '-'}
+                    </td>
+                    <td style={{right: 0}} className={`px-2 py-2 text-xs text-gray-500 text-right border-l border-b bg-gray-50 ${stickyRightClass}`}>
+                        {totalPlannedRev > 0 ? formatCurrency(totalPlannedRev) : '-'}
+                    </td>
+                  </tr>
+
+                  {/* ROW 2: Actual */}
+                  <tr className="hover:bg-gray-50 group">
+                     {/* Actual Label */}
+                     <td className="px-2 py-2 text-xs font-bold text-blue-600 text-center border-r border-b bg-blue-50/30">
+                        {t('tracker.actualShort', 'Actual')}
+                     </td>
+
+                     {/* Actual Inputs */}
+                     {months.map(m => {
+                        const record = projRecords.find(r => r.month === m);
+                        const actual = record?.actual_hours ?? 0;
+                        const isSaving = savingStatus[`${project.id}-${m}-actual_hours`];
+
+                        return (
+                          <td key={`a-${m}`} className="px-1 py-1 border-r border-b relative">
+                             <input 
+                                type="number"
+                                className={`w-full text-xs border-gray-300 rounded focus:ring-green-500 focus:border-green-500 text-right px-1 py-1 transition-colors ${actual > 0 ? 'bg-green-50 font-medium text-green-700' : 'bg-white'}`}
+                                value={actual === 0 ? '' : actual}
+                                placeholder="-"
+                                onChange={(e) => handleValueChange(project.id, m, 'actual_hours', e.target.value)}
+                             />
+                             {isSaving && <Save className="w-2 h-2 absolute top-1 right-1 text-green-500 animate-pulse" />}
+                          </td>
+                        );
+                     })}
+
+                     {/* Actual Totals */}
+                     <td style={{right: `${RIGHT_TOTAL_REV_WIDTH}px`}} className={`px-2 py-2 text-xs font-bold text-gray-900 text-right border-l border-b bg-green-50/30 ${stickyRightClass}`}>
+                        {totalActualHrs > 0 ? totalActualHrs.toLocaleString() : '-'}
+                     </td>
+                     <td style={{right: 0}} className={`px-2 py-2 text-xs font-bold text-gray-900 text-right border-l border-b bg-green-50/30 ${stickyRightClass}`}>
+                        {totalActualRev > 0 ? formatCurrency(totalActualRev) : '-'}
+                     </td>
+                  </tr>
+                </React.Fragment>
               );
             })}
           </tbody>

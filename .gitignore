@@ -11,6 +11,12 @@ node_modules
 dist
 dist-ssr
 *.local
+*.xlsx
+*.csv
+*.docx
+*.doc
+*.txt
+*.env
 
 # Editor directories and files
 .vscode/*
@@ -22,3 +28,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Data & DB
+data/
+# db/ is removed from here to allow schema push
+

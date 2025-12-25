@@ -4,7 +4,6 @@ import { formatCurrency } from '../utils/helpers';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Area, Line } from 'recharts';
 import { Loader2, TrendingUp, DollarSign, Clock, Calculator } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { getAvailableYears, getYearHours } from '../utils/periodData';
 import { DEFAULT_UNIT_PRICE } from '../constants';
 
 export const Dashboard: React.FC = () => {
@@ -21,13 +20,21 @@ export const Dashboard: React.FC = () => {
   const actualShort = t('tracker.actualShort', 'Actual');
 
   useEffect(() => {
-    const years = getAvailableYears();
-    setAvailableYears(years);
-    if (years.length > 0) {
-      setSelectedYear(years[0]);
-    } else {
-      setLoading(false);
-    }
+    const loadYears = async () => {
+      try {
+        const years = await dbService.getRecordYears();
+        setAvailableYears(years);
+        if (years.length > 0) {
+          setSelectedYear(years[0]);
+        } else {
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Failed to load years', error);
+        setLoading(false);
+      }
+    };
+    loadYears();
   }, []);
 
   useEffect(() => {
@@ -39,11 +46,29 @@ export const Dashboard: React.FC = () => {
         if (typeof settings.licenseComputers === 'number') setLicenseComputers(settings.licenseComputers);
         if (typeof settings.licensePerComputer === 'number') setLicensePerComputer(settings.licensePerComputer);
 
-        const { monthly } = getYearHours(selectedYear);
-        const monthlyData = monthly.map((m, idx) => ({
-          ...m,
-          name: new Date(selectedYear, idx).toLocaleString('ja-JP', { month: 'short' }),
+        const records = await dbService.getDashboardStats(selectedYear);
+        
+        // Aggregate by month
+        const monthlyData = Array.from({ length: 12 }, (_, i) => ({
+          month: i + 1,
+          name: new Date(selectedYear, i).toLocaleString('ja-JP', { month: 'short' }),
+          plannedHours: 0,
+          actualHours: 0,
+          plannedRevenue: 0,
+          actualRevenue: 0,
         }));
+
+        records.forEach((r: any) => {
+           if (r.month >= 1 && r.month <= 12) {
+             const target = monthlyData[r.month - 1];
+             target.plannedHours += Number(r.planned_hours) || 0;
+             target.actualHours += Number(r.actual_hours) || 0;
+             const price = r.projects?.unit_price || DEFAULT_UNIT_PRICE;
+             target.plannedRevenue += (Number(r.planned_hours) || 0) * price;
+             target.actualRevenue += (Number(r.actual_hours) || 0) * price;
+           }
+        });
+
         setStats(monthlyData);
 
         let accPlan = 0;
@@ -85,7 +110,7 @@ export const Dashboard: React.FC = () => {
     return <div className="flex justify-center p-12"><Loader2 className="animate-spin text-blue-600" /></div>;
   }
 
-  if (availableYears.length === 0 || selectedYear === null) {
+  if (availableYears.length === 0 && !loading) {
     return (
       <div className="h-full flex items-center justify-center bg-slate-50">
         <div className="bg-white shadow rounded-lg p-6 text-center">
