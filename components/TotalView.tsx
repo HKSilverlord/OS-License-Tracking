@@ -86,6 +86,25 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     return data;
   }, [projects, records, currentYear]);
 
+  // Calculate unified Y-axis maximum value
+  const yAxisMax = useMemo(() => {
+    if (chartData.length === 0) return 100;
+
+    const maxMonthly = Math.max(
+      ...chartData.map(d => Math.max(d.plan, d.actual)),
+      0
+    );
+    const maxAccumulated = Math.max(
+      ...chartData.map(d => Math.max(d.accPlan, d.accActual)),
+      0
+    );
+
+    const overallMax = Math.max(maxMonthly, maxAccumulated);
+
+    // Add 10% padding to the top for better visualization
+    return Math.ceil(overallMax * 1.1);
+  }, [chartData]);
+
   if (loading) {
     return <div className="flex justify-center items-center h-64"><Loader2 className="animate-spin h-8 w-8 text-blue-600"/></div>;
   }
@@ -97,25 +116,25 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
       <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 h-96 flex flex-col shrink-0">
          <h3 className="text-md font-bold text-slate-700 mb-2 flex items-center">
             <TrendingUp className="w-4 h-4 mr-2 text-blue-600" />
-            {t('totalView.chartTitle', `Yearly Overview - ${currentYear}`)}
+            {t('totalView.chartTitle')} - {currentYear}
          </h3>
          <div className="flex-1 min-h-0">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="name" fontSize={12} />
-                <YAxis yAxisId="left" orientation="left" fontSize={11} label={{ value: 'Monthly Hours', angle: -90, position: 'insideLeft' }} />
-                <YAxis yAxisId="right" orientation="right" fontSize={11} label={{ value: 'Accumulated', angle: 90, position: 'insideRight' }} />
+                <YAxis yAxisId="left" orientation="left" fontSize={11} domain={[0, yAxisMax]} label={{ value: t('totalView.axis.monthlyHours'), angle: -90, position: 'insideLeft' }} />
+                <YAxis yAxisId="right" orientation="right" fontSize={11} domain={[0, yAxisMax]} label={{ value: t('totalView.axis.accumulated'), angle: 90, position: 'insideRight' }} />
                 <Tooltip />
                 <Legend />
-                <Bar yAxisId="left" dataKey="plan" name={t('tracker.planShort', 'Plan')} fill="#94a3b8" radius={[4, 4, 0, 0]}>
+                <Bar yAxisId="left" dataKey="plan" name={t('tracker.planShort')} fill="#94a3b8" radius={[4, 4, 0, 0]}>
                    <LabelList dataKey="plan" position="top" fontSize={10} formatter={(val:number) => val > 0 ? val : ''} />
                 </Bar>
-                <Bar yAxisId="left" dataKey="actual" name={t('tracker.actualShort', 'Actual')} fill="#3b82f6" radius={[4, 4, 0, 0]}>
+                <Bar yAxisId="left" dataKey="actual" name={t('tracker.actualShort')} fill="#3b82f6" radius={[4, 4, 0, 0]}>
                    <LabelList dataKey="actual" position="top" fontSize={10} formatter={(val:number) => val > 0 ? val : ''} />
                 </Bar>
-                <Line yAxisId="right" type="monotone" dataKey="accPlan" name={t('dashboard.chart.accPlan', 'Acc. Plan')} stroke="#64748b" strokeDasharray="5 5" dot={false} strokeWidth={2} />
-                <Line yAxisId="right" type="monotone" dataKey="accActual" name={t('dashboard.chart.accActual', 'Acc. Actual')} stroke="#10b981" strokeWidth={2}>
+                <Line yAxisId="right" type="monotone" dataKey="accPlan" name={t('dashboard.chart.accPlan')} stroke="#64748b" strokeDasharray="5 5" dot={false} strokeWidth={2} />
+                <Line yAxisId="right" type="monotone" dataKey="accActual" name={t('dashboard.chart.accActual')} stroke="#10b981" strokeWidth={2}>
                     <LabelList dataKey="accActual" position="top" offset={10} fontSize={10} />
                 </Line>
               </ComposedChart>
@@ -135,7 +154,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                 {t('tracker.projectName')}
               </th>
               <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r`}>
-                Type
+                {t('totalView.tableHeader.type')}
               </th>
               
               {months.map(m => (
@@ -144,7 +163,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                 </th>
               ))}
                <th scope="col" className={`px-2 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider border-b border-l bg-gray-100`}>
-                 Total
+                 {t('totalView.tableHeader.total')}
                </th>
             </tr>
           </thead>

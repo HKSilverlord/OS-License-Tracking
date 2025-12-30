@@ -155,7 +155,7 @@ function App() {
           <nav className="flex-1 px-4 space-y-2">
             <NavLink to="/" icon={LayoutDashboard} label={t('nav.dashboard')} />
             <NavLink to="/tracking" icon={Table} label={t('nav.tracking')} />
-            <NavLink to="/total" icon={BarChart3} label={t('nav.totalView', 'Yearly View')} />
+            <NavLink to="/total" icon={BarChart3} label={t('nav.totalView')} />
           </nav>
           <div className="p-4 border-t border-slate-700">
             <div className="flex items-center mb-4 px-2">
@@ -190,7 +190,7 @@ function App() {
              <nav className="space-y-4">
                 <Link to="/" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.dashboard')}</Link>
                 <Link to="/tracking" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.tracking')}</Link>
-                <Link to="/total" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.totalView', 'Yearly View')}</Link>
+                <Link to="/total" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.totalView')}</Link>
                 <button onClick={handleSignOut} className="block w-full text-left py-3 text-red-400">{t('nav.signOut')}</button>
              </nav>
           </div>
