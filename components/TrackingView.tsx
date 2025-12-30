@@ -227,7 +227,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
           </div>
         </div>
         
-        <table className="min-w-max border-separate border-spacing-0">
+        <table className="w-full min-w-max border-separate border-spacing-0">
           <thead className="bg-gray-50 sticky top-0 z-40">
             <tr>
               {/* Frozen Left Columns */}
@@ -300,7 +300,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                     
                     {/* Plan Label */}
                     <td className="px-2 py-2 text-xs font-semibold text-gray-500 text-center border-r border-b bg-slate-50">
-                      {t('tracker.planShort', 'Plan')}
+                      {t('tracker.planShort')}
                     </td>
 
                     {/* Plan Inputs */}
@@ -336,7 +336,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                   <tr className="hover:bg-gray-50 group">
                      {/* Actual Label */}
                      <td className="px-2 py-2 text-xs font-bold text-blue-600 text-center border-r border-b bg-blue-50/30">
-                        {t('tracker.actualShort', 'Actual')}
+                        {t('tracker.actualShort')}
                      </td>
 
                      {/* Actual Inputs */}

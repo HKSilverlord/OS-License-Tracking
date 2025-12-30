@@ -144,7 +144,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
 
       {/* 2. Table Section */}
       <div className="flex-1 min-h-0 w-full overflow-auto border rounded-lg shadow-sm bg-white relative isolate custom-scrollbar">
-        <table className="min-w-max border-separate border-spacing-0">
+        <table className="w-full min-w-max border-separate border-spacing-0">
           <thead className="bg-gray-50 sticky top-0 z-40">
             <tr>
               <th scope="col" style={{left: 0, width: `${LEFT_CODE_WIDTH}px`}} className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
@@ -189,7 +189,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                        <div className="truncate w-44" title={project.name}>{project.name}</div>
                     </td>
                     <td className="px-2 py-2 text-xs font-semibold text-gray-500 text-center border-r border-b bg-slate-50">
-                      {t('tracker.planShort', 'Plan')}
+                      {t('tracker.planShort')}
                     </td>
                     {monthlyData.map((d, idx) => (
                       <td key={`p-${idx}`} className="px-1 py-2 text-xs text-right text-gray-500 border-r border-b">
@@ -204,7 +204,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                   {/* Actual Row */}
                   <tr className="bg-white hover:bg-gray-50">
                     <td className="px-2 py-2 text-xs font-bold text-blue-600 text-center border-r border-b bg-blue-50/30">
-                      {t('tracker.actualShort', 'Actual')}
+                      {t('tracker.actualShort')}
                     </td>
                     {monthlyData.map((d, idx) => (
                       <td key={`a-${idx}`} className={`px-1 py-2 text-xs text-right border-r border-b font-medium ${d.actual > 0 ? 'text-blue-700 bg-blue-50/10' : 'text-gray-400'}`}>
