@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { Project, MonthlyRecord } from '../types';
+import { Project, MonthlyRecord, DashboardRecord, Settings } from '../types';
 
 const DEFAULT_SETTINGS = {
   exchangeRate: 165,
@@ -117,9 +117,9 @@ export const dbService = {
 
     if (error) throw error;
 
-    // Transform to match the expected shape: 
+    // Transform to match the expected shape:
     // { ...record, projects: { unit_price: x } }
-    return (data || []).map((r: any) => ({
+    return (data || []).map((r: DashboardRecord) => ({
       ...r,
       projects: {
         unit_price: r.projects?.unit_price || 0
@@ -132,10 +132,10 @@ export const dbService = {
     const { data, error } = await supabase
       .from('monthly_records')
       .select('year');
-    
+
     if (error) return []; // Return empty on error or handle it
 
-    const years = Array.from(new Set(data?.map((r: any) => r.year) || [])).sort((a: any, b: any) => b - a);
+    const years = Array.from(new Set(data?.map((r: { year: number }) => r.year) || [])).sort((a, b) => b - a);
     return years as number[];
   },
 

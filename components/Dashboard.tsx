@@ -1,21 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { dbService } from '../services/dbService';
 import { formatCurrency } from '../utils/helpers';
+import { exportChartToPNG, generateChartFilename } from '../utils/chartExport';
+import { MonthlyStats, AccumulatedStats } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Area, Line } from 'recharts';
-import { Loader2, TrendingUp, DollarSign, Clock, Calculator } from 'lucide-react';
+import { Loader2, TrendingUp, DollarSign, Clock, Calculator, Download } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DEFAULT_UNIT_PRICE } from '../constants';
 
 export const Dashboard: React.FC = () => {
-  const [stats, setStats] = useState<any[]>([]);
-  const [accumulatedStats, setAccumulatedStats] = useState<any[]>([]);
+  const [stats, setStats] = useState<MonthlyStats[]>([]);
+  const [accumulatedStats, setAccumulatedStats] = useState<AccumulatedStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [exchangeRate, setExchangeRate] = useState(172);
   const [licenseComputers, setLicenseComputers] = useState(7);
   const [licensePerComputer, setLicensePerComputer] = useState(2517143);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const planShort = t('tracker.planShort', 'Plan');
   const actualShort = t('tracker.actualShort', 'Actual');
 
@@ -47,11 +49,12 @@ export const Dashboard: React.FC = () => {
         if (typeof settings.licensePerComputer === 'number') setLicensePerComputer(settings.licensePerComputer);
 
         const records = await dbService.getDashboardStats(selectedYear);
-        
+
         // Aggregate by month
+        const locale = language === 'ja' ? 'ja-JP' : language === 'vn' ? 'vi-VN' : 'en-US';
         const monthlyData = Array.from({ length: 12 }, (_, i) => ({
           month: i + 1,
-          name: new Date(selectedYear, i).toLocaleString('ja-JP', { month: 'short' }),
+          name: new Date(selectedYear, i).toLocaleString(locale, { month: 'short' }),
           plannedHours: 0,
           actualHours: 0,
           plannedRevenue: 0,
@@ -86,7 +89,7 @@ export const Dashboard: React.FC = () => {
       }
     };
     load();
-  }, [selectedYear]);
+  }, [selectedYear, language]);
 
   const handleRateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value) || 0;
@@ -388,11 +391,21 @@ export const Dashboard: React.FC = () => {
         {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
            <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
-              <h3 className="text-md font-bold text-slate-700 mb-4 flex items-center">
-                <TrendingUp className="w-4 h-4 mr-2 text-blue-500" />
-                {t('dashboard.charts.monthly', 'Monthly Revenue (Plan vs Actual)')}
-              </h3>
-              <div className="h-72">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-md font-bold text-slate-700 flex items-center">
+                  <TrendingUp className="w-4 h-4 mr-2 text-blue-500" />
+                  {t('dashboard.charts.monthly', 'Monthly Revenue (Plan vs Actual)')}
+                </h3>
+                <button
+                  onClick={() => exportChartToPNG('dashboard-monthly-chart', generateChartFilename(`monthly_revenue_${selectedYear}`))}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  title={t('buttons.exportChart', 'Export Chart')}
+                >
+                  <Download className="w-4 h-4" />
+                  PNG
+                </button>
+              </div>
+              <div id="dashboard-monthly-chart" className="h-72">
                  <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={stats}>
                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -408,11 +421,21 @@ export const Dashboard: React.FC = () => {
            </div>
 
            <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
-              <h3 className="text-md font-bold text-slate-700 mb-4 flex items-center">
-                <TrendingUp className="w-4 h-4 mr-2 text-green-500" />
-                {t('dashboard.charts.cumulative', 'Cumulative Revenue (Plan vs Actual)')}
-              </h3>
-              <div className="h-72">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-md font-bold text-slate-700 flex items-center">
+                  <TrendingUp className="w-4 h-4 mr-2 text-green-500" />
+                  {t('dashboard.charts.cumulative', 'Cumulative Revenue (Plan vs Actual)')}
+                </h3>
+                <button
+                  onClick={() => exportChartToPNG('dashboard-cumulative-chart', generateChartFilename(`cumulative_revenue_${selectedYear}`))}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  title={t('buttons.exportChart', 'Export Chart')}
+                >
+                  <Download className="w-4 h-4" />
+                  PNG
+                </button>
+              </div>
+              <div id="dashboard-cumulative-chart" className="h-72">
                  <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={accumulatedStats}>
                        <defs>

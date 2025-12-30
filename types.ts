@@ -43,3 +43,37 @@ export interface KPIMetrics {
   achievementRate: number;
   activeProjects: number;
 }
+
+// Dashboard specific types
+export interface MonthlyStats {
+  month: number;
+  name: string;
+  plannedHours: number;
+  actualHours: number;
+  plannedRevenue: number;
+  actualRevenue: number;
+}
+
+export interface AccumulatedStats {
+  month: string;
+  accPlannedRevenue: number;
+  accActualRevenue: number;
+}
+
+export interface DashboardRecord extends MonthlyRecord {
+  projects: {
+    unit_price: number;
+  } | null;
+}
+
+// Utility types
+export type PeriodLabel = `${number}-${'H1' | 'H2'}`;
+export type SupportedLanguage = 'ja' | 'en' | 'vn';
+
+// Settings interface
+export interface Settings {
+  label: string;
+  exchange_rate: number;
+  license_computers: number;
+  license_per_computer: number;
+}

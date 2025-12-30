@@ -26,9 +26,10 @@ export const Auth: React.FC = () => {
         throw error;
       }
       // Auth state change in App.tsx will handle the redirect/view switch
-    } catch (err: any) {
-      console.error('Login error:', err);
-      setError(err.message || 'Failed to login');
+    } catch (err) {
+      const error = err as Error;
+      console.error('Login error:', error);
+      setError(error.message || 'Failed to login');
     } finally {
       setLoading(false);
     }

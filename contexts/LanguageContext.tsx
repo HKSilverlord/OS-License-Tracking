@@ -105,6 +105,7 @@ const translations: Record<SupportedLanguage, Record<string, string>> = {
     'project.type.software': 'ソフトウェア開発',
     'project.type.translation': '翻訳',
     'project.type.other': 'その他',
+    'alerts.projectCreated': 'プロジェクトが正常に作成されました',
     'alerts.projectCreateError': 'プロジェクトの作成に失敗しました',
     'alerts.exportFailed': 'エクスポートに失敗しました',
     'tracker.select': 'Select',
@@ -127,6 +128,10 @@ const translations: Record<SupportedLanguage, Record<string, string>> = {
     'totalView.axis.accumulated': '累計',
     'totalView.tableHeader.type': '種別',
     'totalView.tableHeader.total': '合計',
+    'totalView.tableHeader.revenue': '売上金額(円)',
+    'totalView.tableHeader.title': '年間データテーブル',
+    'buttons.exportChart': 'チャートをエクスポート',
+    'buttons.exportTable': 'テーブルをエクスポート',
   },
   en: {
     'app.title': 'OS Manager',
@@ -219,6 +224,7 @@ const translations: Record<SupportedLanguage, Record<string, string>> = {
     'project.type.software': 'Software Development',
     'project.type.translation': 'Translation',
     'project.type.other': 'Other',
+    'alerts.projectCreated': 'Project created successfully!',
     'alerts.projectCreateError': 'Error creating project',
     'alerts.exportFailed': 'Export failed',
     'tracker.select': 'Select',
@@ -241,6 +247,10 @@ const translations: Record<SupportedLanguage, Record<string, string>> = {
     'totalView.axis.accumulated': 'Accumulated',
     'totalView.tableHeader.type': 'Type',
     'totalView.tableHeader.total': 'Total',
+    'totalView.tableHeader.revenue': 'Revenue (JPY)',
+    'totalView.tableHeader.title': 'Yearly Data Table',
+    'buttons.exportChart': 'Export Chart',
+    'buttons.exportTable': 'Export Table',
   },
   vn: {
     'app.title': 'Hệ thống quản lý OS',
@@ -333,6 +343,7 @@ const translations: Record<SupportedLanguage, Record<string, string>> = {
     'project.type.software': 'Phát triển phần mềm',
     'project.type.translation': 'Biên dịch',
     'project.type.other': 'Khác',
+    'alerts.projectCreated': 'Dự án đã được tạo thành công!',
     'alerts.projectCreateError': 'Lỗi khi tạo dự án',
     'alerts.exportFailed': 'Xuất dữ liệu thất bại',
     'tracker.select': 'Chọn',
@@ -355,6 +366,10 @@ const translations: Record<SupportedLanguage, Record<string, string>> = {
     'totalView.axis.accumulated': 'Lũy kế',
     'totalView.tableHeader.type': 'Loại',
     'totalView.tableHeader.total': 'Tổng',
+    'totalView.tableHeader.revenue': 'Doanh thu (JPY)',
+    'totalView.tableHeader.title': 'Bảng dữ liệu hàng năm',
+    'buttons.exportChart': 'Xuất biểu đồ',
+    'buttons.exportTable': 'Xuất bảng',
   }
 };
 

@@ -2,7 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Project, MonthlyRecord } from '../types';
 import { dbService } from '../services/dbService';
 import { formatCurrency } from '../utils/helpers';
-import { Loader2, TrendingUp } from 'lucide-react';
+import { TABLE_COLUMN_WIDTHS, STICKY_CLASSES } from '../utils/tableStyles';
+import { exportChartToPNG, generateChartFilename } from '../utils/chartExport';
+import { exportTableToCSV, generateCSVFilename } from '../utils/csvExport';
+import { Loader2, TrendingUp, Download, FileDown } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList } from 'recharts';
 
@@ -18,13 +21,10 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
 
   // Constants for layout
   const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-  const LEFT_CODE_WIDTH = 100;
-  const LEFT_NAME_WIDTH = 200;
-  
-  const stickyLeftClass = "sticky left-0 bg-white z-20 border-r shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]";
-  const stickyLeftHeaderClass = "sticky left-0 bg-gray-50 z-30 border-r shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]";
-  const stickyHeaderZ = "z-40";
-  const stickyCornerZ = "z-50";
+
+  // Use shared table styling constants
+  const { codeReadOnly: LEFT_CODE_WIDTH, nameReadOnly: LEFT_NAME_WIDTH } = TABLE_COLUMN_WIDTHS;
+  const { leftCell: stickyLeftClass, leftHeader: stickyLeftHeaderClass, header: stickyHeaderZ, corner: stickyCornerZ } = STICKY_CLASSES;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -53,8 +53,9 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
 
   // Chart Data Preparation
   const chartData = useMemo(() => {
+    const locale = language === 'ja' ? 'ja-JP' : language === 'vn' ? 'vi-VN' : 'en-US';
     const data = months.map(m => ({
-      name: new Date(currentYear, m - 1).toLocaleString('en-US', { month: 'short' }),
+      name: new Date(currentYear, m - 1).toLocaleString(locale, { month: 'short' }),
       month: m,
       plan: 0,
       actual: 0,
@@ -84,11 +85,11 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     });
 
     return data;
-  }, [projects, records, currentYear]);
+  }, [projects, records, currentYear, language]);
 
-  // Calculate unified Y-axis maximum value
-  const yAxisMax = useMemo(() => {
-    if (chartData.length === 0) return 100;
+  // Calculate unified Y-axis maximum value with 1500 unit intervals
+  const { yAxisMax, yAxisTicks } = useMemo(() => {
+    if (chartData.length === 0) return { yAxisMax: 1500, yAxisTicks: [0, 1500] };
 
     const maxMonthly = Math.max(
       ...chartData.map(d => Math.max(d.plan, d.actual)),
@@ -101,9 +102,67 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
 
     const overallMax = Math.max(maxMonthly, maxAccumulated);
 
-    // Add 10% padding to the top for better visualization
-    return Math.ceil(overallMax * 1.1);
+    // Round up to nearest 1500 multiple with 10% padding
+    const maxWithPadding = overallMax * 1.1;
+    const roundedMax = Math.ceil(maxWithPadding / 1500) * 1500;
+
+    // Generate ticks at 1500 intervals
+    const ticks = [];
+    for (let i = 0; i <= roundedMax; i += 1500) {
+      ticks.push(i);
+    }
+
+    return { yAxisMax: roundedMax, yAxisTicks: ticks };
   }, [chartData]);
+
+  // CSV Export Function
+  const handleExportCSV = () => {
+    const headers = [
+      t('tracker.code'),
+      t('tracker.projectName'),
+      t('totalView.tableHeader.type'),
+      ...months.map(m => m.toString()),
+      t('totalView.tableHeader.total'),
+      t('totalView.tableHeader.revenue')
+    ];
+
+    const rows: string[][] = [];
+
+    projects.forEach(project => {
+      const projRecords = records[project.id] || [];
+      const monthlyData = months.map(m => {
+        const r = projRecords.find(rec => rec.month === m);
+        return { plan: r?.planned_hours || 0, actual: r?.actual_hours || 0 };
+      });
+
+      const totalPlan = monthlyData.reduce((sum, d) => sum + d.plan, 0);
+      const totalActual = monthlyData.reduce((sum, d) => sum + d.actual, 0);
+      const totalRevenuePlan = totalPlan * (project.unit_price || 0);
+      const totalRevenueActual = totalActual * (project.unit_price || 0);
+
+      // Plan row
+      rows.push([
+        project.code,
+        project.name,
+        t('tracker.planShort'),
+        ...monthlyData.map(d => d.plan > 0 ? d.plan.toString() : '-'),
+        totalPlan > 0 ? totalPlan.toString() : '-',
+        totalRevenuePlan > 0 ? totalRevenuePlan.toString() : '-'
+      ]);
+
+      // Actual row
+      rows.push([
+        project.code,
+        project.name,
+        t('tracker.actualShort'),
+        ...monthlyData.map(d => d.actual > 0 ? d.actual.toString() : '-'),
+        totalActual > 0 ? totalActual.toString() : '-',
+        totalRevenueActual > 0 ? totalRevenueActual.toString() : '-'
+      ]);
+    });
+
+    exportTableToCSV(headers, rows, generateCSVFilename(`yearly_data_${currentYear}`));
+  };
 
   if (loading) {
     return <div className="flex justify-center items-center h-64"><Loader2 className="animate-spin h-8 w-8 text-blue-600"/></div>;
@@ -114,17 +173,27 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
       
       {/* 1. Chart Section */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 h-96 flex flex-col shrink-0">
-         <h3 className="text-md font-bold text-slate-700 mb-2 flex items-center">
-            <TrendingUp className="w-4 h-4 mr-2 text-blue-600" />
-            {t('totalView.chartTitle')} - {currentYear}
-         </h3>
-         <div className="flex-1 min-h-0">
+         <div className="flex items-center justify-between mb-2">
+           <h3 className="text-md font-bold text-slate-700 flex items-center">
+              <TrendingUp className="w-4 h-4 mr-2 text-blue-600" />
+              {t('totalView.chartTitle')} - {currentYear}
+           </h3>
+           <button
+             onClick={() => exportChartToPNG('total-view-chart', generateChartFilename(`yearly_overview_${currentYear}`))}
+             className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+             title={t('buttons.exportChart', 'Export Chart')}
+           >
+             <Download className="w-4 h-4" />
+             PNG
+           </button>
+         </div>
+         <div id="total-view-chart" className="flex-1 min-h-0">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="name" fontSize={12} />
-                <YAxis yAxisId="left" orientation="left" fontSize={11} domain={[0, yAxisMax]} label={{ value: t('totalView.axis.monthlyHours'), angle: -90, position: 'insideLeft' }} />
-                <YAxis yAxisId="right" orientation="right" fontSize={11} domain={[0, yAxisMax]} label={{ value: t('totalView.axis.accumulated'), angle: 90, position: 'insideRight' }} />
+                <YAxis yAxisId="left" orientation="left" fontSize={11} domain={[0, yAxisMax]} ticks={yAxisTicks} label={{ value: t('totalView.axis.monthlyHours'), angle: -90, position: 'insideLeft' }} />
+                <YAxis yAxisId="right" orientation="right" fontSize={11} domain={[0, yAxisMax]} ticks={yAxisTicks} label={{ value: t('totalView.axis.accumulated'), angle: 90, position: 'insideRight' }} />
                 <Tooltip />
                 <Legend />
                 <Bar yAxisId="left" dataKey="plan" name={t('tracker.planShort')} fill="#94a3b8" radius={[4, 4, 0, 0]}>
@@ -143,8 +212,22 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
       </div>
 
       {/* 2. Table Section */}
-      <div className="flex-1 min-h-0 w-full overflow-auto border rounded-lg shadow-sm bg-white relative isolate custom-scrollbar">
-        <table className="w-full min-w-max border-separate border-spacing-0">
+      <div className="flex-1 min-h-0 flex flex-col bg-white rounded-lg shadow-sm border border-slate-200">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-gray-50">
+          <h3 className="text-md font-bold text-slate-700">
+            {t('totalView.tableHeader.title', 'Yearly Data Table')} - {currentYear}
+          </h3>
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center gap-1 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+            title={t('buttons.exportTable', 'Export Table')}
+          >
+            <FileDown className="w-4 h-4" />
+            CSV
+          </button>
+        </div>
+        <div className="flex-1 min-h-0 overflow-auto relative isolate custom-scrollbar">
+          <table className="w-full min-w-max border-separate border-spacing-0">
           <thead className="bg-gray-50 sticky top-0 z-40">
             <tr>
               <th scope="col" style={{left: 0, width: `${LEFT_CODE_WIDTH}px`}} className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
@@ -165,6 +248,9 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                <th scope="col" className={`px-2 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider border-b border-l bg-gray-100`}>
                  {t('totalView.tableHeader.total')}
                </th>
+               <th scope="col" className={`px-2 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider border-b border-l bg-amber-50`}>
+                 {t('totalView.tableHeader.revenue')}
+               </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -177,6 +263,9 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
               
               const totalPlan = monthlyData.reduce((sum, d) => sum + d.plan, 0);
               const totalActual = monthlyData.reduce((sum, d) => sum + d.actual, 0);
+
+              const totalRevenuePlan = totalPlan * (project.unit_price || 0);
+              const totalRevenueActual = totalActual * (project.unit_price || 0);
 
               return (
                 <React.Fragment key={project.id}>
@@ -199,6 +288,9 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                     <td className="px-2 py-2 text-xs font-bold text-gray-700 text-right border-l border-b bg-slate-50">
                        {totalPlan > 0 ? totalPlan.toLocaleString() : '-'}
                     </td>
+                    <td className="px-2 py-2 text-xs font-bold text-amber-700 text-right border-l border-b bg-amber-50/30">
+                       {totalRevenuePlan > 0 ? formatCurrency(totalRevenuePlan) : '-'}
+                    </td>
                   </tr>
                   
                   {/* Actual Row */}
@@ -214,12 +306,16 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                     <td className="px-2 py-2 text-xs font-bold text-blue-700 text-right border-l border-b bg-blue-50/30">
                        {totalActual > 0 ? totalActual.toLocaleString() : '-'}
                     </td>
+                    <td className="px-2 py-2 text-xs font-bold text-emerald-700 text-right border-l border-b bg-emerald-50/30">
+                       {totalRevenueActual > 0 ? formatCurrency(totalRevenueActual) : '-'}
+                    </td>
                   </tr>
                 </React.Fragment>
               );
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

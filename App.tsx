@@ -12,6 +12,7 @@ import { ProjectStatus } from './types';
 import { DEFAULT_UNIT_PRICE } from './constants';
 import { useLanguage } from './contexts/LanguageContext';
 import { supabase } from './lib/supabase';
+import type { Session } from '@supabase/supabase-js';
 
 function App() {
   const { t, language, toggleLanguage } = useLanguage();
@@ -24,8 +25,8 @@ function App() {
   const nextLanguage: keyof typeof languageLabels = language === 'ja' ? 'en' : language === 'en' ? 'vn' : 'ja';
   const languageLabel = languageLabels[language as keyof typeof languageLabels];
   const languageShort = languageShortMap[language as keyof typeof languageShortMap];
-  
-  const [session, setSession] = useState<any>(null);
+
+  const [session, setSession] = useState<Session | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [currentPeriod, setCurrentPeriod] = useState(''); // Will be set by init
   const [availablePeriods, setAvailablePeriods] = useState<string[]>([]);
@@ -99,8 +100,8 @@ function App() {
         software: 'AutoCAD',
         unit_price: DEFAULT_UNIT_PRICE
       });
-      // Force reload to update views - consider context or state management for cleaner update
-      window.location.reload();
+      // Success! Project will appear in TrackingView on next load/navigation
+      alert(t('alerts.projectCreated', 'Project created successfully!'));
     } catch (err) {
       alert(t('alerts.projectCreateError'));
       console.error(err);

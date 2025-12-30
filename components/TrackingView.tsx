@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Project, MonthlyRecord, PeriodType } from '../types';
 import { dbService } from '../services/dbService';
 import { getMonthsForPeriod, formatCurrency } from '../utils/helpers';
+import { TABLE_COLUMN_WIDTHS, STICKY_CLASSES, calculateLeftPosition, calculateRightPosition } from '../utils/tableStyles';
 import { Save, Loader2, Trash2 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
@@ -71,6 +72,21 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Cleanup debounce timers on unmount and period change
+  useEffect(() => {
+    return () => {
+      // Clear all pending timers on unmount
+      Object.values(debounceTimers.current).forEach(timer => clearTimeout(timer));
+      debounceTimers.current = {};
+    };
+  }, []);
+
+  useEffect(() => {
+    // Clear all pending timers when period changes
+    Object.values(debounceTimers.current).forEach(timer => clearTimeout(timer));
+    debounceTimers.current = {};
+  }, [currentPeriodLabel]);
 
   const saveRecord = async (projectId: string, month: number, field: 'planned_hours' | 'actual_hours', value: number) => {
     const key = `${projectId}-${month}-${field}`;
@@ -181,23 +197,10 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
     return <div className="flex justify-center items-center h-64"><Loader2 className="animate-spin h-8 w-8 text-blue-600"/></div>;
   }
 
-  // Sticky Positioning
-  const LEFT_SELECT_WIDTH = 64;
-  const LEFT_CODE_WIDTH = 112; 
-  const LEFT_NAME_WIDTH = 192;
-  const LEFT_PRICE_WIDTH = 96;
-  
-  const RIGHT_TOTAL_HRS_WIDTH = 96;
-  const RIGHT_TOTAL_REV_WIDTH = 112;
+  // Use shared table styling constants
+  const { select: LEFT_SELECT_WIDTH, code: LEFT_CODE_WIDTH, name: LEFT_NAME_WIDTH, price: LEFT_PRICE_WIDTH, totalHrs: RIGHT_TOTAL_HRS_WIDTH, totalRev: RIGHT_TOTAL_REV_WIDTH } = TABLE_COLUMN_WIDTHS;
 
-  const stickyLeftClass = "sticky left-0 bg-white z-20 border-r shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]";
-  const stickyLeftHeaderClass = "sticky left-0 bg-gray-50 z-30 border-r shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]";
-  
-  const stickyRightClass = "sticky right-0 bg-white z-20 border-l shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)]";
-  const stickyRightHeaderClass = "sticky right-0 bg-gray-50 z-30 border-l shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)]";
-
-  const stickyHeaderZ = "z-40";
-  const stickyCornerZ = "z-50";
+  const { leftCell: stickyLeftClass, leftHeader: stickyLeftHeaderClass, rightCell: stickyRightClass, rightHeader: stickyRightHeaderClass, header: stickyHeaderZ, corner: stickyCornerZ } = STICKY_CLASSES;
 
   return (
     <div className="flex flex-col h-full bg-slate-50 p-4 md:p-6 overflow-hidden">
