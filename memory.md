@@ -74,6 +74,40 @@
      - `totalView.tableHeader.revenue` – Revenue column header
      - All keys translated to Japanese, English, and Vietnamese
 
+9. **Chart optimization and SVG export system** (Latest - 2025-12-30):
+   - **Chart Display Improvements**:
+     - Increased chart height from 384px to 600px for square-like, more readable shape
+     - Fixed Y-axis to 0-21,000 range with 1,000 unit intervals (21 tick marks)
+     - Better vertical spacing and data visualization
+
+   - **SVG Export as Primary Format** (Replacing problematic PNG export):
+     - **Why SVG over PNG**: PNG export had dimension detection issues (14x14px bug), canvas rendering problems, and file bloat
+     - Created `exportChartToSVG()` function - simple, reliable, no canvas conversion
+     - Vector format with perfect quality at any size
+     - Transparent background by default
+     - ~50-80KB file size vs ~200-300KB for PNG
+     - Works in browsers, PowerPoint, Figma, Illustrator, etc.
+     - Can be edited in design tools
+
+   - **Multiple Export Options** (`utils/chartExport.ts`):
+     - **Primary: SVG Export** - Green button, vector format, best quality
+     - **Chart Data CSV Export** - Blue "Data" button, exports raw chart data for analysis
+     - **PNG Export** - Available as fallback, uses SVG→Canvas→PNG conversion at 3x scale
+     - All exports include proper filename timestamps
+
+   - **Implementation Details**:
+     - `inlineAllStyles()` - Recursively copies all computed CSS styles to inline styles for standalone SVG rendering
+     - `downloadFile()` - Unified download function for all export types
+     - Uses container dimensions instead of SVG's getBoundingClientRect() to avoid size detection issues
+     - Proper XML declaration for SVG files: `<?xml version="1.0" encoding="UTF-8" standalone="no"?>`
+     - SVG attributes set: xmlns, xmlns:xlink, width, height, viewBox
+
+   - **UI Updates**:
+     - TotalView: SVG (green) + Data CSV (blue) export buttons
+     - Dashboard: SVG export buttons on both charts (Monthly Revenue, Cumulative Revenue)
+     - Color coding: Green for SVG, Blue for Data/CSV, Emerald for table CSV
+     - Tooltips with format descriptions
+
 ## Architecture Notes
 - **Data Layer**: `dbService.ts` handles all Supabase operations with autosave (800ms debounce)
 - **Period System**: Half-year periods (H1: Jan-Jun, H2: Jul-Dec) for organizing project tracking
@@ -81,8 +115,8 @@
 - **UI Patterns**: Sticky table columns, responsive design, real-time search filtering, optimistic UI updates
 - **Utility Modules**:
   - `utils/tableStyles.ts` – Shared table column widths and sticky positioning classes
-  - `utils/chartExport.ts` – SVG to PNG export with transparent backgrounds
-  - `utils/csvExport.ts` – CSV generation with UTF-8 BOM encoding for Excel compatibility
+  - `utils/chartExport.ts` – Multiple chart export formats (SVG primary, PNG fallback, CSV data)
+  - `utils/csvExport.ts` – Table CSV generation with UTF-8 BOM encoding for Excel compatibility
   - `utils/helpers.ts` – Currency formatting and general utilities
 - **Type Safety**: Comprehensive TypeScript interfaces in `types.ts` for all data structures
 - **Internationalization**: Complete tri-lingual support via `LanguageContext` with locale-aware formatting
@@ -101,8 +135,8 @@
 │   └── dbService.ts           # Supabase CRUD operations
 ├── utils/
 │   ├── tableStyles.ts         # Shared table constants
-│   ├── chartExport.ts         # PNG export functionality
-│   ├── csvExport.ts           # CSV export functionality
+│   ├── chartExport.ts         # Chart export (SVG, PNG, CSV data)
+│   ├── csvExport.ts           # Table CSV export
 │   └── helpers.ts             # Formatting utilities
 ├── types.ts                   # TypeScript interfaces
 └── App.tsx                    # Root component
@@ -117,6 +151,7 @@
 - Language preference persistence: Consider saving selected language to localStorage or user settings
 - Year/period preference: Could persist last selected year/period across sessions
 - Performance optimization: Monitor autosave performance with large datasets
-- Additional export formats: Consider PDF export for reports
+- Print-friendly views: Add print CSS for direct printing (SVG exports work well for presentations)
 - Dashboard enhancements: Add more customizable financial metrics or date range filters
 - Mobile optimization: Further improve responsive design for tablet/mobile devices
+- Chart interactions: Consider adding click/hover interactions for detailed data views
