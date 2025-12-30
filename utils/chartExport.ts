@@ -4,6 +4,30 @@
  */
 
 /**
+ * Inline all computed styles from original elements to cloned elements
+ */
+const inlineStyles = (sourceElement: Element, targetElement: Element): void => {
+  const computedStyle = window.getComputedStyle(sourceElement);
+
+  // Copy all computed styles
+  for (let i = 0; i < computedStyle.length; i++) {
+    const property = computedStyle[i];
+    const value = computedStyle.getPropertyValue(property);
+    (targetElement as HTMLElement).style.setProperty(property, value);
+  }
+
+  // Recursively apply to children
+  const sourceChildren = sourceElement.children;
+  const targetChildren = targetElement.children;
+
+  for (let i = 0; i < sourceChildren.length; i++) {
+    if (targetChildren[i]) {
+      inlineStyles(sourceChildren[i], targetChildren[i]);
+    }
+  }
+};
+
+/**
  * Export a chart container to PNG with transparent background
  * @param elementId - The ID of the chart container element
  * @param filename - The desired filename for the download
@@ -36,6 +60,9 @@ export const exportChartToPNG = async (elementId: string, filename: string = 'ch
     // Set explicit dimensions on the cloned SVG
     clonedSvg.setAttribute('width', width.toString());
     clonedSvg.setAttribute('height', height.toString());
+
+    // Inline all computed styles to preserve appearance
+    inlineStyles(svgElement, clonedSvg);
 
     // Serialize the SVG to string
     const svgData = new XMLSerializer().serializeToString(clonedSvg);

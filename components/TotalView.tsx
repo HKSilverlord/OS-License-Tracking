@@ -87,9 +87,9 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     return data;
   }, [projects, records, currentYear, language]);
 
-  // Calculate unified Y-axis maximum value with 1500 unit intervals
+  // Calculate unified Y-axis maximum value with 1000 unit intervals
   const { yAxisMax, yAxisTicks } = useMemo(() => {
-    if (chartData.length === 0) return { yAxisMax: 1500, yAxisTicks: [0, 1500] };
+    if (chartData.length === 0) return { yAxisMax: 1000, yAxisTicks: [0, 1000] };
 
     const maxMonthly = Math.max(
       ...chartData.map(d => Math.max(d.plan, d.actual)),
@@ -102,13 +102,13 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
 
     const overallMax = Math.max(maxMonthly, maxAccumulated);
 
-    // Round up to nearest 1500 multiple with 10% padding
+    // Round up to nearest 1000 multiple with 10% padding
     const maxWithPadding = overallMax * 1.1;
-    const roundedMax = Math.ceil(maxWithPadding / 1500) * 1500;
+    const roundedMax = Math.ceil(maxWithPadding / 1000) * 1000;
 
-    // Generate ticks at 1500 intervals
+    // Generate ticks at 1000 intervals
     const ticks = [];
-    for (let i = 0; i <= roundedMax; i += 1500) {
+    for (let i = 0; i <= roundedMax; i += 1000) {
       ticks.push(i);
     }
 
