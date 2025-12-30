@@ -9,12 +9,18 @@ const DEFAULT_SETTINGS = {
 
 export const dbService = {
   // --- Projects ---
-  async getProjects() {
-    const { data, error } = await supabase
+  async getProjects(period?: string) {
+    let query = supabase
       .from('projects')
       .select('*')
       .order('created_at', { ascending: true });
-    
+
+    if (period) {
+      query = query.eq('period', period);
+    }
+
+    const { data, error } = await query;
+
     if (error) {
       console.error('Error fetching projects:', error);
       throw error;
@@ -63,6 +69,28 @@ export const dbService = {
     if (error) throw error;
   },
 
+  async generateNextProjectCode() {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('code');
+
+    if (error) throw error;
+
+    // Extract numbers from codes like "PRJ-001"
+    const numbers = data
+      .map(p => {
+        const match = p.code.match(/PRJ-(\d+)/);
+        return match ? parseInt(match[1], 10) : 0;
+      })
+      .filter(n => !isNaN(n));
+
+    const maxNum = Math.max(0, ...numbers);
+    const nextNum = maxNum + 1;
+
+    // Pad with leading zeros to 3 digits
+    return `PRJ-${nextNum.toString().padStart(3, '0')}`;
+  },
+
   // --- Records ---
   async getRecords(periodLabel: string) {
     const { data, error } = await supabase
@@ -87,7 +115,7 @@ export const dbService = {
   async upsertRecord(record: Partial<MonthlyRecord> & { project_id: string, year: number, month: number }) {
     // Ensure period_label exists
     const period_label = record.period_label || `${record.year}-${record.month <= 6 ? 'H1' : 'H2'}`;
-    
+
     const payload = {
       project_id: record.project_id,
       year: record.year,
@@ -158,11 +186,11 @@ export const dbService = {
     const { error } = await supabase
       .from('periods')
       .insert({ label, year, half });
-      
+
     if (error && error.code !== '23505') { // Ignore unique violation
       throw error;
     }
-    
+
     return this.getPeriods();
   },
 
@@ -188,10 +216,10 @@ export const dbService = {
     // First get current to merge
     const current = await this.getSettings();
     const merged = { ...current, ...settings };
-    
+
     const { data, error } = await supabase
       .from('settings')
-      .upsert({ 
+      .upsert({
         label: 'default',
         exchange_rate: merged.exchangeRate,
         license_computers: merged.licenseComputers,
@@ -201,7 +229,7 @@ export const dbService = {
       .single();
 
     if (error) throw error;
-    
+
     return {
       exchangeRate: data.exchange_rate,
       licenseComputers: data.license_computers,

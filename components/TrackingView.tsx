@@ -21,7 +21,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   const [deleting, setDeleting] = useState(false);
 
   // Debounce refs
-  const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({});
+  const debounceTimers = useRef<Record<string, any>>({});
 
   const [yearStr, typeStr] = currentPeriodLabel.split('-');
   const year = parseInt(yearStr);
@@ -50,7 +50,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
     setLoading(true);
     try {
       const [projectsData, recordsData] = await Promise.all([
-        dbService.getProjects(),
+        dbService.getProjects(currentPeriodLabel),
         dbService.getRecords(currentPeriodLabel)
       ]);
 
@@ -197,6 +197,16 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
     }
   };
 
+  const handleUpdateProject = async (id: string, updates: Partial<Project>) => {
+    try {
+      const updated = await dbService.updateProject(id, updates);
+      setProjects(prev => prev.map(p => p.id === id ? updated : p));
+    } catch (error) {
+      console.error("Failed to update project", error);
+      alert("Failed to update project");
+    }
+  };
+
   if (loading) {
     return <div className="flex justify-center items-center h-64"><Loader2 className="animate-spin h-8 w-8 text-blue-600" /></div>;
   }
@@ -247,22 +257,32 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                   disabled={filteredProjects.length === 0}
                 />
               </th>
-              <th scope="col" style={{ left: `${LEFT_SELECT_WIDTH}px`, width: `${LEFT_CODE_WIDTH}px` }} className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>{t('tracker.code')}</th>
-              <th scope="col" style={{ left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>{t('tracker.projectName')}</th>
+              <th scope="col" style={{ left: `${LEFT_SELECT_WIDTH}px`, width: `${LEFT_CODE_WIDTH}px` }} className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                {t('tracker.code')}
+              </th>
+              <th scope="col" style={{ left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                {t('tracker.projectName')}
+              </th>
               <th scope="col" style={{ left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH + LEFT_NAME_WIDTH}px`, width: `${LEFT_PRICE_WIDTH}px` }} className={`px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>{t('tracker.unitPrice')}</th>
 
-              <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16 border-b border-r bg-gray-50">Type</th>
+              <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r min-w-[200px]">
+                {t('tracker.businessContent')}
+              </th>
 
               {/* Scrollable Month Columns */}
-              {months.map(m => (
-                <th key={m} scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-24 border-b border-r border-gray-200 ${stickyHeaderZ}`}>
+              {months.map((m) => (
+                <th key={m} scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20 border-b border-r border-gray-200 ${stickyHeaderZ}`}>
                   {formatMonthLabel(m)}
                 </th>
               ))}
 
               {/* Frozen Right Columns (Totals) */}
-              <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider border-l border-b bg-gray-100 ${stickyRightHeaderClass} ${stickyCornerZ}`} style={{ right: `${RIGHT_TOTAL_REV_WIDTH}px`, width: `${RIGHT_TOTAL_HRS_WIDTH}px` }}>Total Hrs</th>
-              <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider border-l border-b bg-gray-100 ${stickyRightHeaderClass} ${stickyCornerZ}`} style={{ right: 0, width: `${RIGHT_TOTAL_REV_WIDTH}px` }}>Revenue</th>
+              <th scope="col" className={`px-2 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider border-b border-l bg-gray-100 ${stickyRightHeaderClass} ${stickyCornerZ}`} style={{ right: `${RIGHT_TOTAL_REV_WIDTH}px`, width: `${RIGHT_TOTAL_HRS_WIDTH}px` }}>
+                {t('tracker.totalHrs')}
+              </th>
+              <th scope="col" className={`px-2 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider border-b border-l bg-amber-50 ${stickyRightHeaderClass} ${stickyCornerZ}`} style={{ right: 0, width: `${RIGHT_TOTAL_REV_WIDTH}px` }}>
+                {t('tracker.revenue')}
+              </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -298,11 +318,19 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                     <td rowSpan={2} style={{ left: `${LEFT_SELECT_WIDTH}px`, width: `${LEFT_CODE_WIDTH}px` }} className={`px-3 py-3 text-sm font-medium text-gray-900 ${stickyLeftClass} align-top`}>
                       {project.code}
                     </td>
-                    <td rowSpan={2} style={{ left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-sm text-gray-500 ${stickyLeftClass} align-top`}>
+                    <td rowSpan={2} style={{ left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-sm text-gray-500 border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
                       <div className="truncate w-44" title={project.name}>{project.name}</div>
                     </td>
                     <td rowSpan={2} style={{ left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH + LEFT_NAME_WIDTH}px`, width: `${LEFT_PRICE_WIDTH}px` }} className={`px-3 py-3 text-sm text-gray-500 text-center ${stickyLeftClass} align-top`}>
                       {project.unit_price.toLocaleString()}
+                    </td>
+                    <td rowSpan={2} className="px-2 py-2 text-xs text-gray-500 text-center border-r border-b bg-white align-top p-0 group-hover:bg-gray-50 max-w-[200px]">
+                      <textarea
+                        className="w-full h-full min-h-[50px] border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-xs p-2 bg-transparent resize-none"
+                        value={project.type || ''}
+                        onChange={(e) => handleUpdateProject(project.id, { type: e.target.value })}
+                        placeholder={t('tracker.businessContent')}
+                      />
                     </td>
 
                     {/* Plan Label */}

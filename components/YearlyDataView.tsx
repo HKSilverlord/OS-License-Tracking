@@ -12,7 +12,7 @@ interface YearlyDataViewProps {
 }
 
 export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [projects, setProjects] = useState<Project[]>([]);
   const [records, setRecords] = useState<Record<string, MonthlyRecord[]>>({});
   const [loading, setLoading] = useState(true);
@@ -33,10 +33,13 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
           dbService.getAllRecords(currentYear) // Get all records for the year
         ]);
 
-        // Sort projects by code
-        projectsData.sort((a, b) => a.code.localeCompare(b.code));
+        // Filter projects by year (if period is set)
+        const relevantProjects = projectsData.filter(p => !p.period || p.period.startsWith(currentYear.toString()));
 
-        setProjects(projectsData);
+        // Sort projects by code
+        relevantProjects.sort((a, b) => a.code.localeCompare(b.code));
+
+        setProjects(relevantProjects);
 
         const groupedRecords: Record<string, MonthlyRecord[]> = {};
         recordsData.forEach(r => {
@@ -140,7 +143,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
 
                 {months.map(m => (
                   <th key={m} scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20 border-b border-r border-gray-200 ${stickyHeaderZ}`}>
-                    {m}
+                    {language === 'ja' ? `${m}月` : m}
                   </th>
                 ))}
                 <th scope="col" className={`px-2 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider border-b border-l bg-gray-100`}>

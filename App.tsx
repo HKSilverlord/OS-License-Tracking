@@ -91,7 +91,10 @@ function App() {
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await dbService.createProject(newProject);
+      await dbService.createProject({
+        ...newProject,
+        period: currentPeriod
+      });
       setIsProjectModalOpen(false);
       setNewProject({
         code: '',
@@ -106,6 +109,18 @@ function App() {
     } catch (err) {
       alert(t('alerts.projectCreateError'));
       console.error(err);
+    }
+  };
+
+  const handleOpenProjectModal = async () => {
+    try {
+      const nextCode = await dbService.generateNextProjectCode();
+      setNewProject(prev => ({ ...prev, code: nextCode }));
+      setIsProjectModalOpen(true);
+    } catch (error) {
+      console.error("Failed to generate project code", error);
+      // Fallback or alert? Just open modal with empty code if fail
+      setIsProjectModalOpen(true);
     }
   };
 
@@ -268,7 +283,7 @@ function App() {
                 {t('buttons.export')}
               </button>
               <button
-                onClick={() => setIsProjectModalOpen(true)}
+                onClick={handleOpenProjectModal}
                 className="flex items-center px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
               >
                 <Plus className="w-4 h-4 mr-2" />
@@ -301,7 +316,7 @@ function App() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-700 uppercase mb-1">{t('modals.project.code')}</label>
-                  <input required type="text" className="block w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500" value={newProject.code} onChange={e => setNewProject({ ...newProject, code: e.target.value })} />
+                  <input required readOnly type="text" className="block w-full border border-gray-300 rounded-md p-2 text-sm bg-gray-100 text-gray-500 cursor-not-allowed focus:ring-blue-500 focus:border-blue-500" value={newProject.code} />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 uppercase mb-1">{t('modals.project.name')}</label>

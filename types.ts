@@ -19,6 +19,7 @@ export interface Project {
   status: ProjectStatus;
   unit_price: number;
   created_at?: string;
+  period?: string; // e.g. "2024-H1"
 }
 
 export interface MonthlyRecord {
