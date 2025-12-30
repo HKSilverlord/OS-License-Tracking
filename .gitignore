@@ -36,3 +36,6 @@ db/*.sql
 db/*.md
 os_tracking_app.jsx
 
+# Project memory (local only)
+memory.md
+
