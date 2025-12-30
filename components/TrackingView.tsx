@@ -54,8 +54,9 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
         dbService.getRecords(currentPeriodLabel)
       ]);
 
-      // Sort projects by code
-      projectsData.sort((a, b) => a.code.localeCompare(b.code));
+      // Sort projects by created_at which effectively sorts by number since they are sequential
+      // or we can sort by name if preferred. Let's stick to created_at for stability.
+      // dbService.getProjects already sorts by created_at.
 
       setProjects(projectsData);
 
@@ -81,14 +82,14 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   useEffect(() => {
     return () => {
       // Clear all pending timers on unmount
-      Object.values(debounceTimers.current).forEach(timer => clearTimeout(timer));
+      Object.values(debounceTimers.current).forEach(timer => clearTimeout(timer as any));
       debounceTimers.current = {};
     };
   }, []);
 
   useEffect(() => {
     // Clear all pending timers when period changes
-    Object.values(debounceTimers.current).forEach(timer => clearTimeout(timer));
+    Object.values(debounceTimers.current).forEach(timer => clearTimeout(timer as any));
     debounceTimers.current = {};
   }, [currentPeriodLabel]);
 
@@ -286,7 +287,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredProjects.map(project => {
+            {filteredProjects.map((project, index) => {
               const projRecords = records[project.id] || [];
               const totalPlannedHrs = projRecords.reduce((sum, r) => sum + (r.planned_hours || 0), 0);
               const totalActualHrs = projRecords.reduce((sum, r) => sum + (r.actual_hours || 0), 0);
@@ -316,7 +317,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                       </div>
                     </td>
                     <td rowSpan={2} style={{ left: `${LEFT_SELECT_WIDTH}px`, width: `${LEFT_CODE_WIDTH}px` }} className={`px-3 py-3 text-sm font-medium text-gray-900 ${stickyLeftClass} align-top`}>
-                      {project.code}
+                      {index + 1}
                     </td>
                     <td rowSpan={2} style={{ left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-sm text-gray-500 border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
                       <div className="truncate w-44" title={project.name}>{project.name}</div>

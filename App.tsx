@@ -47,6 +47,9 @@ function App() {
     software: 'AutoCAD',
     unit_price: DEFAULT_UNIT_PRICE
   });
+  const [currentPeriodProjects, setCurrentPeriodProjects] = useState<any[]>([]);
+  const [selectedCarryOverIds, setSelectedCarryOverIds] = useState<string[]>([]);
+
   const projectTypeOptions = [
     { value: 'Mechanical Design', label: t('project.type.mechanical') },
     { value: 'Software', label: t('project.type.software') },
@@ -106,21 +109,28 @@ function App() {
       });
       // Success! Project will appear in TrackingView on next load/navigation
       alert(t('alerts.projectCreated', 'Project created successfully!'));
+      // Force reload or event dispatch could be better but for now TrackingView refreshes on mount/prop change
     } catch (err) {
       alert(t('alerts.projectCreateError'));
       console.error(err);
     }
   };
 
-  const handleOpenProjectModal = async () => {
+  const handleOpenProjectModal = () => {
+    // No code generation needed anymore
+    setIsProjectModalOpen(true);
+  };
+
+  const handleOpenPeriodModal = async () => {
+    // Fetch projects from current period for carry-over
     try {
-      const nextCode = await dbService.generateNextProjectCode();
-      setNewProject(prev => ({ ...prev, code: nextCode }));
-      setIsProjectModalOpen(true);
-    } catch (error) {
-      console.error("Failed to generate project code", error);
-      // Fallback or alert? Just open modal with empty code if fail
-      setIsProjectModalOpen(true);
+      const projs = await dbService.getProjects(currentPeriod);
+      setCurrentPeriodProjects(projs);
+      setSelectedCarryOverIds([]); // Reset selection
+      setIsPeriodModalOpen(true);
+    } catch (e) {
+      console.error("Failed to fetch current projects for period modal", e);
+      setIsPeriodModalOpen(true);
     }
   };
 
@@ -130,6 +140,12 @@ function App() {
     try {
       const updated = await dbService.addPeriod(label);
       setAvailablePeriods(updated);
+
+      // Handle Carry Over
+      if (selectedCarryOverIds.length > 0) {
+        await dbService.copyProjectsToPeriod(label, selectedCarryOverIds);
+      }
+
       setCurrentPeriod(label);
       setIsPeriodModalOpen(false);
     } catch (e) {
@@ -313,11 +329,7 @@ function App() {
               <button onClick={() => setIsProjectModalOpen(false)}><X className="text-gray-400 hover:text-gray-600" /></button>
             </div>
             <form onSubmit={handleCreateProject} className="p-6 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 uppercase mb-1">{t('modals.project.code')}</label>
-                  <input required readOnly type="text" className="block w-full border border-gray-300 rounded-md p-2 text-sm bg-gray-100 text-gray-500 cursor-not-allowed focus:ring-blue-500 focus:border-blue-500" value={newProject.code} />
-                </div>
+              <div className="grid grid-cols-1 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-700 uppercase mb-1">{t('modals.project.name')}</label>
                   <input required type="text" className="block w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500" value={newProject.name} onChange={e => setNewProject({ ...newProject, name: e.target.value })} />
@@ -349,32 +361,75 @@ function App() {
       {/* New Period Modal */}
       {isPeriodModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-xs animate-in fade-in zoom-in duration-200">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md animate-in fade-in zoom-in duration-200">
             <div className="p-4 border-b border-gray-100 flex justify-between items-center">
               <h3 className="text-md font-bold text-gray-800">{t('modals.period.title')}</h3>
               <button onClick={() => setIsPeriodModalOpen(false)}><X className="w-4 h-4 text-gray-400" /></button>
             </div>
             <form onSubmit={handleCreatePeriod} className="p-4 space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">{t('modals.period.year')}</label>
-                <input
-                  type="number"
-                  className="block w-full border border-gray-300 rounded-md p-2 text-sm"
-                  value={newPeriodInput.year}
-                  onChange={e => setNewPeriodInput({ ...newPeriodInput, year: parseInt(e.target.value) })}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">{t('modals.period.year')}</label>
+                  <input
+                    type="number"
+                    className="block w-full border border-gray-300 rounded-md p-2 text-sm"
+                    value={newPeriodInput.year}
+                    onChange={e => setNewPeriodInput({ ...newPeriodInput, year: parseInt(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">{t('modals.period.half')}</label>
+                  <select
+                    className="block w-full border border-gray-300 rounded-md p-2 text-sm"
+                    value={newPeriodInput.type}
+                    onChange={e => setNewPeriodInput({ ...newPeriodInput, type: e.target.value })}
+                  >
+                    <option value="H1">{t('modals.period.option.h1')}</option>
+                    <option value="H2">{t('modals.period.option.h2')}</option>
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">{t('modals.period.half')}</label>
-                <select
-                  className="block w-full border border-gray-300 rounded-md p-2 text-sm"
-                  value={newPeriodInput.type}
-                  onChange={e => setNewPeriodInput({ ...newPeriodInput, type: e.target.value })}
-                >
-                  <option value="H1">{t('modals.period.option.h1')}</option>
-                  <option value="H2">{t('modals.period.option.h2')}</option>
-                </select>
+
+              {/* Carry Over Projects Selection */}
+              <div className="border-t border-gray-100 pt-3">
+                <p className="text-xs font-medium text-gray-700 mb-2">Carry over projects from {currentPeriod}:</p>
+                <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-md p-2 space-y-1 bg-gray-50">
+                  {currentPeriodProjects.length === 0 ? (
+                    <p className="text-xs text-gray-400 italic text-center py-2">No projects in current period to carry over.</p>
+                  ) : (
+                    currentPeriodProjects.map(p => (
+                      <label key={p.id} className="flex items-center space-x-2 text-sm p-1 hover:bg-white rounded cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4"
+                          checked={selectedCarryOverIds.includes(p.id)}
+                          onChange={() => {
+                            setSelectedCarryOverIds(prev =>
+                              prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]
+                            );
+                          }}
+                        />
+                        <span className="truncate flex-1">{p.name}</span>
+                        <span className="text-xs text-gray-400">{p.code}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+                <div className="flex justify-between items-center mt-2">
+                  <button
+                    type="button"
+                    className="text-xs text-blue-600 hover:text-blue-800"
+                    onClick={() => {
+                      if (selectedCarryOverIds.length === currentPeriodProjects.length) setSelectedCarryOverIds([]);
+                      else setSelectedCarryOverIds(currentPeriodProjects.map(p => p.id));
+                    }}
+                  >
+                    {selectedCarryOverIds.length === currentPeriodProjects.length ? 'Deselect All' : 'Select All'}
+                  </button>
+                  <span className="text-xs text-gray-500">{selectedCarryOverIds.length} projects selected</span>
+                </div>
               </div>
+
               <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-md text-sm hover:bg-blue-700">{t('modals.period.submit')}</button>
             </form>
           </div>

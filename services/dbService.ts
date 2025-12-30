@@ -69,26 +69,37 @@ export const dbService = {
     if (error) throw error;
   },
 
-  async generateNextProjectCode() {
-    const { data, error } = await supabase
+  async copyProjectsToPeriod(targetPeriod: string, projectIds: string[]) {
+    // 1. Fetch Source Projects
+    const { data: sourceProjects, error: fetchError } = await supabase
       .from('projects')
-      .select('code');
+      .select('*')
+      .in('id', projectIds);
 
-    if (error) throw error;
+    if (fetchError) throw fetchError;
+    if (!sourceProjects || sourceProjects.length === 0) return [];
 
-    // Extract numbers from codes like "PRJ-001"
-    const numbers = data
-      .map(p => {
-        const match = p.code.match(/PRJ-(\d+)/);
-        return match ? parseInt(match[1], 10) : 0;
-      })
-      .filter(n => !isNaN(n));
+    // 2. Prepare new project payloads (omit id, created_at, etc.)
+    const newProjectsPayload = sourceProjects.map(p => ({
+      name: p.name,
+      code: p.code, // Keep the same code for continuity if needed, or let user handle it. 
+      // Since "code" field is removed from UI, this might just be internal or legacy.
+      // If unique constraint exists on (code, period), this is fine.
+      type: p.type,
+      software: p.software,
+      status: p.status,
+      unit_price: p.unit_price,
+      period: targetPeriod
+    }));
 
-    const maxNum = Math.max(0, ...numbers);
-    const nextNum = maxNum + 1;
+    // 3. Insert new projects
+    const { data: insertedProjects, error: insertError } = await supabase
+      .from('projects')
+      .insert(newProjectsPayload)
+      .select();
 
-    // Pad with leading zeros to 3 digits
-    return `PRJ-${nextNum.toString().padStart(3, '0')}`;
+    if (insertError) throw insertError;
+    return insertedProjects as Project[];
   },
 
   // --- Records ---
