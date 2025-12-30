@@ -49,8 +49,8 @@ const inlineAllStyles = (sourceNode: Element, targetNode: Element): void => {
  * @param filename - The desired filename for the download
  */
 export const exportChartToPNG = async (elementId: string, filename: string = 'chart.png'): Promise<void> => {
-  // Wait a bit to ensure chart is fully rendered
-  await new Promise(resolve => setTimeout(resolve, 100));
+  // Wait for chart to fully render
+  await new Promise(resolve => setTimeout(resolve, 300));
 
   const chartContainer = document.getElementById(elementId);
 
@@ -70,12 +70,13 @@ export const exportChartToPNG = async (elementId: string, filename: string = 'ch
       return;
     }
 
-    // Get actual SVG dimensions
-    const bbox = svgElement.getBoundingClientRect();
-    const width = bbox.width;
-    const height = bbox.height;
+    // CRITICAL FIX: Get dimensions from CONTAINER, not SVG
+    // ResponsiveContainer makes SVG fill parent, so use parent dimensions
+    const containerRect = chartContainer.getBoundingClientRect();
+    const width = containerRect.width;
+    const height = containerRect.height;
 
-    console.log('📊 Exporting chart:', { width, height });
+    console.log('📊 Exporting chart:', { width, height, containerRect });
 
     // Clone the SVG deeply
     const clonedSvg = svgElement.cloneNode(true) as SVGElement;
