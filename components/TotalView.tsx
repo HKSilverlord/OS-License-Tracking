@@ -14,7 +14,7 @@ interface TotalViewProps {
 }
 
 export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [projects, setProjects] = useState<Project[]>([]);
   const [records, setRecords] = useState<Record<string, MonthlyRecord[]>>({});
   const [loading, setLoading] = useState(true);
