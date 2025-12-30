@@ -64,12 +64,7 @@ export const exportChartToPNG = async (elementId: string, filename: string = 'ch
     clonedSvg.setAttribute('width', width.toString());
     clonedSvg.setAttribute('height', height.toString());
 
-    // Add white background rectangle as first child
-    const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    bgRect.setAttribute('width', '100%');
-    bgRect.setAttribute('height', '100%');
-    bgRect.setAttribute('fill', 'white');
-    clonedSvg.insertBefore(bgRect, clonedSvg.firstChild);
+    // No background - keep transparent
 
     // Get all CSS styles and add them to SVG
     const cssText = getCSSStyles(clonedSvg);
@@ -80,9 +75,9 @@ export const exportChartToPNG = async (elementId: string, filename: string = 'ch
     // Serialize to string
     const svgString = new XMLSerializer().serializeToString(clonedSvg);
 
-    // Create canvas
+    // Create canvas with 2K quality
     const canvas = document.createElement('canvas');
-    const scale = 2; // Higher resolution
+    const scale = 4; // 2K resolution (4x scale)
     canvas.width = width * scale;
     canvas.height = height * scale;
 

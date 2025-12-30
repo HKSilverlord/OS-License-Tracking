@@ -87,33 +87,15 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     return data;
   }, [projects, records, currentYear, language]);
 
-  // Calculate unified Y-axis maximum value with 1000 unit intervals
-  const { yAxisMax, yAxisTicks } = useMemo(() => {
-    if (chartData.length === 0) return { yAxisMax: 1000, yAxisTicks: [0, 1000] };
-
-    const maxMonthly = Math.max(
-      ...chartData.map(d => Math.max(d.plan, d.actual)),
-      0
-    );
-    const maxAccumulated = Math.max(
-      ...chartData.map(d => Math.max(d.accPlan, d.accActual)),
-      0
-    );
-
-    const overallMax = Math.max(maxMonthly, maxAccumulated);
-
-    // Round up to nearest 1000 multiple with 10% padding
-    const maxWithPadding = overallMax * 1.1;
-    const roundedMax = Math.ceil(maxWithPadding / 1000) * 1000;
-
-    // Generate ticks at 1000 intervals
+  // Fixed Y-axis: 0-21000 with 1000 unit intervals
+  const yAxisMax = 21000;
+  const yAxisTicks = useMemo(() => {
     const ticks = [];
-    for (let i = 0; i <= roundedMax; i += 1000) {
+    for (let i = 0; i <= yAxisMax; i += 1000) {
       ticks.push(i);
     }
-
-    return { yAxisMax: roundedMax, yAxisTicks: ticks };
-  }, [chartData]);
+    return ticks;
+  }, []);
 
   // CSV Export Function
   const handleExportCSV = () => {
@@ -172,7 +154,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     <div className="flex flex-col h-full bg-slate-50 p-4 md:p-6 overflow-hidden space-y-6">
       
       {/* 1. Chart Section */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 h-96 flex flex-col shrink-0">
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 h-[600px] flex flex-col shrink-0">
          <div className="flex items-center justify-between mb-2">
            <h3 className="text-md font-bold text-slate-700 flex items-center">
               <TrendingUp className="w-4 h-4 mr-2 text-blue-600" />
