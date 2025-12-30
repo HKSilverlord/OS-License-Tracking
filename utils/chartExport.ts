@@ -1,46 +1,57 @@
 /**
  * Chart Export Utilities
  * Export Recharts charts to PNG with transparent background
+ * Complete working solution for capturing full chart
  */
 
 /**
- * Recursively apply inline styles from computed styles
+ * Recursively copy ALL computed styles to inline styles
+ * This ensures the SVG renders correctly when exported
  */
-const applyInlineStyles = (sourceNode: Element, targetNode: Element): void => {
-  const computedStyle = window.getComputedStyle(sourceNode);
+const inlineAllStyles = (sourceNode: Element, targetNode: Element): void => {
+  if (sourceNode.nodeType !== 1) return; // Only process element nodes
+
+  const sourceElement = sourceNode as HTMLElement;
   const targetElement = targetNode as HTMLElement;
 
-  // Apply important presentation attributes
-  const importantStyles = [
-    'fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-linecap',
-    'font-family', 'font-size', 'font-weight', 'text-anchor',
-    'color', 'opacity', 'transform'
-  ];
+  // Get all computed styles
+  const computedStyle = window.getComputedStyle(sourceElement);
 
-  importantStyles.forEach(prop => {
-    const value = computedStyle.getPropertyValue(prop);
-    if (value && value !== '' && value !== 'none') {
-      targetElement.style.setProperty(prop, value);
+  // Copy ALL computed CSS properties as inline styles
+  for (let i = 0; i < computedStyle.length; i++) {
+    const property = computedStyle[i];
+    const value = computedStyle.getPropertyValue(property);
+
+    // Set the property on the target element
+    try {
+      targetElement.style.setProperty(property, value, computedStyle.getPropertyPriority(property));
+    } catch (e) {
+      // Some properties might not be settable, skip them
     }
-  });
+  }
 
-  // Recursively apply to children
+  // Recursively process all children
   const sourceChildren = Array.from(sourceNode.children);
   const targetChildren = Array.from(targetNode.children);
 
-  sourceChildren.forEach((sourceChild, i) => {
+  for (let i = 0; i < sourceChildren.length; i++) {
     if (targetChildren[i]) {
-      applyInlineStyles(sourceChild, targetChildren[i]);
+      inlineAllStyles(sourceChildren[i], targetChildren[i]);
     }
-  });
+  }
 };
 
 /**
  * Export a chart container to PNG with transparent background
+ * Library: Recharts
+ *
  * @param elementId - The ID of the chart container element
  * @param filename - The desired filename for the download
  */
 export const exportChartToPNG = async (elementId: string, filename: string = 'chart.png'): Promise<void> => {
+  // Wait a bit to ensure chart is fully rendered
+  await new Promise(resolve => setTimeout(resolve, 100));
+
   const chartContainer = document.getElementById(elementId);
 
   if (!chartContainer) {
@@ -59,74 +70,96 @@ export const exportChartToPNG = async (elementId: string, filename: string = 'ch
       return;
     }
 
-    // Get SVG dimensions
+    // Get actual SVG dimensions
     const bbox = svgElement.getBoundingClientRect();
     const width = bbox.width;
     const height = bbox.height;
 
-    console.log('Exporting chart:', { width, height });
+    console.log('📊 Exporting chart:', { width, height });
 
-    // Clone the SVG
+    // Clone the SVG deeply
     const clonedSvg = svgElement.cloneNode(true) as SVGElement;
 
-    // Set proper SVG attributes
+    // Set proper SVG namespace and dimensions
     clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clonedSvg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
     clonedSvg.setAttribute('width', width.toString());
     clonedSvg.setAttribute('height', height.toString());
+    clonedSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
 
-    // Apply inline styles from computed styles
-    applyInlineStyles(svgElement, clonedSvg);
+    // CRITICAL: Copy ALL computed styles inline
+    console.log('🎨 Copying styles...');
+    inlineAllStyles(svgElement, clonedSvg);
 
     // Serialize to string
-    const svgString = new XMLSerializer().serializeToString(clonedSvg);
-    console.log('SVG serialized, length:', svgString.length);
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(clonedSvg);
+    console.log('✅ SVG serialized, length:', svgString.length);
 
-    // Create canvas with high resolution
+    // Create high-resolution canvas with transparency
     const canvas = document.createElement('canvas');
     const scale = 4; // 4x for 2K quality
     canvas.width = width * scale;
     canvas.height = height * scale;
 
-    const ctx = canvas.getContext('2d', { alpha: true });
+    const ctx = canvas.getContext('2d', {
+      alpha: true,
+      willReadFrequently: false
+    });
+
     if (!ctx) {
       throw new Error('Could not get canvas context');
     }
 
-    // Clear canvas to transparent
+    // Ensure transparent background
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Scale context for high-res rendering
     ctx.scale(scale, scale);
 
-    // Create data URL from SVG
-    const svgDataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgString)));
+    // Convert SVG to data URL
+    const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
 
-    // Create and load image
+    // Load and draw image
     const img = new Image();
+
+    console.log('🖼️ Loading image...');
 
     await new Promise<void>((resolve, reject) => {
       img.onload = () => {
-        console.log('Image loaded successfully');
+        console.log('✅ Image loaded, drawing to canvas...');
+
+        // Draw the image
         ctx.drawImage(img, 0, 0, width, height);
+
+        // Clean up
+        URL.revokeObjectURL(url);
         resolve();
       };
+
       img.onerror = (e) => {
-        console.error('Image load error:', e);
+        console.error('❌ Image load error:', e);
+        URL.revokeObjectURL(url);
         reject(new Error('Failed to load SVG as image'));
       };
-      img.src = svgDataUrl;
+
+      img.src = url;
     });
 
-    console.log('Drawing complete, converting to PNG...');
+    console.log('💾 Converting to PNG...');
 
-    // Convert to PNG blob and download
+    // Convert canvas to PNG and download
     canvas.toBlob((blob) => {
       if (!blob) {
-        console.error('Failed to create blob from canvas');
+        console.error('❌ Failed to create blob from canvas');
         alert('Failed to create PNG image');
         return;
       }
 
-      console.log('PNG blob created, size:', blob.size);
+      console.log('✅ PNG created, size:', (blob.size / 1024).toFixed(2), 'KB');
 
+      // Download the file
       const downloadUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = downloadUrl;
@@ -136,11 +169,11 @@ export const exportChartToPNG = async (elementId: string, filename: string = 'ch
       document.body.removeChild(link);
       URL.revokeObjectURL(downloadUrl);
 
-      console.log('Export successful!');
+      console.log('🎉 Export successful!');
     }, 'image/png', 1.0);
 
   } catch (error) {
-    console.error('Error exporting chart to PNG:', error);
+    console.error('❌ Export error:', error);
     alert('Failed to export chart: ' + (error as Error).message);
   }
 };
