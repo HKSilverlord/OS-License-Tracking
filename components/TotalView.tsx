@@ -3,7 +3,7 @@ import { Project, MonthlyRecord } from '../types';
 import { dbService } from '../services/dbService';
 import { formatCurrency } from '../utils/helpers';
 import { TABLE_COLUMN_WIDTHS, STICKY_CLASSES } from '../utils/tableStyles';
-import { exportChartToPNG, generateChartFilename } from '../utils/chartExport';
+import { exportChartToSVG, exportChartToPNG, exportChartDataToCSV, generateChartFilename } from '../utils/chartExport';
 import { exportTableToCSV, generateCSVFilename } from '../utils/csvExport';
 import { Loader2, TrendingUp, Download, FileDown } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -160,14 +160,24 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
               <TrendingUp className="w-4 h-4 mr-2 text-blue-600" />
               {t('totalView.chartTitle')} - {currentYear}
            </h3>
-           <button
-             onClick={() => exportChartToPNG('total-view-chart', generateChartFilename(`yearly_overview_${currentYear}`))}
-             className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-             title={t('buttons.exportChart', 'Export Chart')}
-           >
-             <Download className="w-4 h-4" />
-             PNG
-           </button>
+           <div className="flex gap-2">
+             <button
+               onClick={() => exportChartToSVG('total-view-chart', generateChartFilename(`yearly_overview_${currentYear}`, 'svg'))}
+               className="flex items-center gap-1 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+               title="Export as SVG (vector, best quality)"
+             >
+               <Download className="w-4 h-4" />
+               SVG
+             </button>
+             <button
+               onClick={() => exportChartDataToCSV(chartData, generateChartFilename(`yearly_data_${currentYear}`, 'csv'))}
+               className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+               title="Export chart data as CSV"
+             >
+               <Download className="w-4 h-4" />
+               Data
+             </button>
+           </div>
          </div>
          <div id="total-view-chart" className="flex-1 min-h-0">
             <ResponsiveContainer width="100%" height="100%">

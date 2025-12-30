@@ -1,28 +1,25 @@
 /**
  * Chart Export Utilities
- * Export Recharts charts to PNG with transparent background
- * Complete working solution for capturing full chart
+ * Multiple export formats: SVG (primary), PNG, PDF, CSV
+ * Library: Recharts
  */
 
 /**
  * Recursively copy ALL computed styles to inline styles
- * This ensures the SVG renders correctly when exported
+ * This ensures the exported file renders correctly standalone
  */
 const inlineAllStyles = (sourceNode: Element, targetNode: Element): void => {
-  if (sourceNode.nodeType !== 1) return; // Only process element nodes
+  if (sourceNode.nodeType !== 1) return;
 
   const sourceElement = sourceNode as HTMLElement;
   const targetElement = targetNode as HTMLElement;
-
-  // Get all computed styles
   const computedStyle = window.getComputedStyle(sourceElement);
 
-  // Copy ALL computed CSS properties as inline styles
+  // Copy all computed CSS properties as inline styles
   for (let i = 0; i < computedStyle.length; i++) {
     const property = computedStyle[i];
     const value = computedStyle.getPropertyValue(property);
 
-    // Set the property on the target element
     try {
       targetElement.style.setProperty(property, value, computedStyle.getPropertyPriority(property));
     } catch (e) {
@@ -42,149 +39,231 @@ const inlineAllStyles = (sourceNode: Element, targetNode: Element): void => {
 };
 
 /**
- * Export a chart container to PNG with transparent background
- * Library: Recharts
+ * Download a file with given content
+ */
+const downloadFile = (content: string | Blob, filename: string, mimeType: string): void => {
+  const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+/**
+ * PRIMARY: Export chart as SVG (vector format)
+ * ✅ Perfect quality at any size
+ * ✅ Transparent background
+ * ✅ No canvas conversion issues
+ * ✅ Smaller file size
+ * ✅ Can be edited in design tools
  *
  * @param elementId - The ID of the chart container element
  * @param filename - The desired filename for the download
  */
-export const exportChartToPNG = async (elementId: string, filename: string = 'chart.png'): Promise<void> => {
-  // Wait for chart to fully render
-  await new Promise(resolve => setTimeout(resolve, 300));
-
+export const exportChartToSVG = async (elementId: string, filename: string = 'chart.svg'): Promise<void> => {
   const chartContainer = document.getElementById(elementId);
 
   if (!chartContainer) {
-    console.error(`Element with id "${elementId}" not found`);
     alert(`Chart element with id "${elementId}" not found`);
     return;
   }
 
   try {
-    // Find the SVG element within the container
+    // Find the SVG element
     const svgElement = chartContainer.querySelector('svg');
 
     if (!svgElement) {
-      console.error('No SVG element found in chart container');
       alert('No SVG chart found to export');
       return;
     }
 
-    // CRITICAL FIX: Get dimensions from CONTAINER, not SVG
-    // ResponsiveContainer makes SVG fill parent, so use parent dimensions
+    console.log('📊 Exporting chart as SVG...');
+
+    // Get container dimensions
     const containerRect = chartContainer.getBoundingClientRect();
     const width = containerRect.width;
     const height = containerRect.height;
 
-    console.log('📊 Exporting chart:', { width, height, containerRect });
-
     // Clone the SVG deeply
     const clonedSvg = svgElement.cloneNode(true) as SVGElement;
 
-    // Set proper SVG namespace and dimensions
+    // Set proper SVG attributes for standalone use
     clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
     clonedSvg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
     clonedSvg.setAttribute('width', width.toString());
     clonedSvg.setAttribute('height', height.toString());
     clonedSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
 
-    // CRITICAL: Copy ALL computed styles inline
+    // Copy all computed styles inline for standalone rendering
     console.log('🎨 Copying styles...');
     inlineAllStyles(svgElement, clonedSvg);
 
     // Serialize to string
     const serializer = new XMLSerializer();
-    const svgString = serializer.serializeToString(clonedSvg);
-    console.log('✅ SVG serialized, length:', svgString.length);
+    let svgString = serializer.serializeToString(clonedSvg);
 
-    // Create high-resolution canvas with transparency
+    // Add XML declaration for proper SVG file
+    svgString = '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n' + svgString;
+
+    console.log('✅ SVG created, size:', (svgString.length / 1024).toFixed(2), 'KB');
+
+    // Download the SVG file
+    downloadFile(svgString, filename, 'image/svg+xml;charset=utf-8');
+
+    console.log('🎉 SVG export successful!');
+  } catch (error) {
+    console.error('❌ SVG export error:', error);
+    alert('Failed to export SVG: ' + (error as Error).message);
+  }
+};
+
+/**
+ * Export chart as PNG (fallback option)
+ * Note: SVG export is recommended for better quality
+ *
+ * @param elementId - The ID of the chart container element
+ * @param filename - The desired filename for the download
+ */
+export const exportChartToPNG = async (elementId: string, filename: string = 'chart.png'): Promise<void> => {
+  const chartContainer = document.getElementById(elementId);
+
+  if (!chartContainer) {
+    alert(`Chart element with id "${elementId}" not found`);
+    return;
+  }
+
+  try {
+    const svgElement = chartContainer.querySelector('svg');
+
+    if (!svgElement) {
+      alert('No SVG chart found to export');
+      return;
+    }
+
+    console.log('📊 Exporting chart as PNG...');
+
+    // Get container dimensions
+    const containerRect = chartContainer.getBoundingClientRect();
+    const width = containerRect.width;
+    const height = containerRect.height;
+
+    // Clone and prepare SVG
+    const clonedSvg = svgElement.cloneNode(true) as SVGElement;
+    clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clonedSvg.setAttribute('width', width.toString());
+    clonedSvg.setAttribute('height', height.toString());
+    clonedSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+
+    // Copy styles
+    inlineAllStyles(svgElement, clonedSvg);
+
+    // Serialize
+    const svgString = new XMLSerializer().serializeToString(clonedSvg);
+
+    // Create canvas
     const canvas = document.createElement('canvas');
-    const scale = 4; // 4x for 2K quality
+    const scale = 3; // High quality
     canvas.width = width * scale;
     canvas.height = height * scale;
 
-    const ctx = canvas.getContext('2d', {
-      alpha: true,
-      willReadFrequently: false
-    });
+    const ctx = canvas.getContext('2d', { alpha: true });
+    if (!ctx) throw new Error('Could not get canvas context');
 
-    if (!ctx) {
-      throw new Error('Could not get canvas context');
-    }
-
-    // Ensure transparent background
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Scale context for high-res rendering
     ctx.scale(scale, scale);
 
-    // Convert SVG to data URL
+    // Convert SVG to image
     const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(svgBlob);
-
-    // Load and draw image
     const img = new Image();
-
-    console.log('🖼️ Loading image...');
 
     await new Promise<void>((resolve, reject) => {
       img.onload = () => {
-        console.log('✅ Image loaded, drawing to canvas...');
-
-        // Draw the image
         ctx.drawImage(img, 0, 0, width, height);
-
-        // Clean up
         URL.revokeObjectURL(url);
         resolve();
       };
-
-      img.onerror = (e) => {
-        console.error('❌ Image load error:', e);
+      img.onerror = () => {
         URL.revokeObjectURL(url);
         reject(new Error('Failed to load SVG as image'));
       };
-
       img.src = url;
     });
 
-    console.log('💾 Converting to PNG...');
-
-    // Convert canvas to PNG and download
+    // Convert to PNG and download
     canvas.toBlob((blob) => {
       if (!blob) {
-        console.error('❌ Failed to create blob from canvas');
         alert('Failed to create PNG image');
         return;
       }
 
       console.log('✅ PNG created, size:', (blob.size / 1024).toFixed(2), 'KB');
-
-      // Download the file
-      const downloadUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(downloadUrl);
-
-      console.log('🎉 Export successful!');
+      downloadFile(blob, filename, 'image/png');
+      console.log('🎉 PNG export successful!');
     }, 'image/png', 1.0);
 
   } catch (error) {
-    console.error('❌ Export error:', error);
-    alert('Failed to export chart: ' + (error as Error).message);
+    console.error('❌ PNG export error:', error);
+    alert('Failed to export PNG: ' + (error as Error).message);
+  }
+};
+
+/**
+ * Export chart data as CSV for analysis
+ *
+ * @param data - Array of data objects
+ * @param filename - The desired filename for the download
+ */
+export const exportChartDataToCSV = (data: any[], filename: string = 'chart-data.csv'): void => {
+  try {
+    if (!data || data.length === 0) {
+      alert('No data to export');
+      return;
+    }
+
+    console.log('📊 Exporting chart data as CSV...');
+
+    // Get headers from first data object
+    const headers = Object.keys(data[0]);
+
+    // Create CSV content
+    const csvRows = [
+      headers.join(','), // Header row
+      ...data.map(row =>
+        headers.map(header => {
+          const value = row[header];
+          // Escape values that contain commas or quotes
+          if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+            return `"${value.replace(/"/g, '""')}"`;
+          }
+          return value;
+        }).join(',')
+      )
+    ];
+
+    const csvContent = '\uFEFF' + csvRows.join('\n'); // Add BOM for Excel
+
+    console.log('✅ CSV created, rows:', data.length);
+
+    // Download CSV
+    downloadFile(csvContent, filename, 'text/csv;charset=utf-8');
+
+    console.log('🎉 CSV export successful!');
+  } catch (error) {
+    console.error('❌ CSV export error:', error);
+    alert('Failed to export CSV: ' + (error as Error).message);
   }
 };
 
 /**
  * Generate a filename with timestamp
  * @param prefix - Prefix for the filename
- * @param extension - File extension (default: 'png')
+ * @param extension - File extension (default: 'svg')
  */
-export const generateChartFilename = (prefix: string, extension: string = 'png'): string => {
+export const generateChartFilename = (prefix: string, extension: string = 'svg'): string => {
   const now = new Date();
   const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-');
   return `${prefix}_${timestamp}.${extension}`;

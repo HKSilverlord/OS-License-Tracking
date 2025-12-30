@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { dbService } from '../services/dbService';
 import { formatCurrency } from '../utils/helpers';
-import { exportChartToPNG, generateChartFilename } from '../utils/chartExport';
+import { exportChartToSVG, generateChartFilename } from '../utils/chartExport';
 import { MonthlyStats, AccumulatedStats } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Area, Line } from 'recharts';
 import { Loader2, TrendingUp, DollarSign, Clock, Calculator, Download } from 'lucide-react';
@@ -397,12 +397,12 @@ export const Dashboard: React.FC = () => {
                   {t('dashboard.charts.monthly', 'Monthly Revenue (Plan vs Actual)')}
                 </h3>
                 <button
-                  onClick={() => exportChartToPNG('dashboard-monthly-chart', generateChartFilename(`monthly_revenue_${selectedYear}`))}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  title={t('buttons.exportChart', 'Export Chart')}
+                  onClick={() => exportChartToSVG('dashboard-monthly-chart', generateChartFilename(`monthly_revenue_${selectedYear}`, 'svg'))}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                  title="Export as SVG (vector)"
                 >
                   <Download className="w-4 h-4" />
-                  PNG
+                  SVG
                 </button>
               </div>
               <div id="dashboard-monthly-chart" className="h-72">
@@ -427,12 +427,12 @@ export const Dashboard: React.FC = () => {
                   {t('dashboard.charts.cumulative', 'Cumulative Revenue (Plan vs Actual)')}
                 </h3>
                 <button
-                  onClick={() => exportChartToPNG('dashboard-cumulative-chart', generateChartFilename(`cumulative_revenue_${selectedYear}`))}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  title={t('buttons.exportChart', 'Export Chart')}
+                  onClick={() => exportChartToSVG('dashboard-cumulative-chart', generateChartFilename(`cumulative_revenue_${selectedYear}`, 'svg'))}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                  title="Export as SVG (vector)"
                 >
                   <Download className="w-4 h-4" />
-                  PNG
+                  SVG
                 </button>
               </div>
               <div id="dashboard-cumulative-chart" className="h-72">
