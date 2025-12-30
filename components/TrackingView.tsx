@@ -27,7 +27,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   const year = parseInt(yearStr);
   const periodType = typeStr as PeriodType;
   const months = useMemo(() => getMonthsForPeriod(year, periodType), [year, periodType]);
-  
+
   const formatMonthLabel = useCallback((month: number) => {
     if (language === 'ja') return `${month}月`;
     if (language === 'vn') return `Tháng ${month}`;
@@ -37,8 +37,8 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   const filteredProjects = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return projects;
-    return projects.filter(p => 
-      p.name.toLowerCase().includes(query) || 
+    return projects.filter(p =>
+      p.name.toLowerCase().includes(query) ||
       p.code.toLowerCase().includes(query)
     );
   }, [projects, searchQuery]);
@@ -53,8 +53,12 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
         dbService.getProjects(),
         dbService.getRecords(currentPeriodLabel)
       ]);
+
+      // Sort projects by code
+      projectsData.sort((a, b) => a.code.localeCompare(b.code));
+
       setProjects(projectsData);
-      
+
       const groupedRecords: Record<string, MonthlyRecord[]> = {};
       recordsData.forEach(r => {
         if (!groupedRecords[r.project_id]) groupedRecords[r.project_id] = [];
@@ -91,7 +95,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   const saveRecord = async (projectId: string, month: number, field: 'planned_hours' | 'actual_hours', value: number) => {
     const key = `${projectId}-${month}-${field}`;
     setSavingStatus(prev => ({ ...prev, [key]: true }));
-    
+
     try {
       await dbService.upsertRecord({
         project_id: projectId,
@@ -112,9 +116,9 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   };
 
   const handleValueChange = (
-    projectId: string, 
-    month: number, 
-    field: 'planned_hours' | 'actual_hours', 
+    projectId: string,
+    month: number,
+    field: 'planned_hours' | 'actual_hours',
     value: string
   ) => {
     const numValue = value === '' ? 0 : parseFloat(value);
@@ -124,7 +128,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
     setRecords(prev => {
       const projectRecords = prev[projectId] ? [...prev[projectId]] : [];
       const existingIndex = projectRecords.findIndex(r => r.month === month);
-      
+
       if (existingIndex >= 0) {
         projectRecords[existingIndex] = { ...projectRecords[existingIndex], [field]: numValue };
       } else {
@@ -194,7 +198,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   };
 
   if (loading) {
-    return <div className="flex justify-center items-center h-64"><Loader2 className="animate-spin h-8 w-8 text-blue-600"/></div>;
+    return <div className="flex justify-center items-center h-64"><Loader2 className="animate-spin h-8 w-8 text-blue-600" /></div>;
   }
 
   // Use shared table styling constants
@@ -229,24 +233,24 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
             </button>
           </div>
         </div>
-        
+
         <table className="w-full min-w-max border-separate border-spacing-0">
           <thead className="bg-gray-50 sticky top-0 z-40">
             <tr>
               {/* Frozen Left Columns */}
-              <th scope="col" style={{left: 0, width: `${LEFT_SELECT_WIDTH}px`}} className={`px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                <input 
-                  type="checkbox" 
+              <th scope="col" style={{ left: 0, width: `${LEFT_SELECT_WIDTH}px` }} className={`px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                <input
+                  type="checkbox"
                   className="w-4 h-4 text-blue-600 border-gray-300 rounded"
                   checked={allFilteredSelected}
                   onChange={toggleSelectAll}
                   disabled={filteredProjects.length === 0}
                 />
               </th>
-              <th scope="col" style={{left: `${LEFT_SELECT_WIDTH}px`, width: `${LEFT_CODE_WIDTH}px`}} className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>{t('tracker.code')}</th>
-              <th scope="col" style={{left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px`}} className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>{t('tracker.projectName')}</th>
-              <th scope="col" style={{left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH + LEFT_NAME_WIDTH}px`, width: `${LEFT_PRICE_WIDTH}px`}} className={`px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>{t('tracker.unitPrice')}</th>
-              
+              <th scope="col" style={{ left: `${LEFT_SELECT_WIDTH}px`, width: `${LEFT_CODE_WIDTH}px` }} className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>{t('tracker.code')}</th>
+              <th scope="col" style={{ left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>{t('tracker.projectName')}</th>
+              <th scope="col" style={{ left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH + LEFT_NAME_WIDTH}px`, width: `${LEFT_PRICE_WIDTH}px` }} className={`px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>{t('tracker.unitPrice')}</th>
+
               <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16 border-b border-r bg-gray-50">Type</th>
 
               {/* Scrollable Month Columns */}
@@ -257,8 +261,8 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
               ))}
 
               {/* Frozen Right Columns (Totals) */}
-              <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider border-l border-b bg-gray-100 ${stickyRightHeaderClass} ${stickyCornerZ}`} style={{right: `${RIGHT_TOTAL_REV_WIDTH}px`, width: `${RIGHT_TOTAL_HRS_WIDTH}px`}}>Total Hrs</th>
-              <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider border-l border-b bg-gray-100 ${stickyRightHeaderClass} ${stickyCornerZ}`} style={{right: 0, width: `${RIGHT_TOTAL_REV_WIDTH}px`}}>Revenue</th>
+              <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider border-l border-b bg-gray-100 ${stickyRightHeaderClass} ${stickyCornerZ}`} style={{ right: `${RIGHT_TOTAL_REV_WIDTH}px`, width: `${RIGHT_TOTAL_HRS_WIDTH}px` }}>Total Hrs</th>
+              <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider border-l border-b bg-gray-100 ${stickyRightHeaderClass} ${stickyCornerZ}`} style={{ right: 0, width: `${RIGHT_TOTAL_REV_WIDTH}px` }}>Revenue</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -273,34 +277,34 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                 <React.Fragment key={project.id}>
                   {/* ROW 1: Plan */}
                   <tr className="hover:bg-gray-50 group">
-                    <td rowSpan={2} style={{left: 0, width: `${LEFT_SELECT_WIDTH}px`}} className={`px-3 py-3 text-center ${stickyLeftClass} align-top`}>
+                    <td rowSpan={2} style={{ left: 0, width: `${LEFT_SELECT_WIDTH}px` }} className={`px-3 py-3 text-center ${stickyLeftClass} align-top`}>
                       <div className="flex items-center justify-center h-full gap-2">
-                         <input 
-                            type="checkbox" 
-                            className="w-4 h-4 text-blue-600 border-gray-300 rounded"
-                            checked={selectedIds.includes(project.id)}
-                            onChange={() => toggleSelect(project.id)}
-                         />
-                         <button
-                            type="button"
-                            onClick={() => handleDeleteProjects([project.id])}
-                            disabled={deleting}
-                            className="text-red-500 hover:text-red-700"
-                         >
-                            <Trash2 className="w-4 h-4" />
-                         </button>
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded"
+                          checked={selectedIds.includes(project.id)}
+                          onChange={() => toggleSelect(project.id)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteProjects([project.id])}
+                          disabled={deleting}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
-                    <td rowSpan={2} style={{left: `${LEFT_SELECT_WIDTH}px`, width: `${LEFT_CODE_WIDTH}px`}} className={`px-3 py-3 text-sm font-medium text-gray-900 ${stickyLeftClass} align-top`}>
-                       {project.code}
+                    <td rowSpan={2} style={{ left: `${LEFT_SELECT_WIDTH}px`, width: `${LEFT_CODE_WIDTH}px` }} className={`px-3 py-3 text-sm font-medium text-gray-900 ${stickyLeftClass} align-top`}>
+                      {project.code}
                     </td>
-                    <td rowSpan={2} style={{left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px`}} className={`px-3 py-3 text-sm text-gray-500 ${stickyLeftClass} align-top`}>
-                       <div className="truncate w-44" title={project.name}>{project.name}</div>
+                    <td rowSpan={2} style={{ left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-sm text-gray-500 ${stickyLeftClass} align-top`}>
+                      <div className="truncate w-44" title={project.name}>{project.name}</div>
                     </td>
-                    <td rowSpan={2} style={{left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH + LEFT_NAME_WIDTH}px`, width: `${LEFT_PRICE_WIDTH}px`}} className={`px-3 py-3 text-sm text-gray-500 text-center ${stickyLeftClass} align-top`}>
-                       {project.unit_price.toLocaleString()}
+                    <td rowSpan={2} style={{ left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH + LEFT_NAME_WIDTH}px`, width: `${LEFT_PRICE_WIDTH}px` }} className={`px-3 py-3 text-sm text-gray-500 text-center ${stickyLeftClass} align-top`}>
+                      {project.unit_price.toLocaleString()}
                     </td>
-                    
+
                     {/* Plan Label */}
                     <td className="px-2 py-2 text-xs font-semibold text-gray-500 text-center border-r border-b bg-slate-50">
                       {t('tracker.planShort')}
@@ -314,61 +318,61 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
 
                       return (
                         <td key={`p-${m}`} className="px-1 py-1 border-r border-b relative">
-                           <input 
-                              type="number"
-                              className="w-full text-xs border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500 text-right px-1 py-1 bg-white focus:bg-blue-50 transition-colors"
-                              value={plan === 0 ? '' : plan}
-                              placeholder="-"
-                              onChange={(e) => handleValueChange(project.id, m, 'planned_hours', e.target.value)}
-                           />
-                           {isSaving && <Save className="w-2 h-2 absolute top-1 right-1 text-blue-500 animate-pulse" />}
+                          <input
+                            type="number"
+                            className="w-full text-xs border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500 text-right px-1 py-1 bg-white focus:bg-blue-50 transition-colors"
+                            value={plan === 0 ? '' : plan}
+                            placeholder="-"
+                            onChange={(e) => handleValueChange(project.id, m, 'planned_hours', e.target.value)}
+                          />
+                          {isSaving && <Save className="w-2 h-2 absolute top-1 right-1 text-blue-500 animate-pulse" />}
                         </td>
                       );
                     })}
 
                     {/* Plan Totals */}
-                    <td style={{right: `${RIGHT_TOTAL_REV_WIDTH}px`}} className={`px-2 py-2 text-xs font-medium text-gray-600 text-right border-l border-b bg-gray-50 ${stickyRightClass}`}>
-                        {totalPlannedHrs > 0 ? totalPlannedHrs.toLocaleString() : '-'}
+                    <td style={{ right: `${RIGHT_TOTAL_REV_WIDTH}px` }} className={`px-2 py-2 text-xs font-medium text-gray-600 text-right border-l border-b bg-gray-50 ${stickyRightClass}`}>
+                      {totalPlannedHrs > 0 ? totalPlannedHrs.toLocaleString() : '-'}
                     </td>
-                    <td style={{right: 0}} className={`px-2 py-2 text-xs text-gray-500 text-right border-l border-b bg-gray-50 ${stickyRightClass}`}>
-                        {totalPlannedRev > 0 ? formatCurrency(totalPlannedRev) : '-'}
+                    <td style={{ right: 0 }} className={`px-2 py-2 text-xs text-gray-500 text-right border-l border-b bg-gray-50 ${stickyRightClass}`}>
+                      {totalPlannedRev > 0 ? formatCurrency(totalPlannedRev) : '-'}
                     </td>
                   </tr>
 
                   {/* ROW 2: Actual */}
                   <tr className="hover:bg-gray-50 group">
-                     {/* Actual Label */}
-                     <td className="px-2 py-2 text-xs font-bold text-blue-600 text-center border-r border-b bg-blue-50/30">
-                        {t('tracker.actualShort')}
-                     </td>
+                    {/* Actual Label */}
+                    <td className="px-2 py-2 text-xs font-bold text-blue-600 text-center border-r border-b bg-blue-50/30">
+                      {t('tracker.actualShort')}
+                    </td>
 
-                     {/* Actual Inputs */}
-                     {months.map(m => {
-                        const record = projRecords.find(r => r.month === m);
-                        const actual = record?.actual_hours ?? 0;
-                        const isSaving = savingStatus[`${project.id}-${m}-actual_hours`];
+                    {/* Actual Inputs */}
+                    {months.map(m => {
+                      const record = projRecords.find(r => r.month === m);
+                      const actual = record?.actual_hours ?? 0;
+                      const isSaving = savingStatus[`${project.id}-${m}-actual_hours`];
 
-                        return (
-                          <td key={`a-${m}`} className="px-1 py-1 border-r border-b relative">
-                             <input 
-                                type="number"
-                                className={`w-full text-xs border-gray-300 rounded focus:ring-green-500 focus:border-green-500 text-right px-1 py-1 transition-colors ${actual > 0 ? 'bg-green-50 font-medium text-green-700' : 'bg-white'}`}
-                                value={actual === 0 ? '' : actual}
-                                placeholder="-"
-                                onChange={(e) => handleValueChange(project.id, m, 'actual_hours', e.target.value)}
-                             />
-                             {isSaving && <Save className="w-2 h-2 absolute top-1 right-1 text-green-500 animate-pulse" />}
-                          </td>
-                        );
-                     })}
+                      return (
+                        <td key={`a-${m}`} className="px-1 py-1 border-r border-b relative">
+                          <input
+                            type="number"
+                            className={`w-full text-xs border-gray-300 rounded focus:ring-green-500 focus:border-green-500 text-right px-1 py-1 transition-colors ${actual > 0 ? 'bg-green-50 font-medium text-green-700' : 'bg-white'}`}
+                            value={actual === 0 ? '' : actual}
+                            placeholder="-"
+                            onChange={(e) => handleValueChange(project.id, m, 'actual_hours', e.target.value)}
+                          />
+                          {isSaving && <Save className="w-2 h-2 absolute top-1 right-1 text-green-500 animate-pulse" />}
+                        </td>
+                      );
+                    })}
 
-                     {/* Actual Totals */}
-                     <td style={{right: `${RIGHT_TOTAL_REV_WIDTH}px`}} className={`px-2 py-2 text-xs font-bold text-gray-900 text-right border-l border-b bg-green-50/30 ${stickyRightClass}`}>
-                        {totalActualHrs > 0 ? totalActualHrs.toLocaleString() : '-'}
-                     </td>
-                     <td style={{right: 0}} className={`px-2 py-2 text-xs font-bold text-gray-900 text-right border-l border-b bg-green-50/30 ${stickyRightClass}`}>
-                        {totalActualRev > 0 ? formatCurrency(totalActualRev) : '-'}
-                     </td>
+                    {/* Actual Totals */}
+                    <td style={{ right: `${RIGHT_TOTAL_REV_WIDTH}px` }} className={`px-2 py-2 text-xs font-bold text-gray-900 text-right border-l border-b bg-green-50/30 ${stickyRightClass}`}>
+                      {totalActualHrs > 0 ? totalActualHrs.toLocaleString() : '-'}
+                    </td>
+                    <td style={{ right: 0 }} className={`px-2 py-2 text-xs font-bold text-gray-900 text-right border-l border-b bg-green-50/30 ${stickyRightClass}`}>
+                      {totalActualRev > 0 ? formatCurrency(totalActualRev) : '-'}
+                    </td>
                   </tr>
                 </React.Fragment>
               );
@@ -376,9 +380,9 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
           </tbody>
         </table>
         {filteredProjects.length === 0 && (
-           <div className="p-8 text-center text-gray-500">
-             {t('tracker.noResults')}
-           </div>
+          <div className="p-8 text-center text-gray-500">
+            {t('tracker.noResults')}
+          </div>
         )}
       </div>
     </div>
