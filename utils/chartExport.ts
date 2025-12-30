@@ -1,34 +1,35 @@
 /**
  * Chart Export Utilities
- * Export Recharts charts to PNG with transparent background
+ * Export Recharts charts to PNG with white background
  */
 
 /**
- * Inline all computed styles from original elements to cloned elements
+ * Get all CSS styles as a string to embed in SVG
  */
-const inlineStyles = (sourceElement: Element, targetElement: Element): void => {
-  const computedStyle = window.getComputedStyle(sourceElement);
+const getCSSStyles = (element: Element): string => {
+  const sheets = document.styleSheets;
+  let cssText = '';
 
-  // Copy all computed styles
-  for (let i = 0; i < computedStyle.length; i++) {
-    const property = computedStyle[i];
-    const value = computedStyle.getPropertyValue(property);
-    (targetElement as HTMLElement).style.setProperty(property, value);
-  }
-
-  // Recursively apply to children
-  const sourceChildren = sourceElement.children;
-  const targetChildren = targetElement.children;
-
-  for (let i = 0; i < sourceChildren.length; i++) {
-    if (targetChildren[i]) {
-      inlineStyles(sourceChildren[i], targetChildren[i]);
+  for (let i = 0; i < sheets.length; i++) {
+    const sheet = sheets[i];
+    try {
+      const rules = sheet.cssRules || sheet.rules;
+      if (rules) {
+        for (let j = 0; j < rules.length; j++) {
+          cssText += rules[j].cssText + '\n';
+        }
+      }
+    } catch (e) {
+      // Skip sheets that can't be accessed due to CORS
+      console.warn('Cannot access stylesheet:', e);
     }
   }
+
+  return cssText;
 };
 
 /**
- * Export a chart container to PNG with transparent background
+ * Export a chart container to PNG with white background
  * @param elementId - The ID of the chart container element
  * @param filename - The desired filename for the download
  */
@@ -50,75 +51,83 @@ export const exportChartToPNG = async (elementId: string, filename: string = 'ch
     }
 
     // Get SVG dimensions
-    const svgRect = svgElement.getBoundingClientRect();
-    const width = svgRect.width;
-    const height = svgRect.height;
+    const bbox = svgElement.getBoundingClientRect();
+    const width = bbox.width;
+    const height = bbox.height;
 
-    // Clone the SVG to avoid modifying the original
+    // Clone the SVG
     const clonedSvg = svgElement.cloneNode(true) as SVGElement;
 
-    // Set explicit dimensions on the cloned SVG
+    // Set proper SVG attributes
+    clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clonedSvg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
     clonedSvg.setAttribute('width', width.toString());
     clonedSvg.setAttribute('height', height.toString());
 
-    // Inline all computed styles to preserve appearance
-    inlineStyles(svgElement, clonedSvg);
+    // Add white background rectangle as first child
+    const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bgRect.setAttribute('width', '100%');
+    bgRect.setAttribute('height', '100%');
+    bgRect.setAttribute('fill', 'white');
+    clonedSvg.insertBefore(bgRect, clonedSvg.firstChild);
 
-    // Serialize the SVG to string
-    const svgData = new XMLSerializer().serializeToString(clonedSvg);
+    // Get all CSS styles and add them to SVG
+    const cssText = getCSSStyles(clonedSvg);
+    const styleElement = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+    styleElement.textContent = cssText;
+    clonedSvg.insertBefore(styleElement, clonedSvg.firstChild);
 
-    // Create a data URL from the SVG
-    const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-    const svgUrl = URL.createObjectURL(svgBlob);
+    // Serialize to string
+    const svgString = new XMLSerializer().serializeToString(clonedSvg);
 
-    // Create an image element
-    const img = new Image();
-    img.width = width;
-    img.height = height;
-
-    // Wait for image to load
-    await new Promise((resolve, reject) => {
-      img.onload = resolve;
-      img.onerror = reject;
-      img.src = svgUrl;
-    });
-
-    // Create a canvas with transparent background
+    // Create canvas
     const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
+    const scale = 2; // Higher resolution
+    canvas.width = width * scale;
+    canvas.height = height * scale;
 
+    const ctx = canvas.getContext('2d');
     if (!ctx) {
       throw new Error('Could not get canvas context');
     }
 
-    // Draw the image on the canvas (with transparent background)
-    ctx.drawImage(img, 0, 0, width, height);
+    // Scale for better quality
+    ctx.scale(scale, scale);
 
-    // Clean up the blob URL
-    URL.revokeObjectURL(svgUrl);
+    // Create image from SVG
+    const img = new Image();
+    const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
 
-    // Convert canvas to blob and download
+    // Wait for image to load and draw
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      img.onerror = (e) => {
+        URL.revokeObjectURL(url);
+        reject(e);
+      };
+      img.src = url;
+    });
+
+    // Convert to blob and download
     canvas.toBlob((blob) => {
       if (!blob) {
         console.error('Failed to create blob from canvas');
         return;
       }
 
-      // Create download link
-      const url = URL.createObjectURL(blob);
+      const downloadUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = url;
+      link.href = downloadUrl;
       link.download = filename;
-
-      // Trigger download
       document.body.appendChild(link);
       link.click();
-
-      // Clean up
       document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(downloadUrl);
     }, 'image/png');
 
   } catch (error) {
