@@ -46,6 +46,11 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   const allFilteredSelected = filteredProjects.length > 0 && filteredProjects.every(p => selectedIds.includes(p.id));
   const hasSelection = selectedIds.length > 0;
 
+  // Clear selections when period changes
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [currentPeriodLabel]);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -218,18 +223,18 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   const { leftCell: stickyLeftClass, leftHeader: stickyLeftHeaderClass, rightCell: stickyRightClass, rightHeader: stickyRightHeaderClass, header: stickyHeaderZ, corner: stickyCornerZ } = STICKY_CLASSES;
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 p-4 md:p-6 overflow-hidden">
-      <div className="flex-1 min-h-0 w-full overflow-auto border rounded-lg shadow-sm bg-white relative isolate custom-scrollbar">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-gray-100 bg-white">
-          <div className="text-sm text-gray-600">
+    <div className="flex flex-col h-full bg-slate-50 p-2 sm:p-4 md:p-6 overflow-hidden">
+      <div className="flex-1 min-h-0 w-full overflow-x-auto overflow-y-auto border rounded-lg shadow-sm bg-white relative isolate custom-scrollbar">
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 px-2 sm:px-4 py-2 sm:py-3 border-b border-gray-100 bg-white sticky top-0 z-30">
+          <div className="text-xs sm:text-sm text-gray-600">
             {t('tracker.selectedLabel')}: <span className="font-semibold text-gray-800">{selectedIds.length}</span> / {filteredProjects.length}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
             <button
               type="button"
               onClick={toggleSelectAll}
               disabled={filteredProjects.length === 0}
-              className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="px-2 sm:px-3 py-1.5 text-xs sm:text-sm border border-slate-300 rounded-lg bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
             >
               {allFilteredSelected ? t('tracker.clearSelection') : t('tracker.selectAll')}
             </button>
@@ -237,15 +242,17 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
               type="button"
               onClick={() => handleDeleteProjects(selectedIds)}
               disabled={!hasSelection || deleting}
-              className="px-3 py-1.5 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed flex items-center shadow-sm"
+              className="px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed flex items-center shadow-sm whitespace-nowrap"
             >
-              <Trash2 className="w-4 h-4 mr-2" />
-              {t('tracker.deleteSelected')}{hasSelection ? ` (${selectedIds.length})` : ''}
+              <Trash2 className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">{t('tracker.deleteSelected')}</span>
+              <span className="inline sm:hidden">{t('tracker.deleteSelected').split(' ')[0]}</span>
+              {hasSelection ? ` (${selectedIds.length})` : ''}
             </button>
           </div>
         </div>
 
-        <table className="w-full min-w-max border-separate border-spacing-0">
+        <table key={currentPeriodLabel} className="w-full min-w-max border-separate border-spacing-0">
           <thead className="bg-gray-50 sticky top-0 z-40">
             <tr>
               {/* Frozen Left Columns */}
@@ -269,7 +276,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
               <th scope="col" style={{ left: `${LEFT_SELECT_WIDTH + 50 + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
                 {t('tracker.projectName')}
               </th>
-              <th scope="col" style={{ left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH + LEFT_NAME_WIDTH}px`, width: `${LEFT_PRICE_WIDTH}px` }} className={`px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>{t('tracker.unitPrice')}</th>
+              <th scope="col" style={{ left: `${LEFT_SELECT_WIDTH + 50 + LEFT_CODE_WIDTH + LEFT_NAME_WIDTH}px`, width: `${LEFT_PRICE_WIDTH}px` }} className={`px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>{t('tracker.unitPrice')}</th>
 
               <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r min-w-[200px]">
                 {t('tracker.businessContent')}
@@ -419,7 +426,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
           </tbody>
         </table>
         {filteredProjects.length === 0 && (
-          <div className="p-8 text-center text-gray-500">
+          <div className="p-4 sm:p-8 text-center text-gray-500 text-sm sm:text-base">
             {t('tracker.noResults')}
           </div>
         )}
