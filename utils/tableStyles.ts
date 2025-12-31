@@ -10,7 +10,7 @@ export const TABLE_COLUMN_WIDTHS = {
   code: 112,
   name: 200, // Increased to accommodate price display
   software: 120,
-  businessContent: 200,
+  businessContent: 150, // Reduced from 200
   month: 70, // Reduced for 3-digit numbers (000-999)
   totalHrs: 96,
   totalRev: 128,

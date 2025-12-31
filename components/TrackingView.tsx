@@ -213,7 +213,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   }
 
   // Use shared table styling constants
-  const { no: LEFT_NO_WIDTH, code: LEFT_CODE_WIDTH, name: LEFT_NAME_WIDTH, software: LEFT_SOFTWARE_WIDTH, month: MONTH_WIDTH, actions: RIGHT_ACTIONS_WIDTH } = TABLE_COLUMN_WIDTHS;
+  const { no: LEFT_NO_WIDTH, code: LEFT_CODE_WIDTH, name: LEFT_NAME_WIDTH, software: LEFT_SOFTWARE_WIDTH, businessContent: BUSINESS_CONTENT_WIDTH, month: MONTH_WIDTH, actions: RIGHT_ACTIONS_WIDTH } = TABLE_COLUMN_WIDTHS;
 
   const { leftCell: stickyLeftClass, leftHeader: stickyLeftHeaderClass, rightCell: stickyRightClass, rightHeader: stickyRightHeaderClass, header: stickyHeaderZ, corner: stickyCornerZ } = STICKY_CLASSES;
 
@@ -241,7 +241,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                 {t('tracker.software')}
               </th>
 
-              <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r min-w-[200px]">
+              <th scope="col" style={{ width: `${BUSINESS_CONTENT_WIDTH}px` }} className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r">
                 {t('tracker.businessContent')}
               </th>
 
@@ -295,7 +295,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                       />
                     </td>
                     {/* Business Content Cell */}
-                    <td rowSpan={2} className="px-2 py-2 text-xs text-gray-500 text-center border-r border-b bg-white align-top p-0 group-hover:bg-gray-50 max-w-[200px]">
+                    <td rowSpan={2} style={{ width: `${BUSINESS_CONTENT_WIDTH}px` }} className="px-2 py-2 text-xs text-gray-500 text-center border-r border-b bg-white align-top p-0 group-hover:bg-gray-50">
                       <textarea
                         className="w-full h-full min-h-[50px] border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-xs p-2 bg-transparent resize-none"
                         value={project.type || ''}
@@ -334,7 +334,10 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                       <div className="relative inline-block">
                         <button
                           type="button"
-                          onClick={() => setOpenMenuId(openMenuId === project.id ? null : project.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenuId(openMenuId === project.id ? null : project.id);
+                          }}
                           className="p-1 hover:bg-gray-100 rounded"
                         >
                           <MoreVertical className="w-4 h-4 text-gray-600" />
@@ -343,7 +346,8 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                           <div className="absolute right-0 mt-1 w-32 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
                             <button
                               type="button"
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 handleDeleteProjects([project.id]);
                                 setOpenMenuId(null);
                               }}
