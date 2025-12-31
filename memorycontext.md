@@ -195,6 +195,48 @@ Bilingual (JP/VN/EN) dashboard for tracking OS department projects, hours, and r
 - Run in Supabase SQL Editor to populate 16 projects and monthly records
 - Periods table includes 2024-H2, 2025-H1, 2025-H2
 
+### 13. Database Migration and Data Import (2025-12-31)
+- **Period Scoping Migration Completed**:
+  - Created `db/migration_period_scoping.sql` - Idempotent migration script
+  - Added `period` column to projects table (NOT NULL, text)
+  - Dropped old unique constraint on `code` alone
+  - Added unique constraint on `(code, period)` combination
+  - Added foreign key: `period` → `periods(label)` with ON DELETE RESTRICT
+  - Created performance index: `idx_projects_period`
+  - Added 2026-H1 and 2026-H2 periods
+  - Migrated existing projects to default period (2025-H1)
+  - **Result**: Period scoping fully enabled in database
+
+- **Real Data Import (2024-2025)**:
+  - Created `db/import_2024_2025_data.sql` from CSV data (`data/29251230_data.csv`)
+  - Imported 48 projects across 3 periods:
+    - **2024-H2** (Aug-Dec): 16 projects, 20 records, 1,200 planned hrs, 336 actual hrs
+    - **2025-H1** (Jan-Jun): 16 projects, 96 records, 5,255 planned hrs, 1,434 actual hrs
+    - **2025-H2** (Jul-Dec): 16 projects, 96 records, 6,295 planned hrs, 1,737 actual hrs
+  - Projects include: ISJ (生産設備/自動車部品/金型), GLW (LM/FALTEC/河西テクノ), テクノハマ, GNN (multiple variants), 日泉化学, VUTEQ インドネシア, 啓装工業
+  - Each project scoped by period with unique `(code, period)` identifier
+  - All monthly records include both planned and actual hours from real tracking data
+
+- **Database Documentation**:
+  - Created `db/README.md` with comprehensive setup guide
+  - Includes migration instructions for new and existing databases
+  - Documents all import scripts and their purpose
+  - Provides verification queries and troubleshooting guide
+  - Rollback instructions included for safety
+
+- **Git Commit and Push**:
+  - Committed changes: App.tsx, TrackingView.tsx, LanguageContext.tsx, dbService.ts, import_2025_data.sql, memorycontext.md
+  - Commit message: "feat: Add period scoping and import 2024-2025 data"
+  - Pushed to GitHub: HKSilverlord/OS-License-Tracking (main branch)
+  - Commit hash: 43641a9
+
+- **Database State**:
+  - **Total Projects**: 74 (16 each for 2024-H2, 2025-H1, 2025-H2 + 13 each for 2026-H1, 2026-H2)
+  - **Total Periods**: 5 (2024-H2, 2025-H1, 2025-H2, 2026-H1, 2026-H2)
+  - **Total Monthly Records**: 368 records
+  - **Software Used**: CATIA, ICAD, NX CATIA, mixed
+  - **Schema Version**: Fully migrated with period scoping
+
 ## Notes / Next Ideas
 - Language preference persistence: Consider saving selected language to localStorage or user settings
 - Year/period preference: Could persist last selected year/period across sessions
@@ -203,6 +245,14 @@ Bilingual (JP/VN/EN) dashboard for tracking OS department projects, hours, and r
 - Dashboard enhancements: Add more customizable financial metrics or date range filters
 - Mobile optimization: Further improve responsive design for tablet/mobile devices
 - Chart interactions: Consider adding click/hover interactions for detailed data views
+- **Consider version control for db scripts**: Currently in .gitignore, may want to track migration history
+
+## Database Files (Local Only - Not in Git)
+- `db/migration_period_scoping.sql` - Period scoping migration (idempotent)
+- `db/import_2024_2025_data.sql` - Real 2024-2025 data from CSV
+- `db/import_2025_data.sql` - 2026 sample/planning data
+- `db/README.md` - Setup and troubleshooting guide
+- Note: These files are ignored by .gitignore but available locally
 
 ---
-*Last Updated: December 30, 2025*
+*Last Updated: December 31, 2025*
