@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Project, MonthlyRecord, PeriodType } from '../types';
 import { dbService } from '../services/dbService';
-import { getMonthsForPeriod, formatCurrency } from '../utils/helpers';
-import { TABLE_COLUMN_WIDTHS, STICKY_CLASSES, calculateLeftPosition, calculateRightPosition } from '../utils/tableStyles';
+import { getMonthsForPeriod } from '../utils/helpers';
+import { TABLE_COLUMN_WIDTHS, STICKY_CLASSES } from '../utils/tableStyles';
 import { Save, Loader2, Trash2 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ScrollContainer } from './ScrollContainer';
@@ -10,9 +10,10 @@ import { ScrollContainer } from './ScrollContainer';
 interface TrackingViewProps {
   currentPeriodLabel: string; // e.g. "2024-H1"
   searchQuery: string;
+  refreshTrigger?: number; // Trigger to refresh data when project is created
 }
 
-export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, searchQuery }) => {
+export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, searchQuery, refreshTrigger }) => {
   const { t, language } = useLanguage();
   const [projects, setProjects] = useState<Project[]>([]);
   const [records, setRecords] = useState<Record<string, MonthlyRecord[]>>({}); // Key: ProjectId
@@ -83,6 +84,13 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Refresh data when a new project is created
+  useEffect(() => {
+    if (refreshTrigger !== undefined && refreshTrigger > 0) {
+      fetchData();
+    }
+  }, [refreshTrigger, fetchData]);
 
   // Cleanup debounce timers on unmount and period change
   useEffect(() => {
@@ -219,9 +227,9 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   }
 
   // Use shared table styling constants
-  const { select: LEFT_SELECT_WIDTH, code: LEFT_CODE_WIDTH, name: LEFT_NAME_WIDTH, price: LEFT_PRICE_WIDTH, month: MONTH_WIDTH, totalHrs: RIGHT_TOTAL_HRS_WIDTH, totalRev: RIGHT_TOTAL_REV_WIDTH } = TABLE_COLUMN_WIDTHS;
+  const { select: LEFT_SELECT_WIDTH, code: LEFT_CODE_WIDTH, name: LEFT_NAME_WIDTH, price: LEFT_PRICE_WIDTH, month: MONTH_WIDTH } = TABLE_COLUMN_WIDTHS;
 
-  const { leftCell: stickyLeftClass, leftHeader: stickyLeftHeaderClass, rightCell: stickyRightClass, rightHeader: stickyRightHeaderClass, header: stickyHeaderZ, corner: stickyCornerZ } = STICKY_CLASSES;
+  const { leftCell: stickyLeftClass, leftHeader: stickyLeftHeaderClass, header: stickyHeaderZ, corner: stickyCornerZ } = STICKY_CLASSES;
 
   return (
     <div className="flex flex-col h-full bg-slate-50 p-2 sm:p-4 md:p-6 overflow-hidden">
@@ -286,7 +294,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
 
               {/* Row Type Column (Plan/Actual) */}
               <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r w-16">
-                {/* Empty header for Plan/Actual column */}
+                {t('tracker.type')}
               </th>
 
               {/* Scrollable Month Columns */}
@@ -295,23 +303,11 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                   {formatMonthLabel(m)}
                 </th>
               ))}
-
-              {/* Frozen Right Columns (Totals) */}
-              <th scope="col" className={`px-2 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider border-b border-l bg-gray-100 ${stickyRightHeaderClass} ${stickyCornerZ}`} style={{ right: `${RIGHT_TOTAL_REV_WIDTH}px`, width: `${RIGHT_TOTAL_HRS_WIDTH}px` }}>
-                {t('tracker.totalHrs')}
-              </th>
-              <th scope="col" className={`px-2 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider border-b border-l bg-amber-50 ${stickyRightHeaderClass} ${stickyCornerZ}`} style={{ right: 0, width: `${RIGHT_TOTAL_REV_WIDTH}px` }}>
-                {t('tracker.revenue')}
-              </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {filteredProjects.map((project, index) => {
               const projRecords = records[project.id] || [];
-              const totalPlannedHrs = projRecords.reduce((sum, r) => sum + (r.planned_hours || 0), 0);
-              const totalActualHrs = projRecords.reduce((sum, r) => sum + (r.actual_hours || 0), 0);
-              const totalPlannedRev = totalPlannedHrs * project.unit_price;
-              const totalActualRev = totalActualHrs * project.unit_price;
 
               return (
                 <React.Fragment key={project.id}>
@@ -382,14 +378,6 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                         </td>
                       );
                     })}
-
-                    {/* Plan Totals */}
-                    <td style={{ right: `${RIGHT_TOTAL_REV_WIDTH}px` }} className={`px-2 py-2 text-xs font-medium text-gray-600 text-right border-l border-b bg-gray-50 ${stickyRightClass}`}>
-                      {totalPlannedHrs > 0 ? totalPlannedHrs.toLocaleString() : '-'}
-                    </td>
-                    <td style={{ right: 0 }} className={`px-2 py-2 text-xs text-gray-500 text-right border-l border-b bg-gray-50 ${stickyRightClass}`}>
-                      {totalPlannedRev > 0 ? formatCurrency(totalPlannedRev) : '-'}
-                    </td>
                   </tr>
 
                   {/* ROW 2: Actual */}
@@ -418,14 +406,6 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                         </td>
                       );
                     })}
-
-                    {/* Actual Totals */}
-                    <td style={{ right: `${RIGHT_TOTAL_REV_WIDTH}px` }} className={`px-2 py-2 text-xs font-bold text-gray-900 text-right border-l border-b bg-green-50/30 ${stickyRightClass}`}>
-                      {totalActualHrs > 0 ? totalActualHrs.toLocaleString() : '-'}
-                    </td>
-                    <td style={{ right: 0 }} className={`px-2 py-2 text-xs font-bold text-gray-900 text-right border-l border-b bg-green-50/30 ${stickyRightClass}`}>
-                      {totalActualRev > 0 ? formatCurrency(totalActualRev) : '-'}
-                    </td>
                   </tr>
                 </React.Fragment>
               );

@@ -42,20 +42,14 @@ function App() {
   const [newProject, setNewProject] = useState({
     code: '',
     name: '',
-    type: 'Mechanical Design',
+    type: '',
     status: ProjectStatus.ACTIVE,
     software: 'AutoCAD',
     unit_price: DEFAULT_UNIT_PRICE
   });
   const [currentPeriodProjects, setCurrentPeriodProjects] = useState<any[]>([]);
   const [selectedCarryOverIds, setSelectedCarryOverIds] = useState<string[]>([]);
-
-  const projectTypeOptions = [
-    { value: 'Mechanical Design', label: t('project.type.mechanical') },
-    { value: 'Software', label: t('project.type.software') },
-    { value: 'Translation', label: t('project.type.translation') },
-    { value: 'Other', label: t('project.type.other') },
-  ];
+  const [projectCreatedTrigger, setProjectCreatedTrigger] = useState(0);
 
   // Auth & Init Data
   useEffect(() => {
@@ -102,14 +96,14 @@ function App() {
       setNewProject({
         code: '',
         name: '',
-        type: 'Mechanical Design',
+        type: '',
         status: ProjectStatus.ACTIVE,
         software: 'AutoCAD',
         unit_price: DEFAULT_UNIT_PRICE
       });
-      // Success! Project will appear in TrackingView on next load/navigation
+      // Trigger refresh in TrackingView
+      setProjectCreatedTrigger(prev => prev + 1);
       alert(t('alerts.projectCreated', 'Project created successfully!'));
-      // Force reload or event dispatch could be better but for now TrackingView refreshes on mount/prop change
     } catch (err) {
       alert(t('alerts.projectCreateError'));
       console.error(err);
@@ -319,7 +313,7 @@ function App() {
           <div className="flex-1 flex flex-col overflow-hidden relative">
             <Routes>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/tracking" element={<TrackingView currentPeriodLabel={currentPeriod} searchQuery={searchQuery} />} />
+              <Route path="/tracking" element={<TrackingView currentPeriodLabel={currentPeriod} searchQuery={searchQuery} refreshTrigger={projectCreatedTrigger} />} />
               <Route path="/total" element={<TotalView currentYear={currentYear} />} />
               <Route path="/yearly-data" element={<YearlyDataView currentYear={currentYear} />} />
             </Routes>
@@ -349,11 +343,7 @@ function App() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-700 uppercase mb-1">{t('modals.project.type')}</label>
-                  <select className="block w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500" value={newProject.type} onChange={e => setNewProject({ ...newProject, type: e.target.value })}>
-                    {projectTypeOptions.map(option => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
+                  <input type="text" className="block w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500" value={newProject.type} onChange={e => setNewProject({ ...newProject, type: e.target.value })} placeholder={t('modals.project.typePlaceholder')} />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 uppercase mb-1">{t('modals.project.unitPrice')}</label>
