@@ -346,6 +346,12 @@ function App() {
                   <input type="text" className="block w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500" value={newProject.type} onChange={e => setNewProject({ ...newProject, type: e.target.value })} placeholder={t('modals.project.typePlaceholder')} />
                 </div>
                 <div>
+                  <label className="block text-xs font-medium text-gray-700 uppercase mb-1">{t('modals.project.software')}</label>
+                  <input type="text" className="block w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500" value={newProject.software} onChange={e => setNewProject({ ...newProject, software: e.target.value })} placeholder={t('modals.project.softwarePlaceholder')} />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
                   <label className="block text-xs font-medium text-gray-700 uppercase mb-1">{t('modals.project.unitPrice')}</label>
                   <input required type="number" className="block w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500" value={newProject.unit_price} onChange={e => setNewProject({ ...newProject, unit_price: parseInt(e.target.value) })} />
                 </div>
