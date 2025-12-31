@@ -5,13 +5,13 @@
 
 export const TABLE_COLUMN_WIDTHS = {
   // TrackingView specific
-  select: 64,
+  actions: 64, // 3-dot menu column
   no: 50,
   code: 112,
-  name: 192,
-  price: 96,
+  name: 200, // Increased to accommodate price display
+  software: 120,
   businessContent: 200,
-  month: 96, // Month columns minimum width
+  month: 70, // Reduced for 3-digit numbers (000-999)
   totalHrs: 96,
   totalRev: 128,
 
