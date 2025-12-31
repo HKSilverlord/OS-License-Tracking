@@ -284,6 +284,11 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                 {t('tracker.businessContent')}
               </th>
 
+              {/* Row Type Column (Plan/Actual) */}
+              <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r w-16">
+                {/* Empty header for Plan/Actual column */}
+              </th>
+
               {/* Scrollable Month Columns */}
               {months.map((m) => (
                 <th key={m} scope="col" style={{ minWidth: `${MONTH_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-r border-gray-200 ${stickyHeaderZ}`}>
