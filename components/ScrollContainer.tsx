@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, forwardRef } from 'react';
 
 interface ScrollContainerProps {
   children: React.ReactNode;
@@ -10,12 +10,13 @@ interface ScrollContainerProps {
  * ScrollContainer component with left/right shadow indicators
  * Shows shadows when content is scrollable in that direction
  */
-export const ScrollContainer: React.FC<ScrollContainerProps> = ({
+export const ScrollContainer = forwardRef<HTMLDivElement, ScrollContainerProps>(({
   children,
   className = '',
   shadowColor = 'rgba(0, 0, 0, 0.15)'
-}) => {
-  const containerRef = useRef<HTMLDivElement>(null);
+}, forwardedRef) => {
+  const internalRef = useRef<HTMLDivElement>(null);
+  const containerRef = (forwardedRef as React.RefObject<HTMLDivElement>) || internalRef;
   const [showLeftShadow, setShowLeftShadow] = useState(false);
   const [showRightShadow, setShowRightShadow] = useState(false);
 
@@ -83,4 +84,6 @@ export const ScrollContainer: React.FC<ScrollContainerProps> = ({
       />
     </div>
   );
-};
+});
+
+ScrollContainer.displayName = 'ScrollContainer';

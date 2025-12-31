@@ -24,6 +24,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
 
   // Debounce refs
   const debounceTimers = useRef<Record<string, any>>({});
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const [yearStr, typeStr] = currentPeriodLabel.split('-');
   const year = parseInt(yearStr);
@@ -88,7 +89,14 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   // Refresh data when a new project is created
   useEffect(() => {
     if (refreshTrigger !== undefined && refreshTrigger > 0) {
-      fetchData();
+      fetchData().then(() => {
+        // Scroll to bottom after data is loaded to show the new project
+        setTimeout(() => {
+          if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+          }
+        }, 100);
+      });
     }
   }, [refreshTrigger, fetchData]);
 
@@ -220,7 +228,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   return (
     <div className="flex flex-col h-full bg-slate-50 p-2 sm:p-4 md:p-6 overflow-hidden">
       <div className="flex-1 min-h-0 w-full border rounded-lg shadow-sm bg-white relative isolate">
-        <ScrollContainer className="flex-1">
+        <ScrollContainer ref={scrollContainerRef} className="flex-1">
           <table key={currentPeriodLabel} className="w-full min-w-max border-separate border-spacing-0">
           <thead className="bg-gray-50 sticky top-0 z-40">
             <tr>
