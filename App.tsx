@@ -118,12 +118,12 @@ function App() {
 
   const handleOpenProjectModal = async () => {
     try {
-      const nextCode = await dbService.generateNextProjectCode();
+      const nextCode = await dbService.getNextProjectCode(currentPeriod);
       setNewProject(prev => ({ ...prev, code: nextCode }));
       setIsProjectModalOpen(true);
     } catch (error) {
       console.error("Failed to generate project code", error);
-      // Fallback
+      // Fallback: open modal anyway, code will be auto-generated on submit
       setIsProjectModalOpen(true);
     }
   };

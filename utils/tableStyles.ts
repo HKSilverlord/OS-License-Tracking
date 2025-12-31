@@ -6,17 +6,19 @@
 export const TABLE_COLUMN_WIDTHS = {
   // TrackingView specific
   select: 64,
+  no: 50,
   code: 112,
   name: 192,
   price: 96,
+  businessContent: 200,
+  month: 96, // Month columns minimum width
   totalHrs: 96,
-  totalRev: 112,
+  totalRev: 128,
 
   // TotalView specific (slightly different widths)
   codeReadOnly: 100,
   nameReadOnly: 200,
   type: 64,
-  month: 80,
   total: 96,
 } as const;
 

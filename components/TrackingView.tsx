@@ -5,6 +5,7 @@ import { getMonthsForPeriod, formatCurrency } from '../utils/helpers';
 import { TABLE_COLUMN_WIDTHS, STICKY_CLASSES, calculateLeftPosition, calculateRightPosition } from '../utils/tableStyles';
 import { Save, Loader2, Trash2 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { ScrollContainer } from './ScrollContainer';
 
 interface TrackingViewProps {
   currentPeriodLabel: string; // e.g. "2024-H1"
@@ -218,14 +219,14 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   }
 
   // Use shared table styling constants
-  const { select: LEFT_SELECT_WIDTH, code: LEFT_CODE_WIDTH, name: LEFT_NAME_WIDTH, price: LEFT_PRICE_WIDTH, totalHrs: RIGHT_TOTAL_HRS_WIDTH, totalRev: RIGHT_TOTAL_REV_WIDTH } = TABLE_COLUMN_WIDTHS;
+  const { select: LEFT_SELECT_WIDTH, code: LEFT_CODE_WIDTH, name: LEFT_NAME_WIDTH, price: LEFT_PRICE_WIDTH, month: MONTH_WIDTH, totalHrs: RIGHT_TOTAL_HRS_WIDTH, totalRev: RIGHT_TOTAL_REV_WIDTH } = TABLE_COLUMN_WIDTHS;
 
   const { leftCell: stickyLeftClass, leftHeader: stickyLeftHeaderClass, rightCell: stickyRightClass, rightHeader: stickyRightHeaderClass, header: stickyHeaderZ, corner: stickyCornerZ } = STICKY_CLASSES;
 
   return (
     <div className="flex flex-col h-full bg-slate-50 p-2 sm:p-4 md:p-6 overflow-hidden">
-      <div className="flex-1 min-h-0 w-full overflow-x-auto overflow-y-auto border rounded-lg shadow-sm bg-white relative isolate custom-scrollbar">
-        <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 px-2 sm:px-4 py-2 sm:py-3 border-b border-gray-100 bg-white sticky top-0 z-30">
+      <div className="flex-1 min-h-0 w-full border rounded-lg shadow-sm bg-white relative isolate">
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 px-2 sm:px-4 py-2 sm:py-3 border-b border-gray-100 bg-white z-30">
           <div className="text-xs sm:text-sm text-gray-600">
             {t('tracker.selectedLabel')}: <span className="font-semibold text-gray-800">{selectedIds.length}</span> / {filteredProjects.length}
           </div>
@@ -252,7 +253,8 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
           </div>
         </div>
 
-        <table key={currentPeriodLabel} className="w-full min-w-max border-separate border-spacing-0">
+        <ScrollContainer className="flex-1">
+          <table key={currentPeriodLabel} className="w-full min-w-max border-separate border-spacing-0">
           <thead className="bg-gray-50 sticky top-0 z-40">
             <tr>
               {/* Frozen Left Columns */}
@@ -284,7 +286,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
 
               {/* Scrollable Month Columns */}
               {months.map((m) => (
-                <th key={m} scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20 border-b border-r border-gray-200 ${stickyHeaderZ}`}>
+                <th key={m} scope="col" style={{ minWidth: `${MONTH_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-r border-gray-200 ${stickyHeaderZ}`}>
                   {formatMonthLabel(m)}
                 </th>
               ))}
@@ -425,6 +427,8 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
             })}
           </tbody>
         </table>
+        </ScrollContainer>
+
         {filteredProjects.length === 0 && (
           <div className="p-4 sm:p-8 text-center text-gray-500 text-sm sm:text-base">
             {t('tracker.noResults')}

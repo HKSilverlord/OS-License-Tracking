@@ -7,13 +7,68 @@ const DEFAULT_SETTINGS = {
   licensePerComputer: 2517143
 };
 
+/**
+ * Generates the next available project code in PRJ-XXX format
+ * @param period Optional period to scope the code generation (if you want per-period codes)
+ * @returns Promise<string> Next code in format PRJ-001, PRJ-002, etc.
+ */
+async function getNextProjectCode(period?: string): Promise<string> {
+  try {
+    // Query all projects to find the highest code number
+    let query = supabase
+      .from('projects')
+      .select('code');
+
+    // Optional: Scope by period if you want codes to be period-specific
+    // Uncomment the next line if you want separate numbering per period
+    // if (period) query = query.eq('period', period);
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    let maxNumber = 0;
+
+    if (data && data.length > 0) {
+      // Extract numbers from PRJ-XXX format codes
+      data.forEach(project => {
+        const match = project.code?.match(/^PRJ-(\d+)$/);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (num > maxNumber) {
+            maxNumber = num;
+          }
+        }
+      });
+    }
+
+    // Increment and format with leading zeros
+    const nextNumber = maxNumber + 1;
+    const code = `PRJ-${String(nextNumber).padStart(3, '0')}`;
+
+    return code;
+  } catch (error) {
+    console.error('Error generating next project code:', error);
+    throw error;
+  }
+}
+
+/**
+ * Validates if a code matches the PRJ-XXX format
+ * @param code Code string to validate
+ * @returns boolean True if valid format
+ */
+function isValidProjectCode(code: string): boolean {
+  return /^PRJ-\d{3}$/.test(code);
+}
+
 export const dbService = {
   // --- Projects ---
   async getProjects(period?: string) {
     let query = supabase
       .from('projects')
       .select('*')
-      .order('created_at', { ascending: true });
+      .order('code', { ascending: true }); // Sort by code for better organization
 
     if (period) {
       query = query.eq('period', period);
@@ -28,10 +83,17 @@ export const dbService = {
     return data as Project[];
   },
 
-  async createProject(project: Omit<Project, 'id' | 'created_at'>) {
+  async createProject(project: Omit<Project, 'id' | 'created_at' | 'code'> & { code?: string }) {
+    // Auto-generate code if not provided or invalid
+    let finalCode = project.code;
+
+    if (!finalCode || !isValidProjectCode(finalCode)) {
+      finalCode = await getNextProjectCode(project.period);
+    }
+
     const { data, error } = await supabase
       .from('projects')
-      .insert(project)
+      .insert({ ...project, code: finalCode })
       .select()
       .single();
 
@@ -266,5 +328,9 @@ export const dbService = {
       licenseComputers: data.license_computers,
       licensePerComputer: data.license_per_computer
     };
-  }
+  },
+
+  // --- Helper Functions ---
+  getNextProjectCode,
+  isValidProjectCode
 };
