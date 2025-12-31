@@ -116,9 +116,16 @@ function App() {
     }
   };
 
-  const handleOpenProjectModal = () => {
-    // No code generation needed anymore
-    setIsProjectModalOpen(true);
+  const handleOpenProjectModal = async () => {
+    try {
+      const nextCode = await dbService.generateNextProjectCode();
+      setNewProject(prev => ({ ...prev, code: nextCode }));
+      setIsProjectModalOpen(true);
+    } catch (error) {
+      console.error("Failed to generate project code", error);
+      // Fallback
+      setIsProjectModalOpen(true);
+    }
   };
 
   const handleOpenPeriodModal = async () => {
@@ -329,7 +336,11 @@ function App() {
               <button onClick={() => setIsProjectModalOpen(false)}><X className="text-gray-400 hover:text-gray-600" /></button>
             </div>
             <form onSubmit={handleCreateProject} className="p-6 space-y-4">
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 uppercase mb-1">{t('modals.project.code')}</label>
+                  <input required readOnly type="text" className="block w-full border border-gray-300 rounded-md p-2 text-sm bg-gray-100 text-gray-500 cursor-not-allowed focus:ring-blue-500 focus:border-blue-500" value={newProject.code} />
+                </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 uppercase mb-1">{t('modals.project.name')}</label>
                   <input required type="text" className="block w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500" value={newProject.name} onChange={e => setNewProject({ ...newProject, name: e.target.value })} />

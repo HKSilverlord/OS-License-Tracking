@@ -82,9 +82,7 @@ export const dbService = {
     // 2. Prepare new project payloads (omit id, created_at, etc.)
     const newProjectsPayload = sourceProjects.map(p => ({
       name: p.name,
-      code: p.code, // Keep the same code for continuity if needed, or let user handle it. 
-      // Since "code" field is removed from UI, this might just be internal or legacy.
-      // If unique constraint exists on (code, period), this is fine.
+      code: p.code, // Keep the same code for continuity
       type: p.type,
       software: p.software,
       status: p.status,
@@ -100,6 +98,28 @@ export const dbService = {
 
     if (insertError) throw insertError;
     return insertedProjects as Project[];
+  },
+
+  async generateNextProjectCode() {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('code');
+
+    if (error) throw error;
+
+    // Extract numbers from codes like "PRJ-001"
+    const numbers = data
+      .map(p => {
+        const match = p.code.match(/PRJ-(\d+)/);
+        return match ? parseInt(match[1], 10) : 0;
+      })
+      .filter(n => !isNaN(n));
+
+    const maxNum = Math.max(0, ...numbers);
+    const nextNum = maxNum + 1;
+
+    // Pad with leading zeros to 3 digits
+    return `PRJ-${nextNum.toString().padStart(3, '0')}`;
   },
 
   // --- Records ---

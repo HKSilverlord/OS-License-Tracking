@@ -258,10 +258,15 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                   disabled={filteredProjects.length === 0}
                 />
               </th>
-              <th scope="col" style={{ left: `${LEFT_SELECT_WIDTH}px`, width: `${LEFT_CODE_WIDTH}px` }} className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+              {/* No. Column */}
+              <th scope="col" style={{ left: `${LEFT_SELECT_WIDTH}px`, width: `50px` }} className={`px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                {t('tracker.no')}
+              </th>
+              {/* Code Column - Repurposing LEFT_CODE_WIDTH */}
+              <th scope="col" style={{ left: `${LEFT_SELECT_WIDTH + 50}px`, width: `${LEFT_CODE_WIDTH}px` }} className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
                 {t('tracker.code')}
               </th>
-              <th scope="col" style={{ left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+              <th scope="col" style={{ left: `${LEFT_SELECT_WIDTH + 50 + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
                 {t('tracker.projectName')}
               </th>
               <th scope="col" style={{ left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH + LEFT_NAME_WIDTH}px`, width: `${LEFT_PRICE_WIDTH}px` }} className={`px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>{t('tracker.unitPrice')}</th>
@@ -316,13 +321,18 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                         </button>
                       </div>
                     </td>
-                    <td rowSpan={2} style={{ left: `${LEFT_SELECT_WIDTH}px`, width: `${LEFT_CODE_WIDTH}px` }} className={`px-3 py-3 text-sm font-medium text-gray-900 ${stickyLeftClass} align-top`}>
+                    {/* No. Cell */}
+                    <td rowSpan={2} style={{ left: `${LEFT_SELECT_WIDTH}px`, width: `50px` }} className={`px-3 py-3 text-center text-sm font-medium text-gray-500 ${stickyLeftClass} align-top`}>
                       {index + 1}
                     </td>
-                    <td rowSpan={2} style={{ left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-sm text-gray-500 border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
+                    {/* Code Cell */}
+                    <td rowSpan={2} style={{ left: `${LEFT_SELECT_WIDTH + 50}px`, width: `${LEFT_CODE_WIDTH}px` }} className={`px-3 py-3 text-sm font-medium text-gray-900 ${stickyLeftClass} align-top`}>
+                      {project.code}
+                    </td>
+                    <td rowSpan={2} style={{ left: `${LEFT_SELECT_WIDTH + 50 + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-sm text-gray-500 border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
                       <div className="truncate w-44" title={project.name}>{project.name}</div>
                     </td>
-                    <td rowSpan={2} style={{ left: `${LEFT_SELECT_WIDTH + LEFT_CODE_WIDTH + LEFT_NAME_WIDTH}px`, width: `${LEFT_PRICE_WIDTH}px` }} className={`px-3 py-3 text-sm text-gray-500 text-center ${stickyLeftClass} align-top`}>
+                    <td rowSpan={2} style={{ left: `${LEFT_SELECT_WIDTH + 50 + LEFT_CODE_WIDTH + LEFT_NAME_WIDTH}px`, width: `${LEFT_PRICE_WIDTH}px` }} className={`px-3 py-3 text-sm text-gray-500 text-center ${stickyLeftClass} align-top`}>
                       {project.unit_price.toLocaleString()}
                     </td>
                     <td rowSpan={2} className="px-2 py-2 text-xs text-gray-500 text-center border-r border-b bg-white align-top p-0 group-hover:bg-gray-50 max-w-[200px]">
