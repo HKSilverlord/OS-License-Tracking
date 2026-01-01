@@ -84,44 +84,37 @@ export const dbService = {
   },
 
   async getProjectsForCarryOver() {
-    console.log('[DEBUG] Fetching all projects for carryover...');
+    try {
+      console.log('[DEBUG dbService] Starting getProjectsForCarryOver');
 
-    // Fetch ALL projects across ALL periods
-    const { data, error } = await supabase
-      .from('projects')
-      .select('*')
-      .order('created_at', { ascending: false }); // Most recent first
+      // Simple query - just get ALL projects, no filtering, no ordering
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*');
 
-    console.log('[DEBUG] Query result - data:', data, 'error:', error);
+      console.log('[DEBUG dbService] Raw query result:', {
+        dataLength: data?.length,
+        error: error,
+        firstProject: data?.[0]
+      });
 
-    if (error) {
-      console.error('[DEBUG] Error fetching all projects for carryover:', error);
-      throw error;
-    }
+      if (error) {
+        console.error('[DEBUG dbService] Supabase error:', error);
+        return [];
+      }
 
-    if (!data || data.length === 0) {
-      console.log('[DEBUG] No projects found in database');
+      if (!data) {
+        console.log('[DEBUG dbService] No data returned');
+        return [];
+      }
+
+      console.log('[DEBUG dbService] Returning', data.length, 'projects');
+      return data as Project[];
+
+    } catch (err) {
+      console.error('[DEBUG dbService] Catch block error:', err);
       return [];
     }
-
-    console.log('[DEBUG] Total projects fetched:', data.length);
-
-    // Remove duplicates by code (keep the most recent version of each code)
-    const uniqueProjects = data.reduce((acc: Project[], project: Project) => {
-      // Only add if we haven't seen this code before
-      if (!acc.find(p => p.code === project.code)) {
-        console.log('[DEBUG] Adding unique project:', project.code, project.name);
-        acc.push(project);
-      } else {
-        console.log('[DEBUG] Skipping duplicate code:', project.code);
-      }
-      return acc;
-    }, []);
-
-    console.log('[DEBUG] Unique projects after deduplication:', uniqueProjects.length);
-    console.log('[DEBUG] Unique projects:', uniqueProjects);
-
-    return uniqueProjects;
   },
 
   async createProject(project: Omit<Project, 'id' | 'created_at' | 'code'> & { code?: string }) {
