@@ -135,10 +135,23 @@ function App() {
         console.log('[DEBUG App] No periods exist (got empty array)');
         setCurrentPeriodProjects([]);
         setCarryOverFromPeriod('');
+        // Default to current year
+        setNewPeriodInput({ year: new Date().getFullYear(), type: 'H1' });
       } else {
         console.log('[DEBUG App] Setting projects:', result.projects.length, 'from period:', result.fromPeriod);
         setCurrentPeriodProjects(result.projects);
         setCarryOverFromPeriod(result.fromPeriod);
+
+        // Calculate next period based on most recent period
+        const [yearStr, half] = result.fromPeriod.split('-');
+        const year = parseInt(yearStr);
+        if (half === 'H1') {
+          // If most recent is H1, next should be H2 same year
+          setNewPeriodInput({ year, type: 'H2' });
+        } else {
+          // If most recent is H2, next should be H1 next year
+          setNewPeriodInput({ year: year + 1, type: 'H1' });
+        }
       }
 
       setSelectedCarryOverIds([]); // Reset selection
