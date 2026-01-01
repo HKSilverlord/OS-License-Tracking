@@ -83,6 +83,21 @@ export const dbService = {
     return data as Project[];
   },
 
+  async getProjectsForCarryOver(currentPeriod: string) {
+    // Fetch projects that are either in the current period OR have no period (global)
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .or(`period.eq.${currentPeriod},period.is.null`)
+      .order('code', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching projects for carryover:', error);
+      throw error;
+    }
+    return data as Project[];
+  },
+
   async createProject(project: Omit<Project, 'id' | 'created_at' | 'code'> & { code?: string }) {
     // Auto-generate code if not provided or invalid
     let finalCode = project.code;

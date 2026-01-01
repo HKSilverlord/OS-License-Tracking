@@ -125,14 +125,8 @@ function App() {
   const handleOpenPeriodModal = async () => {
     // Fetch projects from current period OR global projects (null period) for carry-over
     try {
-      // Get ALL projects first (since we want current period + global ones)
-      // Note: dbService.getProjects() without args returns all
-      const allProjs = await dbService.getProjects();
-
-      // Filter in memory
-      const eligibleProjects = allProjs.filter(p =>
-        p.period === currentPeriod || !p.period
-      );
+      // Use the optimized backend query
+      const eligibleProjects = await dbService.getProjectsForCarryOver(currentPeriod);
 
       setCurrentPeriodProjects(eligibleProjects);
       setSelectedCarryOverIds([]); // Reset selection
