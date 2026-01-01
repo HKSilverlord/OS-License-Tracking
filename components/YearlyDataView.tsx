@@ -24,36 +24,47 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
   const { codeReadOnly: LEFT_CODE_WIDTH, nameReadOnly: LEFT_NAME_WIDTH } = TABLE_COLUMN_WIDTHS;
   const { leftCell: stickyLeftClass, leftHeader: stickyLeftHeaderClass, header: stickyHeaderZ, corner: stickyCornerZ } = STICKY_CLASSES;
 
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [projectsData, recordsData] = await Promise.all([
+        dbService.getProjects(),
+        dbService.getAllRecords(currentYear) // Get all records for the year
+      ]);
+
+      // Filter projects by year (if period is set)
+      const relevantProjects = projectsData.filter(p => !p.period || p.period.startsWith(currentYear.toString()));
+
+      // Sort projects by code
+      relevantProjects.sort((a, b) => a.code.localeCompare(b.code));
+
+      setProjects(relevantProjects);
+
+      const groupedRecords: Record<string, MonthlyRecord[]> = {};
+      recordsData.forEach(r => {
+        if (!groupedRecords[r.project_id]) groupedRecords[r.project_id] = [];
+        groupedRecords[r.project_id].push(r);
+      });
+      setRecords(groupedRecords);
+    } catch (error) {
+      console.error("Failed to load data for Yearly Data View", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const [projectsData, recordsData] = await Promise.all([
-          dbService.getProjects(),
-          dbService.getAllRecords(currentYear) // Get all records for the year
-        ]);
-
-        // Filter projects by year (if period is set)
-        const relevantProjects = projectsData.filter(p => !p.period || p.period.startsWith(currentYear.toString()));
-
-        // Sort projects by code
-        relevantProjects.sort((a, b) => a.code.localeCompare(b.code));
-
-        setProjects(relevantProjects);
-
-        const groupedRecords: Record<string, MonthlyRecord[]> = {};
-        recordsData.forEach(r => {
-          if (!groupedRecords[r.project_id]) groupedRecords[r.project_id] = [];
-          groupedRecords[r.project_id].push(r);
-        });
-        setRecords(groupedRecords);
-      } catch (error) {
-        console.error("Failed to load data for Yearly Data View", error);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
+  }, [currentYear]);
+
+  // Listen for data updates from other tabs
+  useEffect(() => {
+    const handleDataUpdated = () => {
+      fetchData();
+    };
+
+    window.addEventListener('dataUpdated', handleDataUpdated);
+    return () => window.removeEventListener('dataUpdated', handleDataUpdated);
   }, [currentYear]);
 
   // CSV Export Function

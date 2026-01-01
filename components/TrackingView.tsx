@@ -20,6 +20,8 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   const [savingStatus, setSavingStatus] = useState<Record<string, boolean>>({}); // Key: `${projectId}-${month}-${field}`
   const [deleting, setDeleting] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [pendingChanges, setPendingChanges] = useState<Record<string, MonthlyRecord>>({}); // Key: `${projectId}-${month}`
+  const [isSaving, setIsSaving] = useState(false);
 
   // Debounce refs
   const debounceTimers = useRef<Record<string, any>>({});
@@ -109,9 +111,10 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   }, []);
 
   useEffect(() => {
-    // Clear all pending timers when period changes
+    // Clear all pending timers and changes when period changes
     Object.values(debounceTimers.current).forEach(timer => clearTimeout(timer as any));
     debounceTimers.current = {};
+    setPendingChanges({});
   }, [currentPeriodLabel]);
 
   const saveRecord = async (projectId: string, month: number, field: 'planned_hours' | 'actual_hours', value: number) => {
@@ -137,6 +140,45 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
     }
   };
 
+  // Batch save all pending changes
+  const handleSaveAll = async () => {
+    const changesToSave = Object.values(pendingChanges);
+    if (changesToSave.length === 0) {
+      alert(t('noChangesToSave', 'No changes to save'));
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // Save all changes in parallel
+      await Promise.all(
+        changesToSave.map(record =>
+          dbService.upsertRecord({
+            project_id: record.project_id,
+            period_label: record.period_label,
+            year: record.year,
+            month: record.month,
+            planned_hours: record.planned_hours,
+            actual_hours: record.actual_hours
+          })
+        )
+      );
+
+      // Clear pending changes after successful save
+      setPendingChanges({});
+
+      // Dispatch event to notify other tabs to refresh
+      window.dispatchEvent(new CustomEvent('dataUpdated'));
+
+      alert(t('changesSavedSuccessfully', 'All changes saved successfully!'));
+    } catch (err) {
+      console.error('Batch save failed', err);
+      alert(t('saveFailed', 'Failed to save changes. Please try again.'));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleValueChange = (
     projectId: string,
     month: number,
@@ -146,7 +188,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
     const numValue = value === '' ? 0 : parseFloat(value);
     if (isNaN(numValue) || numValue < 0) return;
 
-    // Optimistic Update
+    // Optimistic Update in UI
     setRecords(prev => {
       const projectRecords = prev[projectId] ? [...prev[projectId]] : [];
       const existingIndex = projectRecords.findIndex(r => r.month === month);
@@ -166,16 +208,34 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
       return { ...prev, [projectId]: projectRecords };
     });
 
-    // Debounce Save
-    const key = `${projectId}-${month}-${field}`;
-    if (debounceTimers.current[key]) {
-      clearTimeout(debounceTimers.current[key]);
-    }
+    // Track pending changes for manual save
+    const changeKey = `${projectId}-${month}`;
+    setPendingChanges(prev => {
+      const existingChange = prev[changeKey] || {
+        project_id: projectId,
+        period_label: currentPeriodLabel,
+        year,
+        month,
+        planned_hours: 0,
+        actual_hours: 0
+      };
 
-    debounceTimers.current[key] = setTimeout(() => {
-      saveRecord(projectId, month, field, numValue);
-      delete debounceTimers.current[key];
-    }, 800); // Autosave after 800ms of inactivity
+      // Get current values from records
+      const currentRecord = records[projectId]?.find(r => r.month === month);
+
+      return {
+        ...prev,
+        [changeKey]: {
+          ...existingChange,
+          [field]: numValue,
+          // Preserve other field value
+          [field === 'planned_hours' ? 'actual_hours' : 'planned_hours']:
+            field === 'planned_hours'
+              ? (currentRecord?.actual_hours || 0)
+              : (currentRecord?.planned_hours || 0)
+        }
+      };
+    });
   };
 
   const handleDeleteProjects = async (ids: string[]) => {
@@ -224,9 +284,47 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
 
   const { leftCell: stickyLeftClass, leftHeader: stickyLeftHeaderClass, rightCell: stickyRightClass, rightHeader: stickyRightHeaderClass, header: stickyHeaderZ, corner: stickyCornerZ } = STICKY_CLASSES;
 
+  const pendingCount = Object.keys(pendingChanges).length;
+  const hasPendingChanges = pendingCount > 0;
+
   return (
     <div className="flex flex-col h-full bg-slate-50 p-2 sm:p-4 md:p-6 overflow-hidden">
       <div className="flex-1 min-h-0 w-full border rounded-lg shadow-sm bg-white relative isolate flex flex-col">
+        {/* Save Button Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-semibold text-slate-900">
+              {t('tracker.title', 'Project Tracking')}
+            </h2>
+            {hasPendingChanges && (
+              <span className="px-2 py-1 text-xs font-medium bg-amber-100 text-amber-800 rounded-full">
+                {pendingCount} {t('unsavedChanges', 'unsaved changes')}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={handleSaveAll}
+            disabled={!hasPendingChanges || isSaving}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              hasPendingChanges && !isSaving
+                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+            }`}
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                {t('saving', 'Saving...')}
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                {t('saveAll', 'Save All')}
+              </>
+            )}
+          </button>
+        </div>
+
         <div
           ref={scrollContainerRef}
           className="flex-1 min-h-0 overflow-auto relative isolate custom-scrollbar"

@@ -19,29 +19,40 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   // Constants for layout
   const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const [projectsData, recordsData] = await Promise.all([
-          dbService.getProjects(),
-          dbService.getAllRecords(currentYear) // Get all records for the year
-        ]);
-        setProjects(projectsData);
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [projectsData, recordsData] = await Promise.all([
+        dbService.getProjects(),
+        dbService.getAllRecords(currentYear) // Get all records for the year
+      ]);
+      setProjects(projectsData);
 
-        const groupedRecords: Record<string, MonthlyRecord[]> = {};
-        recordsData.forEach(r => {
-          if (!groupedRecords[r.project_id]) groupedRecords[r.project_id] = [];
-          groupedRecords[r.project_id].push(r);
-        });
-        setRecords(groupedRecords);
-      } catch (error) {
-        console.error("Failed to load data for Total View", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+      const groupedRecords: Record<string, MonthlyRecord[]> = {};
+      recordsData.forEach(r => {
+        if (!groupedRecords[r.project_id]) groupedRecords[r.project_id] = [];
+        groupedRecords[r.project_id].push(r);
+      });
+      setRecords(groupedRecords);
+    } catch (error) {
+      console.error("Failed to load data for Total View", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchData();
+  }, [currentYear]);
+
+  // Listen for data updates from other tabs
+  useEffect(() => {
+    const handleDataUpdated = () => {
+      fetchData();
+    };
+
+    window.addEventListener('dataUpdated', handleDataUpdated);
+    return () => window.removeEventListener('dataUpdated', handleDataUpdated);
   }, [currentYear]);
 
   // Chart Data Preparation
@@ -95,10 +106,10 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 p-4 md:p-6 overflow-hidden space-y-6">
+    <div className="flex flex-col h-full bg-slate-50 p-4 md:p-6 overflow-hidden">
 
-      {/* 1. Chart Section */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 h-[600px] flex flex-col shrink-0">
+      {/* 1. Chart Section - Full Page */}
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex-1 flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-md font-bold text-slate-700 flex items-center">
             <TrendingUp className="w-4 h-4 mr-2 text-blue-600" />
