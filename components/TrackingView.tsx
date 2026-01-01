@@ -5,7 +5,6 @@ import { getMonthsForPeriod } from '../utils/helpers';
 import { TABLE_COLUMN_WIDTHS, STICKY_CLASSES } from '../utils/tableStyles';
 import { Save, Loader2, Trash2, MoreVertical, Edit, Trash } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { ScrollContainer } from './ScrollContainer';
 
 interface TrackingViewProps {
   currentPeriodLabel: string; // e.g. "2024-H1"
@@ -227,182 +226,185 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
 
   return (
     <div className="flex flex-col h-full bg-slate-50 p-2 sm:p-4 md:p-6 overflow-hidden">
-      <div className="flex-1 min-h-0 w-full border rounded-lg shadow-sm bg-white relative isolate">
-        <ScrollContainer ref={scrollContainerRef} className="flex-1">
+      <div className="flex-1 min-h-0 w-full border rounded-lg shadow-sm bg-white relative isolate flex flex-col">
+        <div
+          ref={scrollContainerRef}
+          className="flex-1 min-h-0 overflow-auto relative isolate custom-scrollbar"
+        >
           <table key={currentPeriodLabel} className="w-full min-w-max border-separate border-spacing-0">
-          <thead className="bg-gray-50 sticky top-0 z-40">
-            <tr>
-              {/* No. Column */}
-              <th scope="col" style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                {t('tracker.no')}
-              </th>
-              {/* Code Column */}
-              <th scope="col" style={{ left: `${LEFT_NO_WIDTH}px`, width: `${LEFT_CODE_WIDTH}px` }} className={`px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                {t('tracker.code')}
-              </th>
-              {/* Company Name Column (now includes price below) */}
-              <th scope="col" style={{ left: `${LEFT_NO_WIDTH + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                {t('tracker.projectName')}
-              </th>
-              {/* Software Column */}
-              <th scope="col" style={{ left: `${LEFT_NO_WIDTH + LEFT_CODE_WIDTH + LEFT_NAME_WIDTH}px`, width: `${LEFT_SOFTWARE_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                {t('tracker.software')}
-              </th>
-
-              <th scope="col" style={{ width: `${BUSINESS_CONTENT_WIDTH}px` }} className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r">
-                {t('tracker.businessContent')}
-              </th>
-
-              {/* Row Type Column (Plan/Actual) */}
-              <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r w-16">
-                {t('tracker.type')}
-              </th>
-
-              {/* Scrollable Month Columns */}
-              {months.map((m) => (
-                <th key={m} scope="col" style={{ width: `${MONTH_WIDTH}px` }} className={`px-1 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-r border-gray-200 ${stickyHeaderZ}`}>
-                  {formatMonthLabel(m)}
+            <thead className="bg-gray-50 sticky top-0 z-40">
+              <tr>
+                {/* No. Column */}
+                <th scope="col" style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                  {t('tracker.no')}
                 </th>
-              ))}
+                {/* Code Column */}
+                <th scope="col" style={{ left: `${LEFT_NO_WIDTH}px`, width: `${LEFT_CODE_WIDTH}px` }} className={`px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                  {t('tracker.code')}
+                </th>
+                {/* Company Name Column (now includes price below) */}
+                <th scope="col" style={{ left: `${LEFT_NO_WIDTH + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                  {t('tracker.projectName')}
+                </th>
+                {/* Software Column */}
+                <th scope="col" style={{ left: `${LEFT_NO_WIDTH + LEFT_CODE_WIDTH + LEFT_NAME_WIDTH}px`, width: `${LEFT_SOFTWARE_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                  {t('tracker.software')}
+                </th>
 
-              {/* Actions Column (3-dot menu) */}
-              <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyRightHeaderClass} ${stickyCornerZ}`} style={{ right: 0, width: `${RIGHT_ACTIONS_WIDTH}px` }}>
-                {t('tracker.actions')}
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {filteredProjects.map((project, index) => {
-              const projRecords = records[project.id] || [];
+                <th scope="col" style={{ width: `${BUSINESS_CONTENT_WIDTH}px` }} className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r">
+                  {t('tracker.businessContent')}
+                </th>
 
-              return (
-                <React.Fragment key={project.id}>
-                  {/* ROW 1: Plan */}
-                  <tr className="hover:bg-gray-50 group">
-                    {/* No. Cell */}
-                    <td rowSpan={2} style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-2 py-3 text-center text-sm font-medium text-gray-500 ${stickyLeftClass} align-top`}>
-                      {index + 1}
-                    </td>
-                    {/* Code Cell */}
-                    <td rowSpan={2} style={{ left: `${LEFT_NO_WIDTH}px`, width: `${LEFT_CODE_WIDTH}px` }} className={`px-2 py-3 text-sm font-medium text-gray-900 ${stickyLeftClass} align-top`}>
-                      {project.code}
-                    </td>
-                    {/* Company Name Cell (with price below) */}
-                    <td rowSpan={2} style={{ left: `${LEFT_NO_WIDTH + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-2 py-2 text-sm text-gray-700 border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
-                      <div className="font-medium truncate" title={project.name}>{project.name}</div>
-                      <div className="text-xs text-gray-500 mt-0.5">{project.unit_price.toLocaleString()} JPY/hours</div>
-                    </td>
-                    {/* Software Cell */}
-                    <td rowSpan={2} style={{ left: `${LEFT_NO_WIDTH + LEFT_CODE_WIDTH + LEFT_NAME_WIDTH}px`, width: `${LEFT_SOFTWARE_WIDTH}px` }} className={`px-2 py-2 text-xs text-gray-600 text-center border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
-                      <input
-                        type="text"
-                        className="w-full text-xs border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-center px-1 py-1 bg-transparent"
-                        value={project.software || ''}
-                        onChange={(e) => handleUpdateProject(project.id, { software: e.target.value })}
-                        placeholder="CAD"
-                      />
-                    </td>
-                    {/* Business Content Cell */}
-                    <td rowSpan={2} style={{ width: `${BUSINESS_CONTENT_WIDTH}px` }} className="px-2 py-2 text-xs text-gray-500 text-center border-r border-b bg-white align-top p-0 group-hover:bg-gray-50">
-                      <textarea
-                        className="w-full h-full min-h-[50px] border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-xs p-2 bg-transparent resize-none"
-                        value={project.type || ''}
-                        onChange={(e) => handleUpdateProject(project.id, { type: e.target.value })}
-                        placeholder={t('tracker.businessContent')}
-                      />
-                    </td>
+                {/* Row Type Column (Plan/Actual) */}
+                <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r w-16">
+                  {t('tracker.type')}
+                </th>
 
-                    {/* Plan Label */}
-                    <td className="px-2 py-2 text-xs font-semibold text-gray-500 text-center border-r border-b bg-slate-50">
-                      {t('tracker.planShort')}
-                    </td>
+                {/* Scrollable Month Columns */}
+                {months.map((m) => (
+                  <th key={m} scope="col" style={{ width: `${MONTH_WIDTH}px` }} className={`px-1 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-r border-gray-200 ${stickyHeaderZ}`}>
+                    {formatMonthLabel(m)}
+                  </th>
+                ))}
 
-                    {/* Plan Inputs */}
-                    {months.map(m => {
-                      const record = projRecords.find(r => r.month === m);
-                      const plan = record?.planned_hours ?? 0;
-                      const isSaving = savingStatus[`${project.id}-${m}-planned_hours`];
+                {/* Actions Column (3-dot menu) */}
+                <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyRightHeaderClass} ${stickyCornerZ}`} style={{ right: 0, width: `${RIGHT_ACTIONS_WIDTH}px` }}>
+                  {t('tracker.actions')}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredProjects.map((project, index) => {
+                const projRecords = records[project.id] || [];
 
-                      return (
-                        <td key={`p-${m}`} className="px-0.5 py-1 border-r border-b relative" style={{ width: `${MONTH_WIDTH}px` }}>
-                          <input
-                            type="number"
-                            className="w-full text-xs border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500 text-right px-1 py-1 bg-white focus:bg-blue-50 transition-colors"
-                            value={plan === 0 ? '' : plan}
-                            placeholder="-"
-                            onChange={(e) => handleValueChange(project.id, m, 'planned_hours', e.target.value)}
-                          />
-                          {isSaving && <Save className="w-2 h-2 absolute top-1 right-1 text-blue-500 animate-pulse" />}
-                        </td>
-                      );
-                    })}
+                return (
+                  <React.Fragment key={project.id}>
+                    {/* ROW 1: Plan */}
+                    <tr className="hover:bg-gray-50 group">
+                      {/* No. Cell */}
+                      <td rowSpan={2} style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-2 py-3 text-center text-sm font-medium text-gray-500 ${stickyLeftClass} align-top`}>
+                        {index + 1}
+                      </td>
+                      {/* Code Cell */}
+                      <td rowSpan={2} style={{ left: `${LEFT_NO_WIDTH}px`, width: `${LEFT_CODE_WIDTH}px` }} className={`px-2 py-3 text-sm font-medium text-gray-900 ${stickyLeftClass} align-top`}>
+                        {project.code}
+                      </td>
+                      {/* Company Name Cell (with price below) */}
+                      <td rowSpan={2} style={{ left: `${LEFT_NO_WIDTH + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-2 py-2 text-sm text-gray-700 border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
+                        <div className="font-medium truncate" title={project.name}>{project.name}</div>
+                        <div className="text-xs text-gray-500 mt-0.5">{project.unit_price.toLocaleString()} JPY/hours</div>
+                      </td>
+                      {/* Software Cell */}
+                      <td rowSpan={2} style={{ left: `${LEFT_NO_WIDTH + LEFT_CODE_WIDTH + LEFT_NAME_WIDTH}px`, width: `${LEFT_SOFTWARE_WIDTH}px` }} className={`px-2 py-2 text-xs text-gray-600 text-center border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
+                        <input
+                          type="text"
+                          className="w-full text-xs border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-center px-1 py-1 bg-transparent"
+                          value={project.software || ''}
+                          onChange={(e) => handleUpdateProject(project.id, { software: e.target.value })}
+                          placeholder="CAD"
+                        />
+                      </td>
+                      {/* Business Content Cell */}
+                      <td rowSpan={2} style={{ width: `${BUSINESS_CONTENT_WIDTH}px` }} className="px-2 py-2 text-xs text-gray-500 text-center border-r border-b bg-white align-top p-0 group-hover:bg-gray-50">
+                        <textarea
+                          className="w-full h-full min-h-[50px] border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-xs p-2 bg-transparent resize-none"
+                          value={project.type || ''}
+                          onChange={(e) => handleUpdateProject(project.id, { type: e.target.value })}
+                          placeholder={t('tracker.businessContent')}
+                        />
+                      </td>
 
-                    {/* Actions Cell (3-dot menu) */}
-                    <td rowSpan={2} className={`px-2 py-3 text-center border-b ${stickyRightClass} align-top`} style={{ right: 0, width: `${RIGHT_ACTIONS_WIDTH}px` }}>
-                      <div className="relative inline-block">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenMenuId(openMenuId === project.id ? null : project.id);
-                          }}
-                          className="p-1 hover:bg-gray-100 rounded"
-                        >
-                          <MoreVertical className="w-4 h-4 text-gray-600" />
-                        </button>
-                        {openMenuId === project.id && (
-                          <div className="absolute right-0 mt-1 w-32 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteProjects([project.id]);
-                                setOpenMenuId(null);
-                              }}
-                              className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                            >
-                              <Trash className="w-4 h-4" />
-                              Delete
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+                      {/* Plan Label */}
+                      <td className="px-2 py-2 text-xs font-semibold text-gray-500 text-center border-r border-b bg-slate-50">
+                        {t('tracker.planShort')}
+                      </td>
 
-                  {/* ROW 2: Actual */}
-                  <tr className="hover:bg-gray-50 group">
-                    {/* Actual Label */}
-                    <td className="px-2 py-2 text-xs font-bold text-blue-600 text-center border-r border-b bg-blue-50/30">
-                      {t('tracker.actualShort')}
-                    </td>
+                      {/* Plan Inputs */}
+                      {months.map(m => {
+                        const record = projRecords.find(r => r.month === m);
+                        const plan = record?.planned_hours ?? 0;
+                        const isSaving = savingStatus[`${project.id}-${m}-planned_hours`];
 
-                    {/* Actual Inputs */}
-                    {months.map(m => {
-                      const record = projRecords.find(r => r.month === m);
-                      const actual = record?.actual_hours ?? 0;
-                      const isSaving = savingStatus[`${project.id}-${m}-actual_hours`];
+                        return (
+                          <td key={`p-${m}`} className="px-0.5 py-1 border-r border-b relative" style={{ width: `${MONTH_WIDTH}px` }}>
+                            <input
+                              type="number"
+                              className="w-full text-xs border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500 text-right px-1 py-1 bg-white focus:bg-blue-50 transition-colors"
+                              value={plan === 0 ? '' : plan}
+                              placeholder="-"
+                              onChange={(e) => handleValueChange(project.id, m, 'planned_hours', e.target.value)}
+                            />
+                            {isSaving && <Save className="w-2 h-2 absolute top-1 right-1 text-blue-500 animate-pulse" />}
+                          </td>
+                        );
+                      })}
 
-                      return (
-                        <td key={`a-${m}`} className="px-0.5 py-1 border-r border-b relative" style={{ width: `${MONTH_WIDTH}px` }}>
-                          <input
-                            type="number"
-                            className={`w-full text-xs border-gray-300 rounded focus:ring-green-500 focus:border-green-500 text-right px-1 py-1 transition-colors ${actual > 0 ? 'bg-green-50 font-medium text-green-700' : 'bg-white'}`}
-                            value={actual === 0 ? '' : actual}
-                            placeholder="-"
-                            onChange={(e) => handleValueChange(project.id, m, 'actual_hours', e.target.value)}
-                          />
-                          {isSaving && <Save className="w-2 h-2 absolute top-1 right-1 text-green-500 animate-pulse" />}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-        </ScrollContainer>
+                      {/* Actions Cell (3-dot menu) */}
+                      <td rowSpan={2} className={`px-2 py-3 text-center border-b ${stickyRightClass} align-top`} style={{ right: 0, width: `${RIGHT_ACTIONS_WIDTH}px` }}>
+                        <div className="relative inline-block">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenMenuId(openMenuId === project.id ? null : project.id);
+                            }}
+                            className="p-1 hover:bg-gray-100 rounded"
+                          >
+                            <MoreVertical className="w-4 h-4 text-gray-600" />
+                          </button>
+                          {openMenuId === project.id && (
+                            <div className="absolute right-0 mt-1 w-32 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteProjects([project.id]);
+                                  setOpenMenuId(null);
+                                }}
+                                className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                              >
+                                <Trash className="w-4 h-4" />
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+
+                    {/* ROW 2: Actual */}
+                    <tr className="hover:bg-gray-50 group">
+                      {/* Actual Label */}
+                      <td className="px-2 py-2 text-xs font-bold text-blue-600 text-center border-r border-b bg-blue-50/30">
+                        {t('tracker.actualShort')}
+                      </td>
+
+                      {/* Actual Inputs */}
+                      {months.map(m => {
+                        const record = projRecords.find(r => r.month === m);
+                        const actual = record?.actual_hours ?? 0;
+                        const isSaving = savingStatus[`${project.id}-${m}-actual_hours`];
+
+                        return (
+                          <td key={`a-${m}`} className="px-0.5 py-1 border-r border-b relative" style={{ width: `${MONTH_WIDTH}px` }}>
+                            <input
+                              type="number"
+                              className={`w-full text-xs border-gray-300 rounded focus:ring-green-500 focus:border-green-500 text-right px-1 py-1 transition-colors ${actual > 0 ? 'bg-green-50 font-medium text-green-700' : 'bg-white'}`}
+                              value={actual === 0 ? '' : actual}
+                              placeholder="-"
+                              onChange={(e) => handleValueChange(project.id, m, 'actual_hours', e.target.value)}
+                            />
+                            {isSaving && <Save className="w-2 h-2 absolute top-1 right-1 text-green-500 animate-pulse" />}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
         {filteredProjects.length === 0 && (
           <div className="p-4 sm:p-8 text-center text-gray-500 text-sm sm:text-base">
