@@ -126,13 +126,17 @@ function App() {
   const handleOpenPeriodModal = async () => {
     // Fetch projects from the most recent period for carry-over
     try {
+      console.log('[DEBUG App] Fetching projects for carryover...');
       const result = await dbService.getProjectsForCarryOver();
+      console.log('[DEBUG App] Result:', result);
 
       if (Array.isArray(result)) {
         // No periods exist yet
+        console.log('[DEBUG App] No periods exist (got empty array)');
         setCurrentPeriodProjects([]);
         setCarryOverFromPeriod('');
       } else {
+        console.log('[DEBUG App] Setting projects:', result.projects.length, 'from period:', result.fromPeriod);
         setCurrentPeriodProjects(result.projects);
         setCarryOverFromPeriod(result.fromPeriod);
       }
@@ -140,7 +144,7 @@ function App() {
       setSelectedCarryOverIds([]); // Reset selection
       setIsPeriodModalOpen(true);
     } catch (e) {
-      console.error("Failed to fetch projects for period modal", e);
+      console.error("[DEBUG App] Failed to fetch projects for period modal", e);
       setCurrentPeriodProjects([]);
       setCarryOverFromPeriod('');
       setIsPeriodModalOpen(true);

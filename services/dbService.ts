@@ -86,11 +86,15 @@ export const dbService = {
   async getProjectsForCarryOver() {
     // Get the most recent period first
     const periods = await this.getPeriods();
+    console.log('[DEBUG] All periods:', periods);
+
     if (periods.length === 0) {
+      console.log('[DEBUG] No periods exist');
       return []; // No periods exist yet
     }
 
     const mostRecentPeriod = periods[0]; // getPeriods() already sorted desc
+    console.log('[DEBUG] Most recent period:', mostRecentPeriod);
 
     // Fetch projects from the most recent period
     const { data, error } = await supabase
@@ -100,10 +104,11 @@ export const dbService = {
       .order('code', { ascending: true });
 
     if (error) {
-      console.error('Error fetching projects for carryover:', error);
+      console.error('[DEBUG] Error fetching projects for carryover:', error);
       throw error;
     }
 
+    console.log('[DEBUG] Projects found:', data?.length || 0, data);
     return { projects: data as Project[], fromPeriod: mostRecentPeriod };
   },
 
