@@ -9,7 +9,7 @@ import { YearlyDataView } from './components/YearlyDataView';
 import { PeriodManagement } from './components/PeriodManagement';
 import { dbService } from './services/dbService';
 import { exportToExcel } from './services/exportService';
-import { LayoutDashboard, Table, Plus, LogOut, Download, Menu, X, Search, CalendarPlus, Languages, BarChart3, Calendar } from 'lucide-react';
+import { LayoutDashboard, Table, Plus, LogOut, Download, Menu, X, Search, Languages, BarChart3, Calendar } from 'lucide-react';
 import { ProjectStatus } from './types';
 import { DEFAULT_UNIT_PRICE } from './constants';
 import { useLanguage } from './contexts/LanguageContext';
@@ -80,6 +80,21 @@ function App() {
       init();
     }
   }, [session]);
+
+  // Listen for period created events to refresh the period list
+  useEffect(() => {
+    const handlePeriodCreated = async (event: any) => {
+      const periods = await dbService.getPeriods();
+      setAvailablePeriods(periods);
+      // Set current period to the newly created one
+      if (event.detail?.periodLabel) {
+        setCurrentPeriod(event.detail.periodLabel);
+      }
+    };
+
+    window.addEventListener('periodCreated', handlePeriodCreated);
+    return () => window.removeEventListener('periodCreated', handlePeriodCreated);
+  }, []);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -286,13 +301,6 @@ function App() {
                   ))}
                 </select>
               </div>
-              <button
-                onClick={() => setIsPeriodModalOpen(true)}
-                className="p-1.5 hover:bg-slate-100 rounded-full text-blue-600 transition-colors"
-                title={t('modals.period.title')}
-              >
-                <CalendarPlus className="w-5 h-5" />
-              </button>
             </div>
 
             <div className="flex items-center gap-2 md:gap-3 flex-wrap justify-end w-full md:w-auto">

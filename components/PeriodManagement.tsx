@@ -97,6 +97,14 @@ export const PeriodManagement: React.FC = () => {
     try {
       setSubmitting(true);
       await dbService.createPeriodWithProjects(formYear, formHalf, selectedProjectIds);
+
+      const periodLabel = `${formYear}-${formHalf}`;
+
+      // Dispatch custom event to notify App.tsx to refresh periods
+      window.dispatchEvent(new CustomEvent('periodCreated', {
+        detail: { periodLabel }
+      }));
+
       alert(t('periodCreatedSuccessfully', 'Period created successfully'));
       setIsCreateModalOpen(false);
       resetForm();

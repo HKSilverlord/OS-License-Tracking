@@ -65,22 +65,34 @@ function isValidProjectCode(code: string): boolean {
 export const dbService = {
   // --- Projects ---
   async getProjects(period?: string) {
-    let query = supabase
-      .from('projects')
-      .select('*')
-      .order('code', { ascending: true }); // Sort by code for better organization
-
     if (period) {
-      query = query.eq('period', period);
-    }
+      // Query projects through the period_projects junction table
+      const { data, error } = await supabase
+        .from('period_projects')
+        .select('projects(*)')
+        .eq('period_label', period)
+        .order('projects(code)', { ascending: true });
 
-    const { data, error } = await query;
+      if (error) {
+        console.error('Error fetching projects:', error);
+        throw error;
+      }
 
-    if (error) {
-      console.error('Error fetching projects:', error);
-      throw error;
+      // Extract projects from the junction table result
+      return (data || []).map((pp: any) => pp.projects).filter(Boolean) as Project[];
+    } else {
+      // If no period specified, return all projects
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .order('code', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching projects:', error);
+        throw error;
+      }
+      return data as Project[];
     }
-    return data as Project[];
   },
 
   async getProjectsForCarryOver() {
