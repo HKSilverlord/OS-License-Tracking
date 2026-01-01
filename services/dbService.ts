@@ -84,31 +84,44 @@ export const dbService = {
   },
 
   async getProjectsForCarryOver() {
-    // Fetch ALL unique projects across ALL periods
-    // We use DISTINCT ON to get one instance of each project code
+    console.log('[DEBUG] Fetching all projects for carryover...');
+
+    // Fetch ALL projects across ALL periods
     const { data, error } = await supabase
       .from('projects')
       .select('*')
-      .order('code', { ascending: true })
-      .order('created_at', { ascending: false }); // Get most recent version of each code
+      .order('created_at', { ascending: false }); // Most recent first
+
+    console.log('[DEBUG] Query result - data:', data, 'error:', error);
 
     if (error) {
       console.error('[DEBUG] Error fetching all projects for carryover:', error);
       throw error;
     }
 
-    // Remove duplicates by code (keep the most recent one for each code)
-    const uniqueProjects = data?.reduce((acc: Project[], project: Project) => {
+    if (!data || data.length === 0) {
+      console.log('[DEBUG] No projects found in database');
+      return [];
+    }
+
+    console.log('[DEBUG] Total projects fetched:', data.length);
+
+    // Remove duplicates by code (keep the most recent version of each code)
+    const uniqueProjects = data.reduce((acc: Project[], project: Project) => {
+      // Only add if we haven't seen this code before
       if (!acc.find(p => p.code === project.code)) {
+        console.log('[DEBUG] Adding unique project:', project.code, project.name);
         acc.push(project);
+      } else {
+        console.log('[DEBUG] Skipping duplicate code:', project.code);
       }
       return acc;
-    }, []) || [];
+    }, []);
 
-    console.log('[DEBUG] Total projects in DB:', data?.length || 0);
-    console.log('[DEBUG] Unique projects (by code):', uniqueProjects.length, uniqueProjects);
+    console.log('[DEBUG] Unique projects after deduplication:', uniqueProjects.length);
+    console.log('[DEBUG] Unique projects:', uniqueProjects);
 
-    return uniqueProjects as Project[];
+    return uniqueProjects;
   },
 
   async createProject(project: Omit<Project, 'id' | 'created_at' | 'code'> & { code?: string }) {
