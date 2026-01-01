@@ -157,6 +157,13 @@ function App() {
   const handleCreatePeriod = async (e: React.FormEvent) => {
     e.preventDefault();
     const label = `${newPeriodInput.year}-${newPeriodInput.type}`;
+
+    // Check for duplicate period
+    if (availablePeriods.includes(label)) {
+      alert(t('alerts.duplicatePeriod', `Period ${label} already exists. Please select a different year or half.`));
+      return;
+    }
+
     try {
       const updated = await dbService.addPeriod(label);
       setAvailablePeriods(updated);
@@ -168,6 +175,7 @@ function App() {
 
       setCurrentPeriod(label);
       setIsPeriodModalOpen(false);
+      alert(t('alerts.periodCreated', `Period ${label} created successfully!`));
     } catch (e) {
       console.error(e);
       alert('Failed to create period');
@@ -387,78 +395,154 @@ function App() {
       {/* New Period Modal */}
       {isPeriodModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md animate-in fade-in zoom-in duration-200">
-            <div className="p-4 border-b border-gray-100 flex justify-between items-center">
-              <h3 className="text-md font-bold text-gray-800">{t('modals.period.title')}</h3>
-              <button onClick={() => setIsPeriodModalOpen(false)}><X className="w-4 h-4 text-gray-400" /></button>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg animate-in fade-in zoom-in duration-200 max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="p-5 border-b border-gray-200 flex justify-between items-center shrink-0">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">{t('modals.period.title', '新しい期間')}</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Create a new period and select projects to include</p>
+              </div>
+              <button
+                onClick={() => setIsPeriodModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <form onSubmit={handleCreatePeriod} className="p-4 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+
+            {/* Form Content - Scrollable */}
+            <form onSubmit={handleCreatePeriod} className="flex-1 overflow-y-auto">
+              <div className="p-6 space-y-6">
+                {/* Year Input - Full Width */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">{t('modals.period.year')}</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    {t('modals.period.year', 'Year')}
+                  </label>
                   <input
                     type="number"
-                    className="block w-full border border-gray-300 rounded-md p-2 text-sm"
+                    required
+                    className="block w-full border-2 border-gray-300 rounded-lg p-3 text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                     value={newPeriodInput.year}
                     onChange={e => setNewPeriodInput({ ...newPeriodInput, year: parseInt(e.target.value) })}
+                    placeholder="2025"
                   />
                 </div>
+
+                {/* Period Dropdown - Full Width */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">{t('modals.period.half')}</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    {t('modals.period.half', 'Period')}
+                  </label>
                   <select
-                    className="block w-full border border-gray-300 rounded-md p-2 text-sm"
+                    required
+                    className="block w-full border-2 border-gray-300 rounded-lg p-3 text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all cursor-pointer bg-white"
                     value={newPeriodInput.type}
                     onChange={e => setNewPeriodInput({ ...newPeriodInput, type: e.target.value })}
                   >
-                    <option value="H1">{t('modals.period.option.h1')}</option>
-                    <option value="H2">{t('modals.period.option.h2')}</option>
+                    <option value="H1">{t('modals.period.option.h1', 'H1 (1月-6月 / Jan-Jun)')}</option>
+                    <option value="H2">{t('modals.period.option.h2', 'H2 (7月-12月 / Jul-Dec)')}</option>
                   </select>
                 </div>
-              </div>
 
-              {/* Carry Over Projects Selection */}
-              <div className="border-t border-gray-100 pt-3">
-                <p className="text-xs font-medium text-gray-700 mb-2">
-                  既存プロジェクトを選択 (Select existing projects):
-                </p>
-                <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-md p-2 space-y-1 bg-gray-50">
-                  {currentPeriodProjects.length === 0 ? (
-                    <p className="text-xs text-gray-400 italic text-center py-2">プロジェクトがまだありません。先にプロジェクトを作成してください。</p>
-                  ) : (
-                    currentPeriodProjects.map(p => (
-                      <label key={p.id} className="flex items-center space-x-2 text-sm p-1 hover:bg-white rounded cursor-pointer">
-                        <input
-                          type="checkbox"
-                          className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4"
-                          checked={selectedCarryOverIds.includes(p.id)}
-                          onChange={() => {
-                            setSelectedCarryOverIds(prev =>
-                              prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]
-                            );
+                {/* Divider */}
+                <div className="border-t border-gray-200 pt-6">
+                  {/* Projects Selection Header */}
+                  <div className="flex justify-between items-center mb-3">
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700">
+                        既存プロジェクトを選択
+                      </h4>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Select existing projects to include in this period
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Projects List */}
+                  <div className="border-2 border-gray-300 rounded-lg overflow-hidden bg-gray-50">
+                    <div className="max-h-64 overflow-y-auto">
+                      {currentPeriodProjects.length === 0 ? (
+                        <div className="text-center py-12 px-4">
+                          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-200 mb-4">
+                            <Plus className="w-8 h-8 text-gray-400" />
+                          </div>
+                          <p className="text-sm text-gray-600 font-medium mb-1">
+                            プロジェクトがまだありません
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            先にプロジェクトを作成してください。
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-gray-200">
+                          {currentPeriodProjects.map(p => (
+                            <label
+                              key={p.id}
+                              className="flex items-center space-x-3 p-3 hover:bg-blue-50 cursor-pointer transition-colors group"
+                            >
+                              <input
+                                type="checkbox"
+                                className="rounded border-2 border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500 w-5 h-5 cursor-pointer"
+                                checked={selectedCarryOverIds.includes(p.id)}
+                                onChange={() => {
+                                  setSelectedCarryOverIds(prev =>
+                                    prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]
+                                  );
+                                }}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate group-hover:text-blue-700">
+                                  {p.name}
+                                </p>
+                                {p.type && (
+                                  <p className="text-xs text-gray-500 truncate">
+                                    {p.type}
+                                  </p>
+                                )}
+                              </div>
+                              <span className="text-xs font-mono text-gray-500 bg-gray-200 px-2 py-1 rounded">
+                                {p.code}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Selection Controls - Inside the border */}
+                    {currentPeriodProjects.length > 0 && (
+                      <div className="flex justify-between items-center px-3 py-2 bg-gray-100 border-t border-gray-300">
+                        <button
+                          type="button"
+                          className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                          onClick={() => {
+                            if (selectedCarryOverIds.length === currentPeriodProjects.length) {
+                              setSelectedCarryOverIds([]);
+                            } else {
+                              setSelectedCarryOverIds(currentPeriodProjects.map(p => p.id));
+                            }
                           }}
-                        />
-                        <span className="truncate flex-1">{p.name}</span>
-                        <span className="text-xs text-gray-400">{p.code}</span>
-                      </label>
-                    ))
-                  )}
-                </div>
-                <div className="flex justify-between items-center mt-2">
-                  <button
-                    type="button"
-                    className="text-xs text-blue-600 hover:text-blue-800"
-                    onClick={() => {
-                      if (selectedCarryOverIds.length === currentPeriodProjects.length) setSelectedCarryOverIds([]);
-                      else setSelectedCarryOverIds(currentPeriodProjects.map(p => p.id));
-                    }}
-                  >
-                    {selectedCarryOverIds.length === currentPeriodProjects.length ? 'Deselect All' : 'Select All'}
-                  </button>
-                  <span className="text-xs text-gray-500">{selectedCarryOverIds.length} projects selected</span>
+                        >
+                          {selectedCarryOverIds.length === currentPeriodProjects.length ? 'Deselect All' : 'Select All'}
+                        </button>
+                        <span className="text-sm font-semibold text-gray-700">
+                          {selectedCarryOverIds.length} selected
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-md text-sm hover:bg-blue-700">{t('modals.period.submit')}</button>
+              {/* Submit Button - Fixed at bottom */}
+              <div className="p-6 pt-0">
+                <button
+                  type="submit"
+                  className="w-full bg-blue-600 text-white py-3 rounded-lg text-base font-semibold hover:bg-blue-700 active:bg-blue-800 transition-all shadow-md hover:shadow-lg"
+                >
+                  {t('modals.period.submit', '期間を追加')}
+                </button>
+              </div>
             </form>
           </div>
         </div>
