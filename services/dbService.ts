@@ -83,19 +83,28 @@ export const dbService = {
     return data as Project[];
   },
 
-  async getProjectsForCarryOver(currentPeriod: string) {
-    // Fetch projects that are either in the current period OR have no period (global)
+  async getProjectsForCarryOver() {
+    // Get the most recent period first
+    const periods = await this.getPeriods();
+    if (periods.length === 0) {
+      return []; // No periods exist yet
+    }
+
+    const mostRecentPeriod = periods[0]; // getPeriods() already sorted desc
+
+    // Fetch projects from the most recent period
     const { data, error } = await supabase
       .from('projects')
       .select('*')
-      .or(`period.eq.${currentPeriod},period.is.null`)
+      .eq('period', mostRecentPeriod)
       .order('code', { ascending: true });
 
     if (error) {
       console.error('Error fetching projects for carryover:', error);
       throw error;
     }
-    return data as Project[];
+
+    return { projects: data as Project[], fromPeriod: mostRecentPeriod };
   },
 
   async createProject(project: Omit<Project, 'id' | 'created_at' | 'code'> & { code?: string }) {

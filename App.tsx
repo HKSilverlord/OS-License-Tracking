@@ -48,6 +48,7 @@ function App() {
     unit_price: DEFAULT_UNIT_PRICE
   });
   const [currentPeriodProjects, setCurrentPeriodProjects] = useState<any[]>([]);
+  const [carryOverFromPeriod, setCarryOverFromPeriod] = useState<string>('');
   const [selectedCarryOverIds, setSelectedCarryOverIds] = useState<string[]>([]);
   const [projectCreatedTrigger, setProjectCreatedTrigger] = useState(0);
 
@@ -123,16 +124,25 @@ function App() {
   };
 
   const handleOpenPeriodModal = async () => {
-    // Fetch projects from current period OR global projects (null period) for carry-over
+    // Fetch projects from the most recent period for carry-over
     try {
-      // Use the optimized backend query
-      const eligibleProjects = await dbService.getProjectsForCarryOver(currentPeriod);
+      const result = await dbService.getProjectsForCarryOver();
 
-      setCurrentPeriodProjects(eligibleProjects);
+      if (Array.isArray(result)) {
+        // No periods exist yet
+        setCurrentPeriodProjects([]);
+        setCarryOverFromPeriod('');
+      } else {
+        setCurrentPeriodProjects(result.projects);
+        setCarryOverFromPeriod(result.fromPeriod);
+      }
+
       setSelectedCarryOverIds([]); // Reset selection
       setIsPeriodModalOpen(true);
     } catch (e) {
       console.error("Failed to fetch projects for period modal", e);
+      setCurrentPeriodProjects([]);
+      setCarryOverFromPeriod('');
       setIsPeriodModalOpen(true);
     }
   };
@@ -401,10 +411,14 @@ function App() {
 
               {/* Carry Over Projects Selection */}
               <div className="border-t border-gray-100 pt-3">
-                <p className="text-xs font-medium text-gray-700 mb-2">Carry over projects from {currentPeriod}:</p>
+                <p className="text-xs font-medium text-gray-700 mb-2">
+                  {carryOverFromPeriod
+                    ? `Carry over projects from ${carryOverFromPeriod}:`
+                    : 'Carry over projects from previous period:'}
+                </p>
                 <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-md p-2 space-y-1 bg-gray-50">
                   {currentPeriodProjects.length === 0 ? (
-                    <p className="text-xs text-gray-400 italic text-center py-2">No projects in current period to carry over.</p>
+                    <p className="text-xs text-gray-400 italic text-center py-2">No projects in previous period to carry over.</p>
                   ) : (
                     currentPeriodProjects.map(p => (
                       <label key={p.id} className="flex items-center space-x-2 text-sm p-1 hover:bg-white rounded cursor-pointer">
