@@ -334,6 +334,136 @@ export const dbService = {
     return this.getPeriods();
   },
 
+  // --- Period Management ---
+  /**
+   * Get all projects for period management (no filtering)
+   */
+  async getAllProjectsForPeriodManagement() {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('id, code, name, type, software, period')
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+    return data as Project[];
+  },
+
+  /**
+   * Get all periods with project counts and metadata
+   */
+  async getPeriodsWithProjectCount() {
+    const { data: periods, error: periodsError } = await supabase
+      .from('periods')
+      .select('label, year, half, created_at')
+      .order('year', { ascending: false })
+      .order('half', { ascending: false });
+
+    if (periodsError) throw periodsError;
+
+    // For each period, count projects
+    const periodsWithCount = await Promise.all(
+      (periods || []).map(async (period) => {
+        const { count, error: countError } = await supabase
+          .from('period_projects')
+          .select('*', { count: 'exact', head: true })
+          .eq('period_label', period.label);
+
+        if (countError) console.error('Error counting projects:', countError);
+
+        return {
+          ...period,
+          project_count: count || 0
+        };
+      })
+    );
+
+    return periodsWithCount;
+  },
+
+  /**
+   * Create a new period and assign projects to it
+   */
+  async createPeriodWithProjects(year: number, half: 'H1' | 'H2', projectIds: string[]) {
+    const label = `${year}-${half}`;
+
+    // 1. Create period (or get existing)
+    const { data: period, error: periodError } = await supabase
+      .from('periods')
+      .upsert({ label, year, half }, { onConflict: 'label' })
+      .select()
+      .single();
+
+    if (periodError) throw periodError;
+
+    // 2. Create period-project relationships
+    if (projectIds.length > 0) {
+      const periodProjects = projectIds.map(projectId => ({
+        period_label: label,
+        project_id: projectId
+      }));
+
+      const { error: linkError } = await supabase
+        .from('period_projects')
+        .insert(periodProjects);
+
+      if (linkError) throw linkError;
+    }
+
+    return period;
+  },
+
+  /**
+   * Update projects assigned to a period
+   */
+  async updatePeriodProjects(periodLabel: string, projectIds: string[]) {
+    // 1. Delete existing links
+    const { error: deleteError } = await supabase
+      .from('period_projects')
+      .delete()
+      .eq('period_label', periodLabel);
+
+    if (deleteError) throw deleteError;
+
+    // 2. Insert new links
+    if (projectIds.length > 0) {
+      const periodProjects = projectIds.map(projectId => ({
+        period_label: periodLabel,
+        project_id: projectId
+      }));
+
+      const { error: insertError } = await supabase
+        .from('period_projects')
+        .insert(periodProjects);
+
+      if (insertError) throw insertError;
+    }
+  },
+
+  /**
+   * Delete a period (cascade will delete period_projects)
+   */
+  async deletePeriod(periodLabel: string) {
+    const { error } = await supabase
+      .from('periods')
+      .delete()
+      .eq('label', periodLabel);
+
+    if (error) throw error;
+  },
+
+  /**
+   * Get projects assigned to a specific period
+   */
+  async getProjectsForPeriod(periodLabel: string) {
+    const { data, error } = await supabase
+      .from('period_projects')
+      .select('project_id, projects(*)')
+      .eq('period_label', periodLabel);
+
+    if (error) throw error;
+    return (data || []).map((pp: any) => pp.projects) as Project[];
+  },
+
   // --- Settings ---
   async getSettings() {
     const { data, error } = await supabase
