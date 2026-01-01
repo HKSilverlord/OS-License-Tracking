@@ -87,33 +87,46 @@ export const dbService = {
     try {
       console.log('[DEBUG dbService] Starting getProjectsForCarryOver');
 
-      // Simple query - just get ALL projects, no filtering, no ordering
+      // Fetch ALL projects without any period filtering
       const { data, error } = await supabase
         .from('projects')
-        .select('*');
+        .select('*')
+        .order('name', { ascending: true });
 
       console.log('[DEBUG dbService] Raw query result:', {
         dataLength: data?.length,
         error: error,
-        firstProject: data?.[0]
+        errorDetails: error ? JSON.stringify(error) : null,
+        firstProject: data?.[0],
+        sampleProjects: data?.slice(0, 3)
       });
 
       if (error) {
         console.error('[DEBUG dbService] Supabase error:', error);
-        return [];
+        console.error('[DEBUG dbService] Error code:', error.code);
+        console.error('[DEBUG dbService] Error message:', error.message);
+        throw new Error(`Supabase error: ${error.message}`);
       }
 
       if (!data) {
-        console.log('[DEBUG dbService] No data returned');
+        console.log('[DEBUG dbService] No data returned (null/undefined)');
         return [];
       }
 
-      console.log('[DEBUG dbService] Returning', data.length, 'projects');
-      return data as Project[];
+      console.log('[DEBUG dbService] Successfully returning', data.length, 'projects');
+
+      // Group by unique project names to show distinct projects
+      const uniqueProjects = data.filter((project, index, self) =>
+        index === self.findIndex((p) => p.code === project.code)
+      );
+
+      console.log('[DEBUG dbService] After deduplication:', uniqueProjects.length, 'unique projects');
+
+      return uniqueProjects as Project[];
 
     } catch (err) {
       console.error('[DEBUG dbService] Catch block error:', err);
-      return [];
+      throw err; // Re-throw to let the caller handle it
     }
   },
 

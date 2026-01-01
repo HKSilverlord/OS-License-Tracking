@@ -128,6 +128,11 @@ function App() {
       console.log('[DEBUG App] Fetching all projects for carryover...');
       const allProjects = await dbService.getProjectsForCarryOver();
       console.log('[DEBUG App] All unique projects:', allProjects);
+      console.log('[DEBUG App] Number of projects returned:', allProjects.length);
+
+      if (allProjects.length === 0) {
+        console.warn('[DEBUG App] No projects returned from getProjectsForCarryOver');
+      }
 
       setCurrentPeriodProjects(allProjects);
 
@@ -149,6 +154,7 @@ function App() {
       setIsPeriodModalOpen(true);
     } catch (e) {
       console.error("[DEBUG App] Failed to fetch projects for period modal", e);
+      alert(`Error fetching projects: ${e instanceof Error ? e.message : 'Unknown error'}. Check console for details.`);
       setCurrentPeriodProjects([]);
       setIsPeriodModalOpen(true);
     }
