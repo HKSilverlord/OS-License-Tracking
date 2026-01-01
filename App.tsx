@@ -48,7 +48,6 @@ function App() {
     unit_price: DEFAULT_UNIT_PRICE
   });
   const [currentPeriodProjects, setCurrentPeriodProjects] = useState<any[]>([]);
-  const [carryOverFromPeriod, setCarryOverFromPeriod] = useState<string>('');
   const [selectedCarryOverIds, setSelectedCarryOverIds] = useState<string[]>([]);
   const [projectCreatedTrigger, setProjectCreatedTrigger] = useState(0);
 
@@ -124,34 +123,26 @@ function App() {
   };
 
   const handleOpenPeriodModal = async () => {
-    // Fetch projects from the most recent period for carry-over
+    // Fetch ALL unique projects for carry-over selection
     try {
-      console.log('[DEBUG App] Fetching projects for carryover...');
-      const result = await dbService.getProjectsForCarryOver();
-      console.log('[DEBUG App] Result:', result);
+      console.log('[DEBUG App] Fetching all projects for carryover...');
+      const allProjects = await dbService.getProjectsForCarryOver();
+      console.log('[DEBUG App] All unique projects:', allProjects);
 
-      if (Array.isArray(result)) {
-        // No periods exist yet
-        console.log('[DEBUG App] No periods exist (got empty array)');
-        setCurrentPeriodProjects([]);
-        setCarryOverFromPeriod('');
-        // Default to current year
-        setNewPeriodInput({ year: new Date().getFullYear(), type: 'H1' });
-      } else {
-        console.log('[DEBUG App] Setting projects:', result.projects.length, 'from period:', result.fromPeriod);
-        setCurrentPeriodProjects(result.projects);
-        setCarryOverFromPeriod(result.fromPeriod);
+      setCurrentPeriodProjects(allProjects);
 
-        // Calculate next period based on most recent period
-        const [yearStr, half] = result.fromPeriod.split('-');
+      // Calculate next period based on current period
+      if (currentPeriod) {
+        const [yearStr, half] = currentPeriod.split('-');
         const year = parseInt(yearStr);
         if (half === 'H1') {
-          // If most recent is H1, next should be H2 same year
           setNewPeriodInput({ year, type: 'H2' });
         } else {
-          // If most recent is H2, next should be H1 next year
           setNewPeriodInput({ year: year + 1, type: 'H1' });
         }
+      } else {
+        // Default to current year if no period selected
+        setNewPeriodInput({ year: new Date().getFullYear(), type: 'H1' });
       }
 
       setSelectedCarryOverIds([]); // Reset selection
@@ -159,7 +150,6 @@ function App() {
     } catch (e) {
       console.error("[DEBUG App] Failed to fetch projects for period modal", e);
       setCurrentPeriodProjects([]);
-      setCarryOverFromPeriod('');
       setIsPeriodModalOpen(true);
     }
   };
@@ -429,13 +419,11 @@ function App() {
               {/* Carry Over Projects Selection */}
               <div className="border-t border-gray-100 pt-3">
                 <p className="text-xs font-medium text-gray-700 mb-2">
-                  {carryOverFromPeriod
-                    ? `Carry over projects from ${carryOverFromPeriod}:`
-                    : 'Carry over projects from previous period:'}
+                  既存プロジェクトを選択 (Select existing projects):
                 </p>
                 <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-md p-2 space-y-1 bg-gray-50">
                   {currentPeriodProjects.length === 0 ? (
-                    <p className="text-xs text-gray-400 italic text-center py-2">No projects in previous period to carry over.</p>
+                    <p className="text-xs text-gray-400 italic text-center py-2">プロジェクトがまだありません。先にプロジェクトを作成してください。</p>
                   ) : (
                     currentPeriodProjects.map(p => (
                       <label key={p.id} className="flex items-center space-x-2 text-sm p-1 hover:bg-white rounded cursor-pointer">

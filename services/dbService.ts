@@ -84,32 +84,31 @@ export const dbService = {
   },
 
   async getProjectsForCarryOver() {
-    // Get the most recent period first
-    const periods = await this.getPeriods();
-    console.log('[DEBUG] All periods:', periods);
-
-    if (periods.length === 0) {
-      console.log('[DEBUG] No periods exist');
-      return []; // No periods exist yet
-    }
-
-    const mostRecentPeriod = periods[0]; // getPeriods() already sorted desc
-    console.log('[DEBUG] Most recent period:', mostRecentPeriod);
-
-    // Fetch projects from the most recent period
+    // Fetch ALL unique projects across ALL periods
+    // We use DISTINCT ON to get one instance of each project code
     const { data, error } = await supabase
       .from('projects')
       .select('*')
-      .eq('period', mostRecentPeriod)
-      .order('code', { ascending: true });
+      .order('code', { ascending: true })
+      .order('created_at', { ascending: false }); // Get most recent version of each code
 
     if (error) {
-      console.error('[DEBUG] Error fetching projects for carryover:', error);
+      console.error('[DEBUG] Error fetching all projects for carryover:', error);
       throw error;
     }
 
-    console.log('[DEBUG] Projects found:', data?.length || 0, data);
-    return { projects: data as Project[], fromPeriod: mostRecentPeriod };
+    // Remove duplicates by code (keep the most recent one for each code)
+    const uniqueProjects = data?.reduce((acc: Project[], project: Project) => {
+      if (!acc.find(p => p.code === project.code)) {
+        acc.push(project);
+      }
+      return acc;
+    }, []) || [];
+
+    console.log('[DEBUG] Total projects in DB:', data?.length || 0);
+    console.log('[DEBUG] Unique projects (by code):', uniqueProjects.length, uniqueProjects);
+
+    return uniqueProjects as Project[];
   },
 
   async createProject(project: Omit<Project, 'id' | 'created_at' | 'code'> & { code?: string }) {
