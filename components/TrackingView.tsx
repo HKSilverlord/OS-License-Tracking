@@ -148,21 +148,30 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
       return;
     }
 
+    console.log('[DEBUG] Saving changes:', changesToSave);
+
     setIsSaving(true);
     try {
-      // Save all changes in parallel
-      await Promise.all(
-        changesToSave.map(record =>
-          dbService.upsertRecord({
-            project_id: record.project_id,
-            period_label: record.period_label,
-            year: record.year,
-            month: record.month,
-            planned_hours: record.planned_hours,
-            actual_hours: record.actual_hours
-          })
-        )
-      );
+      // Save all changes sequentially with better error handling
+      for (const record of changesToSave) {
+        console.log('[DEBUG] Saving record:', {
+          project_id: record.project_id,
+          period_label: record.period_label,
+          year: record.year,
+          month: record.month,
+          planned_hours: record.planned_hours || 0,
+          actual_hours: record.actual_hours || 0
+        });
+
+        await dbService.upsertRecord({
+          project_id: record.project_id,
+          period_label: record.period_label,
+          year: record.year,
+          month: record.month,
+          planned_hours: record.planned_hours || 0,
+          actual_hours: record.actual_hours || 0
+        });
+      }
 
       // Clear pending changes after successful save
       setPendingChanges({});
@@ -171,9 +180,15 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
       window.dispatchEvent(new CustomEvent('dataUpdated'));
 
       alert(t('changesSavedSuccessfully', 'All changes saved successfully!'));
-    } catch (err) {
-      console.error('Batch save failed', err);
-      alert(t('saveFailed', 'Failed to save changes. Please try again.'));
+    } catch (err: any) {
+      console.error('Batch save failed:', err);
+      console.error('Error details:', {
+        message: err.message,
+        code: err.code,
+        details: err.details,
+        hint: err.hint
+      });
+      alert(t('saveFailed', 'Failed to save changes. Please try again.') + '\n\nError: ' + (err.message || err));
     } finally {
       setIsSaving(false);
     }
@@ -188,6 +203,11 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
     const numValue = value === '' ? 0 : parseFloat(value);
     if (isNaN(numValue) || numValue < 0) return;
 
+    // Get current record to preserve other field values
+    const currentRecord = records[projectId]?.find(r => r.month === month);
+    const otherField = field === 'planned_hours' ? 'actual_hours' : 'planned_hours';
+    const otherFieldValue = currentRecord?.[otherField] || 0;
+
     // Optimistic Update in UI
     setRecords(prev => {
       const projectRecords = prev[projectId] ? [...prev[projectId]] : [];
@@ -201,8 +221,8 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
           period_label: currentPeriodLabel,
           year,
           month,
-          planned_hours: field === 'planned_hours' ? numValue : 0,
-          actual_hours: field === 'actual_hours' ? numValue : 0
+          planned_hours: field === 'planned_hours' ? numValue : otherFieldValue,
+          actual_hours: field === 'actual_hours' ? numValue : otherFieldValue
         });
       }
       return { ...prev, [projectId]: projectRecords };
@@ -211,30 +231,32 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
     // Track pending changes for manual save
     const changeKey = `${projectId}-${month}`;
     setPendingChanges(prev => {
-      const existingChange = prev[changeKey] || {
-        project_id: projectId,
-        period_label: currentPeriodLabel,
-        year,
-        month,
-        planned_hours: 0,
-        actual_hours: 0
-      };
+      // Get existing pending change or use current record values
+      const existingChange = prev[changeKey];
 
-      // Get current values from records
-      const currentRecord = records[projectId]?.find(r => r.month === month);
-
-      return {
-        ...prev,
-        [changeKey]: {
-          ...existingChange,
-          [field]: numValue,
-          // Preserve other field value
-          [field === 'planned_hours' ? 'actual_hours' : 'planned_hours']:
-            field === 'planned_hours'
-              ? (currentRecord?.actual_hours || 0)
-              : (currentRecord?.planned_hours || 0)
-        }
-      };
+      if (existingChange) {
+        // Update existing pending change - preserve other field value
+        return {
+          ...prev,
+          [changeKey]: {
+            ...existingChange,
+            [field]: numValue
+          }
+        };
+      } else {
+        // Create new pending change with both fields
+        return {
+          ...prev,
+          [changeKey]: {
+            project_id: projectId,
+            period_label: currentPeriodLabel,
+            year,
+            month,
+            planned_hours: field === 'planned_hours' ? numValue : otherFieldValue,
+            actual_hours: field === 'actual_hours' ? numValue : otherFieldValue
+          }
+        };
+      }
     });
   };
 
