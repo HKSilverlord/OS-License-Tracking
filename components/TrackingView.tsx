@@ -317,9 +317,17 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
         hasPriceUpdates = true;
       }
 
-      // If updating prices, update in the junction table for the CURRENT PERIOD
+      // If updating prices, update in the junction table for the ALL PERIODS IN THE YEAR
+      // Filter out year from currentPeriodLabel (e.g. "2025-H1" -> 2025)
       if (hasPriceUpdates) {
-        await dbService.updateProjectPriceForPeriod(id, currentPeriodLabel, priceUpdates);
+        const year = parseInt(currentPeriodLabel.split('-')[0]);
+        if (!isNaN(year)) {
+          await dbService.updateProjectPriceForYear(id, year, priceUpdates);
+        } else {
+          // Fallback if label format is unexpected, though likely it's "YYYY-HX"
+          // Just update current period
+          await dbService.updateProjectPriceForPeriod(id, currentPeriodLabel, priceUpdates);
+        }
       }
 
       // If updating other fields (name, software, etc.), update the global project record

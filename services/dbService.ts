@@ -209,6 +209,28 @@ export const dbService = {
     if (error) throw error;
   },
 
+  async updateProjectPriceForYear(projectId: string, year: number, prices: { plan_price?: number, actual_price?: number }) {
+    // 1. Get all periods labels for this year
+    const { data: periods, error: periodsError } = await supabase
+      .from('periods')
+      .select('label')
+      .eq('year', year);
+
+    if (periodsError) throw periodsError;
+
+    const periodLabels = periods.map(p => p.label);
+    if (periodLabels.length === 0) return;
+
+    // 2. Update period_projects for all these periods
+    const { error } = await supabase
+      .from('period_projects')
+      .update(prices)
+      .eq('project_id', projectId)
+      .in('period_label', periodLabels);
+
+    if (error) throw error;
+  },
+
   async deleteProject(id: string) {
     const { error } = await supabase
       .from('projects')
