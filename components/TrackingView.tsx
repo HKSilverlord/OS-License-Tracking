@@ -301,8 +301,48 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
 
   const handleUpdateProject = async (id: string, updates: Partial<Project>) => {
     try {
-      const updated = await dbService.updateProject(id, updates);
-      setProjects(prev => prev.map(p => p.id === id ? updated : p));
+      // Separate price updates from other updates
+      const priceUpdates: { plan_price?: number; actual_price?: number } = {};
+      const otherUpdates: Partial<Project> = { ...updates };
+
+      let hasPriceUpdates = false;
+      if ('plan_price' in updates) {
+        priceUpdates.plan_price = updates.plan_price;
+        delete otherUpdates.plan_price;
+        hasPriceUpdates = true;
+      }
+      if ('actual_price' in updates) {
+        priceUpdates.actual_price = updates.actual_price;
+        delete otherUpdates.actual_price;
+        hasPriceUpdates = true;
+      }
+
+      // If updating prices, update in the junction table for the CURRENT PERIOD
+      if (hasPriceUpdates) {
+        await dbService.updateProjectPriceForPeriod(id, currentPeriodLabel, priceUpdates);
+      }
+
+      // If updating other fields (name, software, etc.), update the global project record
+      // Only proceed if there are other keys remaining
+      let updatedProject: Project | null = null;
+      if (Object.keys(otherUpdates).length > 0) {
+        updatedProject = await dbService.updateProject(id, otherUpdates);
+      }
+
+      // Update local state
+      setProjects(prev => prev.map(p => {
+        if (p.id !== id) return p;
+
+        // Merge updates: 
+        // 1. Existing project state
+        // 2. Global updates (if any)
+        // 3. Price updates (explicitly applied to local state since they valid for this period)
+        return {
+          ...p,
+          ...(updatedProject || {}),
+          ...priceUpdates
+        };
+      }));
 
       // Update dataUpdated event so Yearly view refreshes
       window.dispatchEvent(new CustomEvent('dataUpdated'));

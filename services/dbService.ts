@@ -79,7 +79,19 @@ export const dbService = {
       }
 
       // Extract projects from the junction table result
-      return (data || []).map((pp: any) => pp.projects).filter(Boolean) as Project[];
+      return (data || []).map((pp: any) => {
+        const project = pp.projects;
+        if (!project) return null;
+
+        // Override global prices with period-specific prices if available
+        // If period_price is null, fallback to global price
+        return {
+          ...project,
+          plan_price: pp.plan_price ?? project.plan_price,
+          actual_price: pp.actual_price ?? project.actual_price,
+          // Store the original period_projects ID or keys if needed, but here we just map fields
+        };
+      }).filter(Boolean) as Project[];
     } else {
       // If no period specified, return all projects
       const { data, error } = await supabase
@@ -170,6 +182,31 @@ export const dbService = {
 
     if (error) throw error;
     return data as Project;
+  },
+
+  async updateProjectPriceForPeriod(projectId: string, periodLabel: string, prices: { plan_price?: number, actual_price?: number }) {
+    // Check if link exists
+    const { data: link, error: fetchError } = await supabase
+      .from('period_projects')
+      .select('*')
+      .eq('project_id', projectId)
+      .eq('period_label', periodLabel)
+      .single();
+
+    if (fetchError && fetchError.code !== 'PGRST116') throw fetchError;
+
+    if (!link) {
+      // Logic for if link doesn't exist (shouldn't happen in tracking view usually)
+      throw new Error(`Project ${projectId} not linked to period ${periodLabel}`);
+    }
+
+    const { error } = await supabase
+      .from('period_projects')
+      .update(prices)
+      .eq('project_id', projectId)
+      .eq('period_label', periodLabel);
+
+    if (error) throw error;
   },
 
   async deleteProject(id: string) {
