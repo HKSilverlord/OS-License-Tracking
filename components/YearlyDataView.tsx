@@ -89,8 +89,8 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
 
       const totalPlan = monthlyData.reduce((sum, d) => sum + d.plan, 0);
       const totalActual = monthlyData.reduce((sum, d) => sum + d.actual, 0);
-      const totalRevenuePlan = totalPlan * (project.unit_price || 0);
-      const totalRevenueActual = totalActual * (project.unit_price || 0);
+      const totalRevenuePlan = totalPlan * (project.plan_price || project.unit_price || 0);
+      const totalRevenueActual = totalActual * (project.actual_price || project.unit_price || 0);
 
       // Plan row
       rows.push([
@@ -176,8 +176,8 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
                 const totalPlan = monthlyData.reduce((sum, d) => sum + d.plan, 0);
                 const totalActual = monthlyData.reduce((sum, d) => sum + d.actual, 0);
 
-                const totalRevenuePlan = totalPlan * (project.unit_price || 0);
-                const totalRevenueActual = totalActual * (project.unit_price || 0);
+                const totalRevenuePlan = totalPlan * (project.plan_price || project.unit_price || 0);
+                const totalRevenueActual = totalActual * (project.actual_price || project.unit_price || 0);
 
                 return (
                   <React.Fragment key={project.id}>

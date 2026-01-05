@@ -12,6 +12,15 @@ interface TrackingViewProps {
   refreshTrigger?: number; // Trigger to refresh data when project is created
 }
 
+import { EditProjectModal } from './EditProjectModal';
+import { formatCurrency } from '../utils/helpers';
+
+interface TrackingViewProps {
+  currentPeriodLabel: string; // e.g. "2024-H1"
+  searchQuery: string;
+  refreshTrigger?: number; // Trigger to refresh data when project is created
+}
+
 export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, searchQuery, refreshTrigger }) => {
   const { t, language } = useLanguage();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -22,6 +31,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [pendingChanges, setPendingChanges] = useState<Record<string, MonthlyRecord>>({}); // Key: `${projectId}-${month}`
   const [isSaving, setIsSaving] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
 
   // Debounce refs
   const debounceTimers = useRef<Record<string, any>>({});
@@ -63,10 +73,6 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
         dbService.getProjects(currentPeriodLabel),
         dbService.getRecords(currentPeriodLabel)
       ]);
-
-      // Sort projects by created_at which effectively sorts by number since they are sequential
-      // or we can sort by name if preferred. Let's stick to created_at for stability.
-      // dbService.getProjects already sorts by created_at.
 
       setProjects(projectsData);
 
@@ -117,52 +123,16 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
     setPendingChanges({});
   }, [currentPeriodLabel]);
 
-  const saveRecord = async (projectId: string, month: number, field: 'planned_hours' | 'actual_hours', value: number) => {
-    const key = `${projectId}-${month}-${field}`;
-    setSavingStatus(prev => ({ ...prev, [key]: true }));
-
-    try {
-      await dbService.upsertRecord({
-        project_id: projectId,
-        period_label: currentPeriodLabel,
-        year,
-        month,
-        [field]: value
-      });
-    } catch (err) {
-      console.error("Save failed", err);
-    } finally {
-      setSavingStatus(prev => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-    }
-  };
-
-  // Batch save all pending changes
   const handleSaveAll = async () => {
-    const changesToSave = Object.values(pendingChanges);
+    const changesToSave: MonthlyRecord[] = Object.values(pendingChanges);
     if (changesToSave.length === 0) {
       alert(t('noChangesToSave', 'No changes to save'));
       return;
     }
 
-    console.log('[DEBUG] Saving changes:', changesToSave);
-
     setIsSaving(true);
     try {
-      // Save all changes sequentially with better error handling
       for (const record of changesToSave) {
-        console.log('[DEBUG] Saving record:', {
-          project_id: record.project_id,
-          period_label: record.period_label,
-          year: record.year,
-          month: record.month,
-          planned_hours: record.planned_hours || 0,
-          actual_hours: record.actual_hours || 0
-        });
-
         await dbService.upsertRecord({
           project_id: record.project_id,
           period_label: record.period_label,
@@ -173,21 +143,11 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
         });
       }
 
-      // Clear pending changes after successful save
       setPendingChanges({});
-
-      // Dispatch event to notify other tabs to refresh
       window.dispatchEvent(new CustomEvent('dataUpdated'));
-
       alert(t('changesSavedSuccessfully', 'All changes saved successfully!'));
     } catch (err: any) {
       console.error('Batch save failed:', err);
-      console.error('Error details:', {
-        message: err.message,
-        code: err.code,
-        details: err.details,
-        hint: err.hint
-      });
       alert(t('saveFailed', 'Failed to save changes. Please try again.') + '\n\nError: ' + (err.message || err));
     } finally {
       setIsSaving(false);
@@ -203,12 +163,10 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
     const numValue = value === '' ? 0 : parseFloat(value);
     if (isNaN(numValue) || numValue < 0) return;
 
-    // Get current record to preserve other field values
     const currentRecord = records[projectId]?.find(r => r.month === month);
     const otherField = field === 'planned_hours' ? 'actual_hours' : 'planned_hours';
     const otherFieldValue = currentRecord?.[otherField] || 0;
 
-    // Optimistic Update in UI
     setRecords(prev => {
       const projectRecords = prev[projectId] ? [...prev[projectId]] : [];
       const existingIndex = projectRecords.findIndex(r => r.month === month);
@@ -228,23 +186,15 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
       return { ...prev, [projectId]: projectRecords };
     });
 
-    // Track pending changes for manual save
     const changeKey = `${projectId}-${month}`;
     setPendingChanges(prev => {
-      // Get existing pending change or use current record values
       const existingChange = prev[changeKey];
-
       if (existingChange) {
-        // Update existing pending change - preserve other field value
         return {
           ...prev,
-          [changeKey]: {
-            ...existingChange,
-            [field]: numValue
-          }
+          [changeKey]: { ...existingChange, [field]: numValue }
         };
       } else {
-        // Create new pending change with both fields
         return {
           ...prev,
           [changeKey]: {
@@ -291,9 +241,14 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
     try {
       const updated = await dbService.updateProject(id, updates);
       setProjects(prev => prev.map(p => p.id === id ? updated : p));
+
+      // Update dataUpdated event so Yearly view refreshes
+      window.dispatchEvent(new CustomEvent('dataUpdated'));
+
     } catch (error) {
       console.error("Failed to update project", error);
       alert("Failed to update project");
+      throw error;
     }
   };
 
@@ -303,6 +258,9 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
 
   // Use shared table styling constants
   const { no: LEFT_NO_WIDTH, code: LEFT_CODE_WIDTH, name: LEFT_NAME_WIDTH, software: LEFT_SOFTWARE_WIDTH, businessContent: BUSINESS_CONTENT_WIDTH, month: MONTH_WIDTH, actions: RIGHT_ACTIONS_WIDTH } = TABLE_COLUMN_WIDTHS;
+
+  // New column width for Price
+  const PRICE_WIDTH = 100;
 
   const { leftCell: stickyLeftClass, leftHeader: stickyLeftHeaderClass, rightCell: stickyRightClass, rightHeader: stickyRightHeaderClass, header: stickyHeaderZ, corner: stickyCornerZ } = STICKY_CLASSES;
 
@@ -327,11 +285,10 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
           <button
             onClick={handleSaveAll}
             disabled={!hasPendingChanges || isSaving}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-              hasPendingChanges && !isSaving
-                ? 'bg-blue-600 text-white hover:bg-blue-700'
-                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${hasPendingChanges && !isSaving
+              ? 'bg-blue-600 text-white hover:bg-blue-700'
+              : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+              }`}
           >
             {isSaving ? (
               <>
@@ -354,19 +311,15 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
           <table key={currentPeriodLabel} className="w-full min-w-max border-separate border-spacing-0">
             <thead className="bg-gray-50 sticky top-0 z-40">
               <tr>
-                {/* No. Column */}
                 <th scope="col" style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
                   {t('tracker.no')}
                 </th>
-                {/* Code Column */}
                 <th scope="col" style={{ left: `${LEFT_NO_WIDTH}px`, width: `${LEFT_CODE_WIDTH}px` }} className={`px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
                   {t('tracker.code')}
                 </th>
-                {/* Company Name Column (now includes price below) */}
                 <th scope="col" style={{ left: `${LEFT_NO_WIDTH + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
                   {t('tracker.projectName')}
                 </th>
-                {/* Software Column */}
                 <th scope="col" style={{ left: `${LEFT_NO_WIDTH + LEFT_CODE_WIDTH + LEFT_NAME_WIDTH}px`, width: `${LEFT_SOFTWARE_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
                   {t('tracker.software')}
                 </th>
@@ -375,19 +328,21 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                   {t('tracker.businessContent')}
                 </th>
 
-                {/* Row Type Column (Plan/Actual) */}
+                {/* Price Column */}
+                <th scope="col" style={{ width: `${PRICE_WIDTH}px` }} className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r">
+                  {t('totalView.tableHeader.price', 'Price')} (JPY/h)
+                </th>
+
                 <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r w-16">
                   {t('tracker.type')}
                 </th>
 
-                {/* Scrollable Month Columns */}
                 {months.map((m) => (
                   <th key={m} scope="col" style={{ width: `${MONTH_WIDTH}px` }} className={`px-1 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-r border-gray-200 ${stickyHeaderZ}`}>
                     {formatMonthLabel(m)}
                   </th>
                 ))}
 
-                {/* Actions Column (3-dot menu) */}
                 <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyRightHeaderClass} ${stickyCornerZ}`} style={{ right: 0, width: `${RIGHT_ACTIONS_WIDTH}px` }}>
                   {t('tracker.actions')}
                 </th>
@@ -401,30 +356,24 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                   <React.Fragment key={project.id}>
                     {/* ROW 1: Plan */}
                     <tr className="hover:bg-gray-50 group">
-                      {/* No. Cell */}
                       <td rowSpan={2} style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-2 py-3 text-center text-sm font-medium text-gray-500 ${stickyLeftClass} align-top`}>
                         {index + 1}
                       </td>
-                      {/* Code Cell */}
                       <td rowSpan={2} style={{ left: `${LEFT_NO_WIDTH}px`, width: `${LEFT_CODE_WIDTH}px` }} className={`px-2 py-3 text-sm font-medium text-gray-900 ${stickyLeftClass} align-top`}>
                         {project.code}
                       </td>
-                      {/* Company Name Cell (with price below) */}
                       <td rowSpan={2} style={{ left: `${LEFT_NO_WIDTH + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-2 py-2 text-sm text-gray-700 border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
-                        <div className="font-medium truncate" title={project.name}>{project.name}</div>
-                        <div className="text-xs text-gray-500 mt-0.5">{project.unit_price.toLocaleString()} JPY/hours</div>
+                        <div className="font-medium line-clamp-2" title={project.name}>{project.name}</div>
                       </td>
-                      {/* Software Cell */}
                       <td rowSpan={2} style={{ left: `${LEFT_NO_WIDTH + LEFT_CODE_WIDTH + LEFT_NAME_WIDTH}px`, width: `${LEFT_SOFTWARE_WIDTH}px` }} className={`px-2 py-2 text-xs text-gray-600 text-center border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
-                        <input
-                          type="text"
-                          className="w-full text-xs border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-center px-1 py-1 bg-transparent"
+                        <textarea
+                          className="w-full min-h-[50px] text-xs border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-center px-1 py-1 bg-transparent resize-none overflow-hidden"
                           value={project.software || ''}
                           onChange={(e) => handleUpdateProject(project.id, { software: e.target.value })}
                           placeholder="CAD"
+                          rows={2}
                         />
                       </td>
-                      {/* Business Content Cell */}
                       <td rowSpan={2} style={{ width: `${BUSINESS_CONTENT_WIDTH}px` }} className="px-2 py-2 text-xs text-gray-500 text-center border-r border-b bg-white align-top p-0 group-hover:bg-gray-50">
                         <textarea
                           className="w-full h-full min-h-[50px] border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-xs p-2 bg-transparent resize-none"
@@ -434,12 +383,15 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                         />
                       </td>
 
-                      {/* Plan Label */}
+                      {/* Price Column */}
+                      <td style={{ width: `${PRICE_WIDTH}px` }} className="px-2 py-2 text-xs text-gray-500 text-right border-r border-b bg-slate-50 font-mono">
+                        {(project.plan_price || project.unit_price || 0).toLocaleString()}
+                      </td>
+
                       <td className="px-2 py-2 text-xs font-semibold text-gray-500 text-center border-r border-b bg-slate-50">
                         {t('tracker.planShort')}
                       </td>
 
-                      {/* Plan Inputs */}
                       {months.map(m => {
                         const record = projRecords.find(r => r.month === m);
                         const plan = record?.planned_hours ?? 0;
@@ -459,7 +411,6 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                         );
                       })}
 
-                      {/* Actions Cell (3-dot menu) */}
                       <td rowSpan={2} className={`px-2 py-3 text-center border-b ${stickyRightClass} align-top`} style={{ right: 0, width: `${RIGHT_ACTIONS_WIDTH}px` }}>
                         <div className="relative inline-block">
                           <button
@@ -478,13 +429,25 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  setEditingProject(project);
+                                  setOpenMenuId(null);
+                                }}
+                                className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                              >
+                                <Edit className="w-4 h-4" />
+                                {t('common.edit', 'Edit')}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   handleDeleteProjects([project.id]);
                                   setOpenMenuId(null);
                                 }}
                                 className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
                               >
                                 <Trash className="w-4 h-4" />
-                                Delete
+                                {t('common.delete', 'Delete')}
                               </button>
                             </div>
                           )}
@@ -494,12 +457,16 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
 
                     {/* ROW 2: Actual */}
                     <tr className="hover:bg-gray-50 group">
-                      {/* Actual Label */}
+
+                      {/* Price Column */}
+                      <td style={{ width: `${PRICE_WIDTH}px` }} className="px-2 py-2 text-xs text-emerald-600 text-right border-r border-b bg-emerald-50/10 font-mono">
+                        {(project.actual_price || project.unit_price || 0).toLocaleString()}
+                      </td>
+
                       <td className="px-2 py-2 text-xs font-bold text-blue-600 text-center border-r border-b bg-blue-50/30">
                         {t('tracker.actualShort')}
                       </td>
 
-                      {/* Actual Inputs */}
                       {months.map(m => {
                         const record = projRecords.find(r => r.month === m);
                         const actual = record?.actual_hours ?? 0;
@@ -532,6 +499,16 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
           </div>
         )}
       </div>
+
+      {editingProject && (
+        <EditProjectModal
+          project={editingProject}
+          isOpen={!!editingProject}
+          onClose={() => setEditingProject(null)}
+          onSave={handleUpdateProject}
+        />
+      )}
+
     </div>
   );
 };

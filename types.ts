@@ -17,7 +17,9 @@ export interface Project {
   type: string;
   software: string;
   status: ProjectStatus;
-  unit_price: number;
+  unit_price: number; // @deprecated use plan_price and actual_price
+  plan_price: number;
+  actual_price: number;
   created_at?: string;
   period?: string; // e.g. "2024-H1"
 }

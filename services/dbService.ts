@@ -208,6 +208,8 @@ export const dbService = {
       software: p.software,
       status: p.status,
       unit_price: p.unit_price,
+      plan_price: p.plan_price || p.unit_price || 0,
+      actual_price: p.actual_price || p.unit_price || 0,
       period: targetPeriod
     }));
 
@@ -302,7 +304,9 @@ export const dbService = {
     return (data || []).map((r: DashboardRecord) => ({
       ...r,
       projects: {
-        unit_price: r.projects?.unit_price || 0
+        unit_price: r.projects?.unit_price || 0,
+        plan_price: (r.projects as any)?.plan_price || r.projects?.unit_price || 0,
+        actual_price: (r.projects as any)?.actual_price || r.projects?.unit_price || 0
       }
     }));
   },
