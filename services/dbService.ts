@@ -69,7 +69,7 @@ export const dbService = {
       // Query projects through the period_projects junction table
       const { data, error } = await supabase
         .from('period_projects')
-        .select('projects(*)')
+        .select('plan_price, actual_price, projects(*)')
         .eq('period_label', period)
         .order('projects(code)', { ascending: true });
 
