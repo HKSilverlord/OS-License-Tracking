@@ -13,6 +13,7 @@ interface TrackingViewProps {
 }
 
 import { EditProjectModal } from './EditProjectModal';
+import { DropdownMenu } from './DropdownMenu';
 import { formatCurrency } from '../utils/helpers';
 
 interface TrackingViewProps {
@@ -21,6 +22,65 @@ interface TrackingViewProps {
   refreshTrigger?: number; // Trigger to refresh data when project is created
 }
 
+const ProjectActionsMenu: React.FC<{
+  project: Project;
+  onEdit: () => void;
+  onDelete: () => void;
+  t: (key: string, defaultVal?: string) => string;
+}> = ({ project, onEdit, onDelete, t }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
+        className="p-1 hover:bg-gray-100 rounded"
+      >
+        <MoreVertical className="w-4 h-4 text-gray-600" />
+      </button>
+
+      <DropdownMenu
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        triggerRef={triggerRef}
+      >
+        <div className="flex flex-col">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit();
+              setIsOpen(false);
+            }}
+            className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+          >
+            <Edit className="w-4 h-4" />
+            {t('common.edit', 'Edit')}
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+              setIsOpen(false);
+            }}
+            className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+          >
+            <Trash className="w-4 h-4" />
+            {t('common.delete', 'Delete')}
+          </button>
+        </div>
+      </DropdownMenu>
+    </>
+  );
+};
+
 export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, searchQuery, refreshTrigger }) => {
   const { t, language } = useLanguage();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -28,7 +88,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   const [loading, setLoading] = useState(true);
   const [savingStatus, setSavingStatus] = useState<Record<string, boolean>>({}); // Key: `${projectId}-${month}-${field}`
   const [deleting, setDeleting] = useState(false);
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  // const [openMenuId, setOpenMenuId] = useState<string | null>(null); // Removed: handling locally in component
   const [pendingChanges, setPendingChanges] = useState<Record<string, MonthlyRecord>>({}); // Key: `${projectId}-${month}`
   const [isSaving, setIsSaving] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -57,7 +117,8 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
     );
   }, [projects, searchQuery]);
 
-  // Close menu when clicking outside
+  // Close menu when clicking outside - Removed as DropdownMenu handles it locally
+  /*
   useEffect(() => {
     const handleClickOutside = () => setOpenMenuId(null);
     if (openMenuId) {
@@ -65,6 +126,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
       return () => document.removeEventListener('click', handleClickOutside);
     }
   }, [openMenuId]);
+  */
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -412,46 +474,12 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                       })}
 
                       <td rowSpan={2} className={`px-2 py-3 text-center border-b ${stickyRightClass} align-top`} style={{ right: 0, width: `${RIGHT_ACTIONS_WIDTH}px` }}>
-                        <div className="relative inline-block">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenMenuId(openMenuId === project.id ? null : project.id);
-                            }}
-                            className="p-1 hover:bg-gray-100 rounded"
-                          >
-                            <MoreVertical className="w-4 h-4 text-gray-600" />
-                          </button>
-                          {openMenuId === project.id && (
-                            <div className="absolute right-0 mt-1 w-32 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setEditingProject(project);
-                                  setOpenMenuId(null);
-                                }}
-                                className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                              >
-                                <Edit className="w-4 h-4" />
-                                {t('common.edit', 'Edit')}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteProjects([project.id]);
-                                  setOpenMenuId(null);
-                                }}
-                                className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                              >
-                                <Trash className="w-4 h-4" />
-                                {t('common.delete', 'Delete')}
-                              </button>
-                            </div>
-                          )}
-                        </div>
+                        <ProjectActionsMenu
+                          project={project}
+                          onEdit={() => setEditingProject(project)}
+                          onDelete={() => handleDeleteProjects([project.id])}
+                          t={t}
+                        />
                       </td>
                     </tr>
 

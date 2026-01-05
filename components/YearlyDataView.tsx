@@ -27,16 +27,30 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [projectsData, recordsData] = await Promise.all([
-        dbService.getProjects(),
-        dbService.getAllRecords(currentYear) // Get all records for the year
+      const [periodsLabel, recordsData] = await Promise.all([
+        dbService.getPeriods(),
+        dbService.getAllRecords(currentYear)
       ]);
 
-      // Filter projects by year (if period is set)
-      const relevantProjects = projectsData.filter(p => !p.period || p.period.startsWith(currentYear.toString()));
+      // Identify periods belonging to this year
+      // e.g. "2025-H1", "2025-H2"
+      const yearPeriods = periodsLabel.filter(p => p.startsWith(currentYear.toString()));
+
+      // Fetch projects for each relevant period
+      // This ensures we get projects even if they are linked via period_projects (Shared model)
+      const projectPromises = yearPeriods.map(p => dbService.getProjects(p));
+      const projectsArrays = await Promise.all(projectPromises);
+
+      // Flatten and deduplicate by ID
+      const allProjects = projectsArrays.flat();
+      const uniqueProjectsMap = new Map<string, Project>();
+      allProjects.forEach(p => {
+        if (p && p.id) uniqueProjectsMap.set(p.id, p);
+      });
+      const relevantProjects = Array.from(uniqueProjectsMap.values());
 
       // Sort projects by code
-      relevantProjects.sort((a, b) => a.code.localeCompare(b.code));
+      relevantProjects.sort((a, b) => (a.code || '').localeCompare(b.code || ''));
 
       setProjects(relevantProjects);
 
@@ -80,6 +94,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
 
     const rows: string[][] = [];
 
+    // Use current state 'projects' which is already filtered correctly
     projects.forEach(project => {
       const projRecords = records[project.id] || [];
       const monthlyData = months.map(m => {
@@ -93,24 +108,27 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
       const totalRevenueActual = totalActual * (project.actual_price || project.unit_price || 0);
 
       // Plan row
-      rows.push([
+      const planRow = [
         project.code,
         project.name,
         t('tracker.planShort'),
         ...monthlyData.map(d => d.plan > 0 ? d.plan.toString() : '-'),
         totalPlan > 0 ? totalPlan.toString() : '-',
         totalRevenuePlan > 0 ? totalRevenuePlan.toString() : '-'
-      ]);
+      ];
 
       // Actual row
-      rows.push([
+      const actualRow = [
         project.code,
         project.name,
         t('tracker.actualShort'),
         ...monthlyData.map(d => d.actual > 0 ? d.actual.toString() : '-'),
         totalActual > 0 ? totalActual.toString() : '-',
         totalRevenueActual > 0 ? totalRevenueActual.toString() : '-'
-      ]);
+      ];
+
+      rows.push(planRow);
+      rows.push(actualRow);
     });
 
     exportTableToCSV(headers, rows, generateCSVFilename(`yearly_data_${currentYear}`));
