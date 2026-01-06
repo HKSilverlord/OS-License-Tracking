@@ -259,6 +259,122 @@ export const exportChartDataToCSV = (data: any[], filename: string = 'chart-data
 };
 
 /**
+ * Copy chart as PNG image to clipboard
+ * This allows pasting directly into PowerPoint, Word, Slack, etc.
+ *
+ * @param elementId - The ID of the chart container element
+ */
+export const copyChartToClipboard = async (elementId: string): Promise<void> => {
+  const chartContainer = document.getElementById(elementId);
+
+  if (!chartContainer) {
+    alert(`Chart element with id "${elementId}" not found`);
+    return;
+  }
+
+  try {
+    const svgElement = chartContainer.querySelector('svg');
+
+    if (!svgElement) {
+      alert('No SVG chart found to copy');
+      return;
+    }
+
+    console.log('📋 Copying chart to clipboard...');
+
+    // Get container dimensions
+    const containerRect = chartContainer.getBoundingClientRect();
+    const width = containerRect.width;
+    const height = containerRect.height;
+
+    // Clone and prepare SVG
+    const clonedSvg = svgElement.cloneNode(true) as SVGElement;
+    clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clonedSvg.setAttribute('width', width.toString());
+    clonedSvg.setAttribute('height', height.toString());
+    clonedSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+
+    // Copy styles
+    inlineAllStyles(svgElement, clonedSvg);
+
+    // Serialize
+    const svgString = new XMLSerializer().serializeToString(clonedSvg);
+
+    // Create canvas with white background for better compatibility
+    const canvas = document.createElement('canvas');
+    const scale = 3; // High quality
+    canvas.width = width * scale;
+    canvas.height = height * scale;
+
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) throw new Error('Could not get canvas context');
+
+    // Fill white background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.scale(scale, scale);
+
+    // Convert SVG to image
+    const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+    const img = new Image();
+
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, width, height);
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('Failed to load SVG as image'));
+      };
+      img.src = url;
+    });
+
+    // Convert canvas to blob
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error('Failed to create image blob'));
+          return;
+        }
+        resolve(blob);
+      }, 'image/png', 1.0);
+    });
+
+    // Copy to clipboard using Clipboard API
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        'image/png': blob
+      })
+    ]);
+
+    console.log('✅ Chart copied to clipboard!');
+
+    // Show success message
+    const message = document.createElement('div');
+    message.textContent = '✅ Chart copied to clipboard!';
+    message.style.cssText = 'position:fixed;top:20px;right:20px;background:#10b981;color:white;padding:12px 20px;border-radius:8px;font-size:14px;font-weight:500;box-shadow:0 4px 6px rgba(0,0,0,0.1);z-index:9999;transition:opacity 0.3s ease-out';
+    document.body.appendChild(message);
+
+    setTimeout(() => {
+      message.style.opacity = '0';
+      setTimeout(() => {
+        if (message.parentNode) {
+          document.body.removeChild(message);
+        }
+      }, 300);
+    }, 2000);
+
+  } catch (error) {
+    console.error('❌ Copy to clipboard error:', error);
+    alert('Failed to copy chart to clipboard: ' + (error as Error).message);
+  }
+};
+
+/**
  * Generate a filename with timestamp
  * @param prefix - Prefix for the filename
  * @param extension - File extension (default: 'svg')

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Project, MonthlyRecord } from '../types';
 import { dbService } from '../services/dbService';
-import { exportChartToSVG, exportChartToPNG, exportChartDataToCSV, generateChartFilename } from '../utils/chartExport';
-import { Loader2, TrendingUp, Download, Palette } from 'lucide-react';
+import { exportChartToSVG, exportChartToPNG, exportChartDataToCSV, generateChartFilename, copyChartToClipboard } from '../utils/chartExport';
+import { Loader2, TrendingUp, Download, Palette, Copy, Image } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, TooltipProps } from 'recharts';
 
@@ -197,12 +197,12 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
 
       {/* 1. Chart Section - Full Page */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex-1 flex flex-col min-h-0">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
           <h3 className="text-md font-bold text-slate-700 flex items-center">
             <TrendingUp className="w-4 h-4 mr-2 text-blue-600" />
             {t('totalView.chartTitle')} - {currentYear}
           </h3>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => setShowColorPicker(!showColorPicker)}
               className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
@@ -210,6 +210,22 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
             >
               <Palette className="w-4 h-4" />
               Colors
+            </button>
+            <button
+              onClick={() => copyChartToClipboard('total-view-chart')}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              title="Copy chart to clipboard (paste into PowerPoint, Word, etc.)"
+            >
+              <Copy className="w-4 h-4" />
+              Copy
+            </button>
+            <button
+              onClick={() => exportChartToPNG('total-view-chart', generateChartFilename(`yearly_overview_${currentYear}`, 'png'))}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors"
+              title="Export as PNG image"
+            >
+              <Image className="w-4 h-4" />
+              PNG
             </button>
             <button
               onClick={() => exportChartToSVG('total-view-chart', generateChartFilename(`yearly_overview_${currentYear}`, 'svg'))}
