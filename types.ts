@@ -20,6 +20,9 @@ export interface Project {
   unit_price: number; // @deprecated use plan_price and actual_price
   plan_price: number;
   actual_price: number;
+  notes: string; // 補足 - Supplementary notes
+  exclusion_mark: string; // 除外記号 - Exclusion mark (e.g., ×, ○, -)
+  display_order: number; // Display order for sorting (lower = higher in list)
   created_at?: string;
   period?: string; // e.g. "2024-H1"
 }

@@ -71,7 +71,7 @@ export const dbService = {
         .from('period_projects')
         .select('plan_price, actual_price, projects(*)')
         .eq('period_label', period)
-        .order('projects(code)', { ascending: true });
+        .order('projects(display_order)', { ascending: true });
 
       if (error) {
         console.error('Error fetching projects:', error);
@@ -93,11 +93,11 @@ export const dbService = {
         };
       }).filter(Boolean) as Project[];
     } else {
-      // If no period specified, return all projects
+      // If no period specified, return all projects sorted by display_order
       const { data, error } = await supabase
         .from('projects')
         .select('*')
-        .order('code', { ascending: true });
+        .order('display_order', { ascending: true });
 
       if (error) {
         console.error('Error fetching projects:', error);
@@ -580,6 +580,51 @@ export const dbService = {
       licenseComputers: data.license_computers,
       licensePerComputer: data.license_per_computer
     };
+  },
+
+  // --- Project Reordering Functions ---
+  async moveProjectUp(projectId: string, periodLabel: string) {
+    // Get all projects for this period, sorted by display_order
+    const { data: allProjects, error: fetchError } = await supabase
+      .from('projects')
+      .select('id, display_order')
+      .order('display_order', { ascending: true });
+
+    if (fetchError) throw fetchError;
+    if (!allProjects || allProjects.length === 0) return;
+
+    // Find current project and the one above it
+    const currentIndex = allProjects.findIndex(p => p.id === projectId);
+    if (currentIndex <= 0) return; // Already at top or not found
+
+    const currentProject = allProjects[currentIndex];
+    const aboveProject = allProjects[currentIndex - 1];
+
+    // Swap display_order values
+    await supabase.from('projects').update({ display_order: aboveProject.display_order }).eq('id', currentProject.id);
+    await supabase.from('projects').update({ display_order: currentProject.display_order }).eq('id', aboveProject.id);
+  },
+
+  async moveProjectDown(projectId: string, periodLabel: string) {
+    // Get all projects for this period, sorted by display_order
+    const { data: allProjects, error: fetchError } = await supabase
+      .from('projects')
+      .select('id, display_order')
+      .order('display_order', { ascending: true });
+
+    if (fetchError) throw fetchError;
+    if (!allProjects || allProjects.length === 0) return;
+
+    // Find current project and the one below it
+    const currentIndex = allProjects.findIndex(p => p.id === projectId);
+    if (currentIndex < 0 || currentIndex >= allProjects.length - 1) return; // Already at bottom or not found
+
+    const currentProject = allProjects[currentIndex];
+    const belowProject = allProjects[currentIndex + 1];
+
+    // Swap display_order values
+    await supabase.from('projects').update({ display_order: belowProject.display_order }).eq('id', currentProject.id);
+    await supabase.from('projects').update({ display_order: currentProject.display_order }).eq('id', belowProject.id);
   },
 
   // --- Helper Functions ---

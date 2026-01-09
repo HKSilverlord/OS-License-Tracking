@@ -7,13 +7,16 @@ export const TABLE_COLUMN_WIDTHS = {
   // TrackingView specific
   actions: 64, // 3-dot menu column
   no: 50,
-  code: 112,
+  exclusionMark: 50, // 除外記号
+  code: 112, // Hidden from UI but used in database
   name: 200, // Increased to accommodate price display
+  notes: 150, // 補足 - Supplementary notes
   software: 120,
   businessContent: 150, // Reduced from 200
   month: 70, // Reduced for 3-digit numbers (000-999)
   totalHrs: 96,
   totalRev: 128,
+  sortButtons: 50, // Up/down arrow buttons for reordering
 
   // TotalView specific (slightly different widths)
   codeReadOnly: 100,

@@ -1,0 +1,256 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { Loader2, TrendingUp, Download, Copy, Image } from 'lucide-react';
+import { useLanguage } from '../contexts/LanguageContext';
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipProps } from 'recharts';
+import { exportChartToSVG, exportChartToPNG, exportChartDataToCSV, generateChartFilename, copyChartToClipboard } from '../utils/chartExport';
+
+// Long-term plan data interface
+interface LongTermPlanData {
+  year: number;
+  salesPlan: number | null;      // 売上計画（万円）
+  salesActual: number | null;    // 売上実績（万円）
+  hourlyRatePlan: number | null; // 平均時給計画（千円/時）
+  hourlyRateActual: number | null; // 平均時給実績（千円/時）
+}
+
+export const LongTermPlanView: React.FC = () => {
+  const { t, language } = useLanguage();
+  const [loading, setLoading] = useState(false);
+
+  // Sample data structure (2024-2030)
+  // TODO: Replace with actual data from database
+  const longTermData: LongTermPlanData[] = useMemo(() => [
+    { year: 2024, salesPlan: 2500, salesActual: 2109, hourlyRatePlan: 2300, hourlyRateActual: 2300 },
+    { year: 2025, salesPlan: 4100, salesActual: 942, hourlyRatePlan: 2550, hourlyRateActual: 2880 },
+    { year: 2026, salesPlan: 4800, salesActual: null, hourlyRatePlan: 2800, hourlyRateActual: null },
+    { year: 2027, salesPlan: 5500, salesActual: null, hourlyRatePlan: 3050, hourlyRateActual: null },
+    { year: 2028, salesPlan: 6100, salesActual: null, hourlyRatePlan: 3200, hourlyRateActual: null },
+    { year: 2029, salesPlan: 6400, salesActual: null, hourlyRatePlan: 3350, hourlyRateActual: null },
+    { year: 2030, salesPlan: 6635, salesActual: null, hourlyRatePlan: 3500, hourlyRateActual: null },
+  ], []);
+
+  // Chart data preparation - convert nulls to undefined for Recharts
+  const chartData = useMemo(() => {
+    return longTermData.map(d => ({
+      year: d.year.toString(),
+      salesPlan: d.salesPlan ?? undefined,
+      salesActual: d.salesActual ?? undefined,
+      hourlyRatePlan: d.hourlyRatePlan ?? undefined,
+      hourlyRateActual: d.hourlyRateActual ?? undefined,
+    }));
+  }, [longTermData]);
+
+  // Custom Tooltip Component
+  const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
+    if (!active || !payload || payload.length === 0) return null;
+
+    const data = payload[0].payload;
+
+    return (
+      <div className="bg-white p-3 border border-slate-300 rounded-lg shadow-lg">
+        <p className="font-semibold text-slate-800 mb-2 border-b border-slate-200 pb-1">
+          {t('longTermPlan.year', '年度')}: {data.year}
+        </p>
+        <div className="space-y-1.5 text-sm">
+          {/* Sales Data */}
+          {data.salesPlan !== undefined && (
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#87CEEB' }}></div>
+                <span className="text-slate-700">{t('longTermPlan.salesPlan', '売上計画')}:</span>
+              </div>
+              <span className="font-medium text-slate-900">{data.salesPlan.toLocaleString()} {t('longTermPlan.unit.sales', '万円')}</span>
+            </div>
+          )}
+
+          {data.salesActual !== undefined && (
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#000080' }}></div>
+                <span className="text-slate-700">{t('longTermPlan.salesActual', '売上実績')}:</span>
+              </div>
+              <span className="font-medium text-slate-900">{data.salesActual.toLocaleString()} {t('longTermPlan.unit.sales', '万円')}</span>
+            </div>
+          )}
+
+          {/* Hourly Rate Data */}
+          {(data.hourlyRatePlan !== undefined || data.hourlyRateActual !== undefined) && (
+            <div className="border-t border-slate-200 pt-2 mt-2"></div>
+          )}
+
+          {data.hourlyRatePlan !== undefined && (
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#32CD32' }}></div>
+                <span className="text-slate-700">{t('longTermPlan.hourlyRatePlan', '平均時給計画')}:</span>
+              </div>
+              <span className="font-medium text-slate-900">{data.hourlyRatePlan.toLocaleString()} {t('longTermPlan.unit.hourlyRate', '千円/時')}</span>
+            </div>
+          )}
+
+          {data.hourlyRateActual !== undefined && (
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#006400' }}></div>
+                <span className="text-slate-700">{t('longTermPlan.hourlyRateActual', '平均時給実績')}:</span>
+              </div>
+              <span className="font-medium text-slate-900">{data.hourlyRateActual.toLocaleString()} {t('longTermPlan.unit.hourlyRate', '千円/時')}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  if (loading) {
+    return <div className="flex justify-center items-center h-64"><Loader2 className="animate-spin h-8 w-8 text-blue-600" /></div>;
+  }
+
+  return (
+    <div className="flex flex-col h-full bg-slate-50 p-4 md:p-6 overflow-hidden">
+      {/* Chart Section - Full Page */}
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex-1 flex flex-col min-h-0">
+        <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+          <h3 className="text-md font-bold text-slate-700 flex items-center">
+            <TrendingUp className="w-4 h-4 mr-2 text-blue-600" />
+            {t('longTermPlan.title', 'OS事業長期計画')}
+          </h3>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => copyChartToClipboard('long-term-plan-chart')}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              title={t('longTermPlan.copyToClipboard', 'Copy chart to clipboard')}
+            >
+              <Copy className="w-4 h-4" />
+              {t('buttons.copy', 'Copy')}
+            </button>
+            <button
+              onClick={() => exportChartToPNG('long-term-plan-chart', generateChartFilename('long_term_plan', 'png'))}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors"
+              title={t('longTermPlan.exportPNG', 'Export as PNG image')}
+            >
+              <Image className="w-4 h-4" />
+              PNG
+            </button>
+            <button
+              onClick={() => exportChartToSVG('long-term-plan-chart', generateChartFilename('long_term_plan', 'svg'))}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+              title={t('longTermPlan.exportSVG', 'Export as SVG (vector, best quality)')}
+            >
+              <Download className="w-4 h-4" />
+              SVG
+            </button>
+            <button
+              onClick={() => exportChartDataToCSV(chartData, generateChartFilename('long_term_plan_data', 'csv'))}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              title={t('longTermPlan.exportData', 'Export chart data as CSV')}
+            >
+              <Download className="w-4 h-4" />
+              Data
+            </button>
+          </div>
+        </div>
+
+        {/* Chart Container */}
+        <div id="long-term-plan-chart" className="flex-1 min-h-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart
+              data={chartData}
+              margin={{ top: 20, right: 60, left: 20, bottom: 20 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e0e0" />
+
+              {/* X-Axis: Years */}
+              <XAxis
+                dataKey="year"
+                fontSize={12}
+                label={{ value: t('longTermPlan.axis.year', '年度'), position: 'insideBottom', offset: -10 }}
+              />
+
+              {/* Y1-Axis (Left): Sales in 万円 */}
+              <YAxis
+                yAxisId="left"
+                orientation="left"
+                fontSize={11}
+                domain={[0, 8000]}
+                ticks={[0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000]}
+                label={{
+                  value: t('longTermPlan.axis.sales', '売上額（万円）'),
+                  angle: -90,
+                  position: 'insideLeft',
+                  style: { fill: '#000080' }
+                }}
+              />
+
+              {/* Y2-Axis (Right): Hourly Rate in 千円/時 */}
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                fontSize={11}
+                domain={[0, 4000]}
+                ticks={[0, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000]}
+                label={{
+                  value: t('longTermPlan.axis.hourlyRate', '平均時給（千円/時）'),
+                  angle: 90,
+                  position: 'insideRight',
+                  style: { fill: '#32CD32' }
+                }}
+              />
+
+              <Tooltip content={<CustomTooltip />} />
+              <Legend
+                verticalAlign="top"
+                height={36}
+                wrapperStyle={{ paddingBottom: '10px' }}
+              />
+
+              {/* Series 1: Sales Plan - Column (Y1) */}
+              <Bar
+                yAxisId="left"
+                dataKey="salesPlan"
+                name={t('longTermPlan.legend.salesPlan', '売上計画（万円）')}
+                fill="#87CEEB"
+                radius={[4, 4, 0, 0]}
+                maxBarSize={60}
+              />
+
+              {/* Series 2: Sales Actual - Column (Y1) */}
+              <Bar
+                yAxisId="left"
+                dataKey="salesActual"
+                name={t('longTermPlan.legend.salesActual', '売上実績（万円）')}
+                fill="#000080"
+                radius={[4, 4, 0, 0]}
+                maxBarSize={60}
+              />
+
+              {/* Series 3: Hourly Rate Plan - Line (Y2) */}
+              <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="hourlyRatePlan"
+                name={t('longTermPlan.legend.hourlyRatePlan', '平均時給計画')}
+                stroke="#32CD32"
+                strokeWidth={3}
+                dot={{ fill: '#32CD32', r: 5 }}
+                connectNulls={false}
+              />
+
+              {/* Series 4: Hourly Rate Actual - Line (Y2) */}
+              <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="hourlyRateActual"
+                name={t('longTermPlan.legend.hourlyRateActual', '平均時給実績')}
+                stroke="#006400"
+                strokeWidth={3}
+                dot={{ fill: '#006400', r: 5 }}
+                connectNulls={false}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+};

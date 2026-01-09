@@ -7,9 +7,11 @@ import { TrackingView } from './components/TrackingView';
 import { TotalView } from './components/TotalView';
 import { YearlyDataView } from './components/YearlyDataView';
 import { PeriodManagement } from './components/PeriodManagement';
+import { LongTermPlanView } from './components/LongTermPlanView';
+import { MonthlyPlanActualView } from './components/MonthlyPlanActualView';
 import { dbService } from './services/dbService';
 import { exportToExcel } from './services/exportService';
-import { LayoutDashboard, Table, Plus, LogOut, Download, Menu, X, Search, Languages, BarChart3, Calendar } from 'lucide-react';
+import { LayoutDashboard, Table, Plus, LogOut, Download, Menu, X, Search, Languages, BarChart3, Calendar as CalendarIcon, TrendingUp } from 'lucide-react';
 import { ProjectStatus } from './types';
 import { DEFAULT_UNIT_PRICE } from './constants';
 import { useLanguage } from './contexts/LanguageContext';
@@ -240,7 +242,9 @@ function App() {
             <NavLink to="/tracking" icon={Table} label={t('nav.tracking')} />
             <NavLink to="/total" icon={BarChart3} label={t('nav.totalView')} />
             <NavLink to="/yearly-data" icon={Table} label={t('nav.yearlyData')} />
-            <NavLink to="/period-management" icon={Calendar} label={t('nav.periodManagement')} />
+            <NavLink to="/long-term-plan" icon={TrendingUp} label={t('nav.longTermPlan')} />
+            <NavLink to="/monthly-plan-actual" icon={BarChart3} label={t('nav.monthlyPlanActual')} />
+            <NavLink to="/period-management" icon={CalendarIcon} label={t('nav.periodManagement')} />
           </nav>
           <div className="p-4 border-t border-slate-700">
             <div className="flex items-center mb-4 px-2">
@@ -277,6 +281,8 @@ function App() {
               <Link to="/tracking" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.tracking')}</Link>
               <Link to="/total" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.totalView')}</Link>
               <Link to="/yearly-data" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.yearlyData')}</Link>
+              <Link to="/long-term-plan" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.longTermPlan')}</Link>
+              <Link to="/monthly-plan-actual" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.monthlyPlanActual')}</Link>
               <Link to="/period-management" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.periodManagement')}</Link>
               <button onClick={handleSignOut} className="block w-full text-left py-3 text-red-400">{t('nav.signOut')}</button>
             </nav>
@@ -360,6 +366,8 @@ function App() {
               <Route path="/tracking" element={<TrackingView currentPeriodLabel={currentPeriod} searchQuery={searchQuery} refreshTrigger={projectCreatedTrigger} />} />
               <Route path="/total" element={<TotalView currentYear={currentYear} />} />
               <Route path="/yearly-data" element={<YearlyDataView currentYear={currentYear} />} />
+              <Route path="/long-term-plan" element={<LongTermPlanView />} />
+              <Route path="/monthly-plan-actual" element={<MonthlyPlanActualView currentYear={currentYear} />} />
               <Route path="/period-management" element={<PeriodManagement />} />
             </Routes>
           </div>
