@@ -9,9 +9,10 @@ import { YearlyDataView } from './components/YearlyDataView';
 import { PeriodManagement } from './components/PeriodManagement';
 import { LongTermPlanView } from './components/LongTermPlanView';
 import { MonthlyPlanActualView } from './components/MonthlyPlanActualView';
+import { DatabaseDiagnostic } from './components/DatabaseDiagnostic';
 import { dbService } from './services/dbService';
 import { exportToExcel } from './services/exportService';
-import { LayoutDashboard, Table, Plus, LogOut, Download, Menu, X, Search, Languages, BarChart3, Calendar as CalendarIcon, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, Table, Plus, LogOut, Download, Menu, X, Search, Languages, BarChart3, Calendar as CalendarIcon, TrendingUp, Wrench } from 'lucide-react';
 import { ProjectStatus } from './types';
 import { DEFAULT_UNIT_PRICE } from './constants';
 import { useLanguage } from './contexts/LanguageContext';
@@ -245,6 +246,8 @@ function App() {
             <NavLink to="/long-term-plan" icon={TrendingUp} label={t('nav.longTermPlan')} />
             <NavLink to="/monthly-plan-actual" icon={BarChart3} label={t('nav.monthlyPlanActual')} />
             <NavLink to="/period-management" icon={CalendarIcon} label={t('nav.periodManagement')} />
+            <div className="pt-2 border-t border-slate-700"></div>
+            <NavLink to="/diagnostic" icon={Wrench} label="Database Fix" />
           </nav>
           <div className="p-4 border-t border-slate-700">
             <div className="flex items-center mb-4 px-2">
@@ -284,6 +287,7 @@ function App() {
               <Link to="/long-term-plan" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.longTermPlan')}</Link>
               <Link to="/monthly-plan-actual" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.monthlyPlanActual')}</Link>
               <Link to="/period-management" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.periodManagement')}</Link>
+              <Link to="/diagnostic" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">Database Fix</Link>
               <button onClick={handleSignOut} className="block w-full text-left py-3 text-red-400">{t('nav.signOut')}</button>
             </nav>
           </div>
@@ -369,6 +373,7 @@ function App() {
               <Route path="/long-term-plan" element={<LongTermPlanView />} />
               <Route path="/monthly-plan-actual" element={<MonthlyPlanActualView currentYear={currentYear} />} />
               <Route path="/period-management" element={<PeriodManagement />} />
+              <Route path="/diagnostic" element={<DatabaseDiagnostic />} />
             </Routes>
           </div>
         </main>
