@@ -162,6 +162,10 @@ export const dbService = {
       finalCode = await getNextProjectCode(project.period);
     }
 
+    // Extract period for linking
+    const periodLabel = project.period;
+
+    // Insert project into projects table
     const { data, error } = await supabase
       .from('projects')
       .insert({ ...project, code: finalCode })
@@ -169,6 +173,24 @@ export const dbService = {
       .single();
 
     if (error) throw error;
+
+    // Link project to period in period_projects table
+    if (periodLabel && data?.id) {
+      const { error: linkError } = await supabase
+        .from('period_projects')
+        .insert({
+          period_label: periodLabel,
+          project_id: data.id,
+          plan_price: project.plan_price || project.unit_price || null,
+          actual_price: project.actual_price || project.unit_price || null
+        });
+
+      if (linkError) {
+        console.error('Error linking project to period:', linkError);
+        // Don't throw - project was created successfully
+      }
+    }
+
     return data as Project;
   },
 
@@ -250,36 +272,33 @@ export const dbService = {
   },
 
   async copyProjectsToPeriod(targetPeriod: string, projectIds: string[]) {
-    // 1. Fetch Source Projects
+    if (!projectIds || projectIds.length === 0) return [];
+
+    // Fetch source projects to get their prices
     const { data: sourceProjects, error: fetchError } = await supabase
       .from('projects')
-      .select('*')
+      .select('id, unit_price, plan_price, actual_price')
       .in('id', projectIds);
 
     if (fetchError) throw fetchError;
     if (!sourceProjects || sourceProjects.length === 0) return [];
 
-    // 2. Prepare new project payloads (omit id, created_at, etc.)
-    const newProjectsPayload = sourceProjects.map(p => ({
-      name: p.name,
-      code: p.code, // Keep the same code for continuity
-      type: p.type,
-      software: p.software,
-      status: p.status,
-      unit_price: p.unit_price,
-      plan_price: p.plan_price || p.unit_price || 0,
-      actual_price: p.actual_price || p.unit_price || 0,
-      period: targetPeriod
+    // Create period-project links (not new projects!)
+    const periodProjectsPayload = sourceProjects.map(p => ({
+      period_label: targetPeriod,
+      project_id: p.id,
+      plan_price: p.plan_price || p.unit_price || null,
+      actual_price: p.actual_price || p.unit_price || null
     }));
 
-    // 3. Insert new projects
-    const { data: insertedProjects, error: insertError } = await supabase
-      .from('projects')
-      .insert(newProjectsPayload)
-      .select();
+    const { error: insertError } = await supabase
+      .from('period_projects')
+      .insert(periodProjectsPayload);
 
     if (insertError) throw insertError;
-    return insertedProjects as Project[];
+
+    // Return the source projects (they're now linked to the new period)
+    return sourceProjects as Project[];
   },
 
   async generateNextProjectCode() {
