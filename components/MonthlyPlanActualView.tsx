@@ -3,6 +3,7 @@ import { Loader2, Calendar, Download, Copy, Image } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipProps, Cell, LabelList } from 'recharts';
 import { exportChartToSVG, exportChartToPNG, exportChartDataToCSV, generateChartFilename, copyChartToClipboard } from '../utils/chartExport';
+import { dbService } from '../services/dbService';
 
 // Monthly plan-actual data interface
 interface MonthlyPlanActualData {
@@ -21,33 +22,46 @@ interface MonthlyPlanActualViewProps {
 
 export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ currentYear }) => {
   const { t, language } = useLanguage();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [monthlyData, setMonthlyData] = useState<MonthlyPlanActualData[]>([]);
 
-  // Sample data for 2026 (TODO: Replace with actual data from database)
-  const monthlyData: MonthlyPlanActualData[] = useMemo(() => {
-    const locale = language === 'ja' ? 'ja-JP' : language === 'vn' ? 'vi-VN' : 'en-US';
+  // Fetch real data from Supabase
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const [aggregatedData, capacityData] = await Promise.all([
+          dbService.getMonthlyAggregatedData(currentYear),
+          dbService.getCapacityLine(currentYear)
+        ]);
 
-    // Sample data based on the specification
-    const capacityLineData = [1278, 1278, 1530, 1530, 1530, 1530, 1278, 1530, 1530, 1530, 1530, 1530];
-    const workingPlanData = [200, 400, 900, 900, 1100, 1200, 1300, 1000, 1320, 1320, 1320, 1320];
-    const workingActualData = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; // All zeros for future months
-    const salesPlanData = [50, 114, 466, 2050, 2530, 2530, 3066, 2300, 3036, 3036, 3660, 3660];
-    const salesActualData = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; // All zeros for future months
+        const locale = language === 'ja' ? 'ja-JP' : language === 'vn' ? 'vi-VN' : 'en-US';
 
-    return Array.from({ length: 12 }, (_, i) => {
-      const monthNum = i + 1;
-      const monthLabel = new Date(currentYear, i).toLocaleString(locale, { month: 'short' });
+        // Combine data
+        const combined = aggregatedData.map(data => {
+          const capacity = capacityData.find(c => c.month === data.month)?.capacity || 0;
+          const monthLabel = new Date(currentYear, data.month - 1).toLocaleString(locale, { month: 'short' });
 
-      return {
-        month: monthNum,
-        monthLabel: language === 'ja' ? `${monthNum}月` : monthLabel,
-        capacityLine: capacityLineData[i],
-        workingHoursPlan: workingPlanData[i],
-        workingHoursActual: workingActualData[i],
-        salesPlan: salesPlanData[i],
-        salesActual: salesActualData[i],
-      };
-    });
+          return {
+            month: data.month,
+            monthLabel: language === 'ja' ? `${data.month}月` : monthLabel,
+            capacityLine: capacity,
+            workingHoursPlan: data.workingHoursPlan,
+            workingHoursActual: data.workingHoursActual,
+            salesPlan: data.salesPlan,
+            salesActual: data.salesActual
+          };
+        });
+
+        setMonthlyData(combined);
+      } catch (error) {
+        console.error('Failed to load monthly plan-actual data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
   }, [currentYear, language]);
 
   // Calculate Y-axis ranges

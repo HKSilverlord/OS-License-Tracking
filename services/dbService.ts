@@ -582,6 +582,148 @@ export const dbService = {
     };
   },
 
+  // --- Chart Data Aggregation Functions ---
+  async getYearlyAggregatedData(startYear: number, endYear: number) {
+    // Fetch all monthly records and projects for the year range
+    const { data: records, error } = await supabase
+      .from('monthly_records')
+      .select(`
+        *,
+        projects (
+          plan_price,
+          actual_price,
+          unit_price
+        )
+      `)
+      .gte('year', startYear)
+      .lte('year', endYear);
+
+    if (error) throw error;
+
+    // Aggregate by year
+    const yearlyData: Record<number, {
+      salesPlan: number;
+      salesActual: number;
+      totalPlanHours: number;
+      totalActualHours: number;
+      priceSum: number;
+      projectCount: number;
+    }> = {};
+
+    // Initialize years
+    for (let year = startYear; year <= endYear; year++) {
+      yearlyData[year] = {
+        salesPlan: 0,
+        salesActual: 0,
+        totalPlanHours: 0,
+        totalActualHours: 0,
+        priceSum: 0,
+        projectCount: 0
+      };
+    }
+
+    // Aggregate data
+    (records || []).forEach((record: any) => {
+      const year = record.year;
+      if (!yearlyData[year]) return;
+
+      const project = record.projects;
+      const planPrice = project?.plan_price || project?.unit_price || 0;
+      const actualPrice = project?.actual_price || project?.unit_price || 0;
+
+      yearlyData[year].salesPlan += (record.planned_hours || 0) * planPrice;
+      yearlyData[year].salesActual += (record.actual_hours || 0) * actualPrice;
+      yearlyData[year].totalPlanHours += record.planned_hours || 0;
+      yearlyData[year].totalActualHours += record.actual_hours || 0;
+      yearlyData[year].priceSum += planPrice;
+      yearlyData[year].projectCount += 1;
+    });
+
+    // Convert to array with calculated average hourly rates
+    return Object.entries(yearlyData).map(([year, data]) => ({
+      year: parseInt(year),
+      salesPlan: Math.round(data.salesPlan / 10000), // Convert to 万円
+      salesActual: data.salesActual > 0 ? Math.round(data.salesActual / 10000) : null, // 万円, null if no actual
+      hourlyRatePlan: data.projectCount > 0 ? Math.round(data.priceSum / data.projectCount) : null, // Average price
+      hourlyRateActual: data.totalActualHours > 0
+        ? Math.round((data.salesActual / data.totalActualHours))
+        : null // Actual average rate, null if no hours
+    }));
+  },
+
+  async getMonthlyAggregatedData(year: number) {
+    // Fetch all monthly records for the specified year
+    const { data: records, error } = await supabase
+      .from('monthly_records')
+      .select(`
+        *,
+        projects (
+          plan_price,
+          actual_price,
+          unit_price
+        )
+      `)
+      .eq('year', year);
+
+    if (error) throw error;
+
+    // Initialize 12 months
+    const monthlyData: Record<number, {
+      workingHoursPlan: number;
+      workingHoursActual: number;
+      salesPlan: number;
+      salesActual: number;
+    }> = {};
+
+    for (let month = 1; month <= 12; month++) {
+      monthlyData[month] = {
+        workingHoursPlan: 0,
+        workingHoursActual: 0,
+        salesPlan: 0,
+        salesActual: 0
+      };
+    }
+
+    // Aggregate data by month
+    (records || []).forEach((record: any) => {
+      const month = record.month;
+      if (!monthlyData[month]) return;
+
+      const project = record.projects;
+      const planPrice = project?.plan_price || project?.unit_price || 0;
+      const actualPrice = project?.actual_price || project?.unit_price || 0;
+
+      monthlyData[month].workingHoursPlan += record.planned_hours || 0;
+      monthlyData[month].workingHoursActual += record.actual_hours || 0;
+      monthlyData[month].salesPlan += (record.planned_hours || 0) * planPrice;
+      monthlyData[month].salesActual += (record.actual_hours || 0) * actualPrice;
+    });
+
+    // Convert to array
+    return Object.entries(monthlyData).map(([month, data]) => ({
+      month: parseInt(month),
+      workingHoursPlan: Math.round(data.workingHoursPlan),
+      workingHoursActual: Math.round(data.workingHoursActual),
+      salesPlan: Math.round(data.salesPlan / 10000), // Convert to 万円
+      salesActual: Math.round(data.salesActual / 10000) // Convert to 万円
+    }));
+  },
+
+  async getCapacityLine(year: number) {
+    // Get license settings to calculate capacity
+    const settings = await this.getSettings();
+
+    // Typical working days per month (can be customized)
+    const workingDaysPerMonth = [20, 19, 21, 21, 20, 21, 21, 22, 21, 22, 20, 20]; // 2024-ish average
+    const hoursPerDay = 8; // Standard work day
+
+    // Capacity = license_computers × working_days × hours_per_day
+    return workingDaysPerMonth.map((days, index) => ({
+      month: index + 1,
+      capacity: settings.licenseComputers * days * hoursPerDay
+    }));
+  },
+
   // --- Project Reordering Functions ---
   async moveProjectUp(projectId: string, periodLabel: string) {
     // Get all projects for this period, sorted by display_order

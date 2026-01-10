@@ -3,6 +3,7 @@ import { Loader2, TrendingUp, Download, Copy, Image } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipProps } from 'recharts';
 import { exportChartToSVG, exportChartToPNG, exportChartDataToCSV, generateChartFilename, copyChartToClipboard } from '../utils/chartExport';
+import { dbService } from '../services/dbService';
 
 // Long-term plan data interface
 interface LongTermPlanData {
@@ -15,19 +16,29 @@ interface LongTermPlanData {
 
 export const LongTermPlanView: React.FC = () => {
   const { t, language } = useLanguage();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [longTermData, setLongTermData] = useState<LongTermPlanData[]>([]);
 
-  // Sample data structure (2024-2030)
-  // TODO: Replace with actual data from database
-  const longTermData: LongTermPlanData[] = useMemo(() => [
-    { year: 2024, salesPlan: 2500, salesActual: 2109, hourlyRatePlan: 2300, hourlyRateActual: 2300 },
-    { year: 2025, salesPlan: 4100, salesActual: 942, hourlyRatePlan: 2550, hourlyRateActual: 2880 },
-    { year: 2026, salesPlan: 4800, salesActual: null, hourlyRatePlan: 2800, hourlyRateActual: null },
-    { year: 2027, salesPlan: 5500, salesActual: null, hourlyRatePlan: 3050, hourlyRateActual: null },
-    { year: 2028, salesPlan: 6100, salesActual: null, hourlyRatePlan: 3200, hourlyRateActual: null },
-    { year: 2029, salesPlan: 6400, salesActual: null, hourlyRatePlan: 3350, hourlyRateActual: null },
-    { year: 2030, salesPlan: 6635, salesActual: null, hourlyRatePlan: 3500, hourlyRateActual: null },
-  ], []);
+  // Fetch real data from Supabase
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const currentYear = new Date().getFullYear();
+        const startYear = 2024;
+        const endYear = 2030;
+
+        const data = await dbService.getYearlyAggregatedData(startYear, endYear);
+        setLongTermData(data);
+      } catch (error) {
+        console.error('Failed to load long-term plan data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   // Chart data preparation - convert nulls to undefined for Recharts
   const chartData = useMemo(() => {
