@@ -66,22 +66,28 @@ export const dbService = {
   // --- Projects ---
   async getProjects(period?: string) {
     if (period) {
+      console.log('[getProjects] Fetching projects for period:', period);
+
       // Query projects through the period_projects junction table
       const { data, error } = await supabase
         .from('period_projects')
         .select('plan_price, actual_price, projects(*)')
-        .eq('period_label', period)
-        .order('projects(display_order)', { ascending: true });
+        .eq('period_label', period);
 
       if (error) {
-        console.error('Error fetching projects:', error);
+        console.error('[getProjects] Error fetching projects:', error);
         throw error;
       }
 
-      // Extract projects from the junction table result
-      return (data || []).map((pp: any) => {
+      console.log('[getProjects] Raw data from period_projects:', data?.length || 0, 'items');
+
+      // Extract projects from the junction table result and sort by display_order
+      const projects = (data || []).map((pp: any) => {
         const project = pp.projects;
-        if (!project) return null;
+        if (!project) {
+          console.warn('[getProjects] Found period_project without nested project data:', pp);
+          return null;
+        }
 
         // Override global prices with period-specific prices if available
         // If period_price is null, fallback to global price
@@ -89,10 +95,17 @@ export const dbService = {
           ...project,
           plan_price: pp.plan_price ?? project.plan_price,
           actual_price: pp.actual_price ?? project.actual_price,
-          // Store the original period_projects ID or keys if needed, but here we just map fields
         };
       }).filter(Boolean) as Project[];
+
+      // Sort by display_order in JavaScript since Supabase doesn't support nested ordering
+      projects.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+
+      console.log('[getProjects] Returning', projects.length, 'projects');
+      return projects;
     } else {
+      console.log('[getProjects] Fetching all projects (no period filter)');
+
       // If no period specified, return all projects sorted by display_order
       const { data, error } = await supabase
         .from('projects')
@@ -100,9 +113,11 @@ export const dbService = {
         .order('display_order', { ascending: true });
 
       if (error) {
-        console.error('Error fetching projects:', error);
+        console.error('[getProjects] Error fetching projects:', error);
         throw error;
       }
+
+      console.log('[getProjects] Returning', data?.length || 0, 'projects');
       return data as Project[];
     }
   },
@@ -155,6 +170,8 @@ export const dbService = {
   },
 
   async createProject(project: Omit<Project, 'id' | 'created_at' | 'code'> & { code?: string }) {
+    console.log('[createProject] Starting with period:', project.period);
+
     // Auto-generate code if not provided or invalid
     let finalCode = project.code;
 
@@ -172,10 +189,17 @@ export const dbService = {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('[createProject] Error creating project:', error);
+      throw error;
+    }
+
+    console.log('[createProject] Project created:', data.id, data.code);
 
     // Link project to period in period_projects table
     if (periodLabel && data?.id) {
+      console.log('[createProject] Linking to period:', periodLabel);
+
       const { error: linkError } = await supabase
         .from('period_projects')
         .insert({
@@ -186,9 +210,13 @@ export const dbService = {
         });
 
       if (linkError) {
-        console.error('Error linking project to period:', linkError);
+        console.error('[createProject] ERROR linking project to period:', linkError);
         // Don't throw - project was created successfully
+      } else {
+        console.log('[createProject] ✓ Successfully linked project to period');
       }
+    } else {
+      console.warn('[createProject] WARNING: No period label or project ID, skipping link');
     }
 
     return data as Project;
