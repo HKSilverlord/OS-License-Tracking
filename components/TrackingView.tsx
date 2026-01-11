@@ -3,15 +3,10 @@ import { Project, MonthlyRecord, PeriodType } from '../types';
 import { dbService } from '../services/dbService';
 import { getMonthsForPeriod } from '../utils/helpers';
 import { TABLE_COLUMN_WIDTHS, STICKY_CLASSES } from '../utils/tableStyles';
-import { Save, Loader2, Trash2, MoreVertical, Edit, Trash } from 'lucide-react';
+import { Save, Loader2, MoreVertical, Edit, Trash, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
-interface TrackingViewProps {
-  currentPeriodLabel: string; // e.g. "2024-H1"
-  searchQuery: string;
-  refreshTrigger?: number; // Trigger to refresh data when project is created
-}
-
+// ... imports ...
 import { EditProjectModal } from './EditProjectModal';
 import { DropdownMenu } from './DropdownMenu';
 import { formatCurrency } from '../utils/helpers';
@@ -26,8 +21,10 @@ const ProjectActionsMenu: React.FC<{
   project: Project;
   onEdit: () => void;
   onDelete: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
   t: (key: string, defaultVal?: string) => string;
-}> = ({ project, onEdit, onDelete, t }) => {
+}> = ({ project, onEdit, onDelete, onMoveUp, onMoveDown, t }) => {
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -51,6 +48,31 @@ const ProjectActionsMenu: React.FC<{
         triggerRef={triggerRef}
       >
         <div className="flex flex-col">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMoveUp();
+              setIsOpen(false);
+            }}
+            className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+          >
+            <ArrowUp className="w-4 h-4" />
+            {t('common.moveUp', 'Move Up')}
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMoveDown();
+              setIsOpen(false);
+            }}
+            className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+          >
+            <ArrowDown className="w-4 h-4" />
+            {t('common.moveDown', 'Move Down')}
+          </button>
+          <div className="border-t border-gray-100 my-1"></div>
           <button
             type="button"
             onClick={(e) => {
@@ -88,10 +110,13 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   const [loading, setLoading] = useState(true);
   const [savingStatus, setSavingStatus] = useState<Record<string, boolean>>({}); // Key: `${projectId}-${month}-${field}`
   const [deleting, setDeleting] = useState(false);
-  // const [openMenuId, setOpenMenuId] = useState<string | null>(null); // Removed: handling locally in component
   const [pendingChanges, setPendingChanges] = useState<Record<string, MonthlyRecord>>({}); // Key: `${projectId}-${month}`
   const [isSaving, setIsSaving] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+
+  // Local Filter & Sort State
+  const [localFilter, setLocalFilter] = useState('');
+  const [sortConfig, setSortConfig] = useState<{ key: keyof Project | null; direction: 'asc' | 'desc' }>({ key: 'display_order', direction: 'asc' });
 
   // Debounce refs
   const debounceTimers = useRef<Record<string, any>>({});
@@ -108,14 +133,93 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
     return new Date(2000, month - 1).toLocaleString('en-US', { month: 'short' });
   }, [language]);
 
-  const filteredProjects = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return projects;
-    return projects.filter(p =>
-      p.name.toLowerCase().includes(query) ||
-      p.code.toLowerCase().includes(query)
-    );
-  }, [projects, searchQuery]);
+  // Handle Sort
+  const handleSort = (key: keyof Project) => {
+    setSortConfig(current => ({
+      key,
+      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc',
+    }));
+  };
+
+  // Handle Reorder
+  const handleMoveProject = async (projectId: string, direction: 'up' | 'down') => {
+    // Optimistic Update
+    const currentIndex = projects.findIndex(p => p.id === projectId);
+    if (currentIndex === -1) return;
+    if (direction === 'up' && currentIndex === 0) return;
+    if (direction === 'down' && currentIndex === projects.length - 1) return;
+
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    const newProjects = [...projects];
+
+    // Swap
+    [newProjects[currentIndex], newProjects[targetIndex]] = [newProjects[targetIndex], newProjects[currentIndex]];
+
+    // Update display_order based on new index
+    // Assuming backend sorts by display_order, we just need to swap the orders or re-assign
+    const currentOrder = newProjects[currentIndex].display_order;
+    const targetOrder = newProjects[targetIndex].display_order;
+
+    // Swap display_order property as well to keep consistency
+    newProjects[currentIndex].display_order = targetOrder;
+    newProjects[targetIndex].display_order = currentOrder;
+
+    setProjects(newProjects);
+
+    try {
+      // Call DB Service
+      if (direction === 'up') {
+        await dbService.moveProjectUp(projectId, currentPeriodLabel);
+      } else {
+        await dbService.moveProjectDown(projectId, currentPeriodLabel);
+      }
+    } catch (error) {
+      console.error("Failed to move project", error);
+      // Revert on error? For now, we assume success or user will refresh
+      fetchData();
+    }
+  };
+
+
+  const filteredAndSortedProjects = useMemo(() => {
+    // 1. Filter
+    let result = projects;
+
+    // Global Search
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        p.code.toLowerCase().includes(q)
+      );
+    }
+
+    // Local Filter
+    if (localFilter.trim()) {
+      const q = localFilter.trim().toLowerCase();
+      result = result.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        p.code.toLowerCase().includes(q)
+      );
+    }
+
+    // 2. Sort
+    if (sortConfig.key) {
+      result = [...result].sort((a, b) => {
+        const aValue = a[sortConfig.key!] ?? '';
+        const bValue = b[sortConfig.key!] ?? '';
+
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    } else {
+      // Default Sort by display_order
+      result = [...result].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+    }
+
+    return result;
+  }, [projects, searchQuery, localFilter, sortConfig]);
 
   // Close menu when clicking outside - Removed as DropdownMenu handles it locally
   /*
@@ -384,7 +488,6 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
     return <div className="flex justify-center items-center h-64"><Loader2 className="animate-spin h-8 w-8 text-blue-600" /></div>;
   }
 
-
   // Use shared table styling constants
   const {
     no: LEFT_NO_WIDTH,
@@ -407,8 +510,9 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   const hasPendingChanges = pendingCount > 0;
 
   // Calculate sticky positions
+  // CODE column is effectively hidden (width 0), so we can skip it or it will calculate to same pos
   const POS_EXCLUSION = LEFT_NO_WIDTH;
-  const POS_CODE = POS_EXCLUSION + LEFT_EXCLUSION_WIDTH;
+  const POS_CODE = POS_EXCLUSION + LEFT_EXCLUSION_WIDTH; // If WIDTH is 0, POS_CODE == POS_EXCLUSION
   const POS_NAME = POS_CODE + LEFT_CODE_WIDTH;
   const POS_NOTES = POS_NAME + LEFT_NAME_WIDTH;
   const POS_SOFTWARE = POS_NOTES + LEFT_NOTES_WIDTH;
@@ -428,26 +532,40 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
               </span>
             )}
           </div>
-          <button
-            onClick={handleSaveAll}
-            disabled={!hasPendingChanges || isSaving}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${hasPendingChanges && !isSaving
-              ? 'bg-blue-600 text-white hover:bg-blue-700'
-              : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-              }`}
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                {t('saving', 'Saving...')}
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4" />
-                {t('saveAll', 'Save All')}
-              </>
-            )}
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Local Filter Box */}
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" />
+              <input
+                type="text"
+                placeholder={t('search.placeholder', 'Search...')}
+                className="pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
+                value={localFilter}
+                onChange={(e) => setLocalFilter(e.target.value)}
+              />
+            </div>
+
+            <button
+              onClick={handleSaveAll}
+              disabled={!hasPendingChanges || isSaving}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${hasPendingChanges && !isSaving
+                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                }`}
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {t('saving', 'Saving...')}
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  {t('saveAll', 'Save All')}
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         <div
@@ -458,16 +576,35 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
             <thead className="bg-gray-50 sticky top-0 z-40">
               <tr>
                 <th scope="col" style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                  {t('tracker.no')}
+                  <div className="flex items-center justify-center gap-1 cursor-pointer hover:bg-gray-100 rounded" onClick={() => handleSort('display_order')}>
+                    {t('tracker.no')}
+                    {sortConfig.key === 'display_order' && <ArrowUpDown className={`w-3 h-3 ${sortConfig.direction === 'asc' ? 'text-blue-600' : 'text-blue-600 rotate-180'}`} />}
+                  </div>
                 </th>
                 <th scope="col" style={{ left: `${POS_EXCLUSION}px`, width: `${LEFT_EXCLUSION_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                  {t('tracker.exclusion', '除外')}
+                  <div className="flex items-center justify-center gap-1 cursor-pointer hover:bg-gray-100 rounded" onClick={() => handleSort('exclusion_mark')}>
+                    {t('tracker.exclusion', '除外')}
+                    {sortConfig.key === 'exclusion_mark' && <ArrowUpDown className={`w-3 h-3 ${sortConfig.direction === 'asc' ? 'text-blue-600' : 'text-blue-600 rotate-180'}`} />}
+                  </div>
                 </th>
-                <th scope="col" style={{ left: `${POS_CODE}px`, width: `${LEFT_CODE_WIDTH}px` }} className={`px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                  {t('tracker.code')}
-                </th>
+
+                {/* Code Column - Hidden (Width 0) */}
+                {/* <th ...> - Removed for UI cleanliness, or empty if width 0 is enough to hide? 
+                    Since width is 0 in tableStyles, it might still render border/padding. Better to skip rendering or ensure overflow hidden.
+                    If we skip rendering, sticky calcs might break if simple CSS logic used. 
+                    However, sticky styling is done via inline 'left' styles.
+                    Since width is 0, we can render it empty, but best to not render the TH/TD to completely remove it from DOM flow.
+                    BUT sticky positions depend on it if we don't adjust logic. 
+                    Logic POS_NAME = POS_CODE + LEFT_CODE_WIDTH. If LEFT_CODE_WIDTH is 0, POS_NAME = POS_CODE.
+                    So removing the TH/TD is fine as long as we don't assume its existence for other things. 
+                    Let's remove it.
+                 */}
+
                 <th scope="col" style={{ left: `${POS_NAME}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                  {t('tracker.projectName')}
+                  <div className="flex items-center justify-between gap-1 cursor-pointer hover:bg-gray-100 rounded" onClick={() => handleSort('name')}>
+                    {t('tracker.projectName')}
+                    {sortConfig.key === 'name' && <ArrowUpDown className={`w-3 h-3 ${sortConfig.direction === 'asc' ? 'text-blue-600' : 'text-blue-600 rotate-180'}`} />}
+                  </div>
                 </th>
                 <th scope="col" style={{ left: `${POS_NOTES}px`, width: `${LEFT_NOTES_WIDTH}px` }} className={`px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
                   {t('tracker.notes', '補足')}
@@ -501,7 +638,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredProjects.map((project, index) => {
+              {filteredAndSortedProjects.map((project, index) => {
                 const projRecords = records[project.id] || [];
 
                 return (
@@ -520,9 +657,10 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                           placeholder="-"
                         />
                       </td>
-                      <td rowSpan={2} style={{ left: `${POS_CODE}px`, width: `${LEFT_CODE_WIDTH}px` }} className={`px-2 py-3 text-sm font-medium text-gray-900 ${stickyLeftClass} align-top`}>
-                        {project.code}
-                      </td>
+
+                      {/* Code Column - Hidden */}
+                      {/* <td ...>{project.code}</td> */}
+
                       <td rowSpan={2} style={{ left: `${POS_NAME}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-2 py-2 text-sm text-gray-700 border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
                         <div className="font-medium line-clamp-2" title={project.name}>{project.name}</div>
                       </td>
@@ -586,6 +724,8 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                           project={project}
                           onEdit={() => setEditingProject(project)}
                           onDelete={() => handleDeleteProjects([project.id])}
+                          onMoveUp={() => handleMoveProject(project.id, 'up')}
+                          onMoveDown={() => handleMoveProject(project.id, 'down')}
                           t={t}
                         />
                       </td>
@@ -628,7 +768,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
             </tbody>
           </table>
         </div>
-        {filteredProjects.length === 0 && (
+        {filteredAndSortedProjects.length === 0 && (
           <div className="p-4 sm:p-8 text-center text-gray-500 text-sm sm:text-base">
             {t('tracker.noResults')}
           </div>

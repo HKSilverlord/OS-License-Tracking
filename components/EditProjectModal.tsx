@@ -22,7 +22,9 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ project, isO
                 software: project.software,
                 type: project.type,
                 plan_price: project.plan_price || project.unit_price || 0,
-                actual_price: project.actual_price || project.unit_price || 0
+                actual_price: project.actual_price || project.unit_price || 0,
+                exclusion_mark: project.exclusion_mark,
+                notes: project.notes
             });
         }
     }, [isOpen, project]);
@@ -79,6 +81,30 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ project, isO
                             placeholder="AutoCAD, Revit, etc."
                         />
                         <p className="text-xs text-gray-500 mt-1">Enter multiple software names, separated by commas or new lines.</p>
+                    </div>
+
+                    {/* Exclusion & Note */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">{t('tracker.exclusion', 'Exclusion')}</label>
+                            <input
+                                type="text"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                value={formData.exclusion_mark || ''}
+                                onChange={e => setFormData({ ...formData, exclusion_mark: e.target.value })}
+                                placeholder="-"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">{t('tracker.notes', 'Note')}</label>
+                            <input
+                                type="text"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                value={formData.notes || ''}
+                                onChange={e => setFormData({ ...formData, notes: e.target.value })}
+                                placeholder="Notes..."
+                            />
+                        </div>
                     </div>
 
                     {/* Business Content */}

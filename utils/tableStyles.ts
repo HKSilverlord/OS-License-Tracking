@@ -8,7 +8,7 @@ export const TABLE_COLUMN_WIDTHS = {
   actions: 64, // 3-dot menu column
   no: 50,
   exclusionMark: 50, // 除外記号
-  code: 112, // Hidden from UI but used in database
+  code: 0, // Hidden from UI
   name: 200, // Increased to accommodate price display
   notes: 150, // 補足 - Supplementary notes
   software: 120,
