@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Project, MonthlyRecord } from '../types';
+import { MonthlyRecord } from '../types';
 import { dbService } from '../services/dbService';
 import { exportChartToSVG, exportChartToPNG, exportChartDataToCSV, generateChartFilename, copyChartToClipboard } from '../utils/chartExport';
 import { Loader2, TrendingUp, Download, Palette, Copy, Image } from 'lucide-react';
@@ -19,8 +19,7 @@ interface ChartColors {
 
 export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   const { t, language } = useLanguage();
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [records, setRecords] = useState<Record<string, MonthlyRecord[]>>({});
+  const [allRecords, setAllRecords] = useState<MonthlyRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [chartColors, setChartColors] = useState<ChartColors>({
@@ -36,18 +35,8 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [projectsData, recordsData] = await Promise.all([
-        dbService.getProjects(),
-        dbService.getAllRecords(currentYear) // Get all records for the year
-      ]);
-      setProjects(projectsData);
-
-      const groupedRecords: Record<string, MonthlyRecord[]> = {};
-      recordsData.forEach(r => {
-        if (!groupedRecords[r.project_id]) groupedRecords[r.project_id] = [];
-        groupedRecords[r.project_id].push(r);
-      });
-      setRecords(groupedRecords);
+      const recordsData = await dbService.getAllRecords(currentYear);
+      setAllRecords(recordsData);
     } catch (error) {
       console.error("Failed to load data for Total View", error);
     } finally {
@@ -81,15 +70,12 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
       accActual: 0
     }));
 
-    // Aggregate monthly totals
-    projects.forEach(p => {
-      const projRecords = records[p.id] || [];
-      projRecords.forEach(r => {
-        if (r.month >= 1 && r.month <= 12) {
-          data[r.month - 1].plan += Number(r.planned_hours) || 0;
-          data[r.month - 1].actual += Number(r.actual_hours) || 0;
-        }
-      });
+    // Aggregate monthly totals from all records directly
+    allRecords.forEach(r => {
+      if (r.month >= 1 && r.month <= 12) {
+        data[r.month - 1].plan += Number(r.planned_hours) || 0;
+        data[r.month - 1].actual += Number(r.actual_hours) || 0;
+      }
     });
 
     // Calculate accumulations
@@ -103,7 +89,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     });
 
     return data;
-  }, [projects, records, currentYear, language]);
+  }, [allRecords, currentYear, language]);
 
   // Fixed Y-axis: 0-21000 with 1000 unit intervals
   const yAxisMax = 21000;
