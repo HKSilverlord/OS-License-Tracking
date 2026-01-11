@@ -299,61 +299,74 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
     }
   };
 
-  const handleUpdateProject = async (id: string, updates: Partial<Project>) => {
+  const handleUpdateProject = async (id: string, updates: Partial<Project>, debounceMs = 0) => {
     try {
-      // Separate price updates from other updates
-      const priceUpdates: { plan_price?: number; actual_price?: number } = {};
-      const otherUpdates: Partial<Project> = { ...updates };
-
-      let hasPriceUpdates = false;
-      if ('plan_price' in updates) {
-        priceUpdates.plan_price = updates.plan_price;
-        delete otherUpdates.plan_price;
-        hasPriceUpdates = true;
-      }
-      if ('actual_price' in updates) {
-        priceUpdates.actual_price = updates.actual_price;
-        delete otherUpdates.actual_price;
-        hasPriceUpdates = true;
-      }
-
-      // If updating prices, update in the junction table for the ALL PERIODS IN THE YEAR
-      // Filter out year from currentPeriodLabel (e.g. "2025-H1" -> 2025)
-      if (hasPriceUpdates) {
-        const year = parseInt(currentPeriodLabel.split('-')[0]);
-        if (!isNaN(year)) {
-          await dbService.updateProjectPriceForYear(id, year, priceUpdates);
-        } else {
-          // Fallback if label format is unexpected, though likely it's "YYYY-HX"
-          // Just update current period
-          await dbService.updateProjectPriceForPeriod(id, currentPeriodLabel, priceUpdates);
-        }
-      }
-
-      // If updating other fields (name, software, etc.), update the global project record
-      // Only proceed if there are other keys remaining
-      let updatedProject: Project | null = null;
-      if (Object.keys(otherUpdates).length > 0) {
-        updatedProject = await dbService.updateProject(id, otherUpdates);
-      }
-
-      // Update local state
+      // 1. Optimistic update (Immediate UI change)
       setProjects(prev => prev.map(p => {
         if (p.id !== id) return p;
-
-        // Merge updates: 
-        // 1. Existing project state
-        // 2. Global updates (if any)
-        // 3. Price updates (explicitly applied to local state since they valid for this period)
-        return {
-          ...p,
-          ...(updatedProject || {}),
-          ...priceUpdates
-        };
+        return { ...p, ...updates };
       }));
 
-      // Update dataUpdated event so Yearly view refreshes
-      window.dispatchEvent(new CustomEvent('dataUpdated'));
+      // 2. Prepare logic for API call
+      const performSave = async () => {
+        try {
+          // Separate price updates from other updates
+          const priceUpdates: { plan_price?: number; actual_price?: number } = {};
+          const otherUpdates: Partial<Project> = { ...updates };
+
+          let hasPriceUpdates = false;
+          if ('plan_price' in updates) {
+            priceUpdates.plan_price = updates.plan_price;
+            delete otherUpdates.plan_price;
+            hasPriceUpdates = true;
+          }
+          if ('actual_price' in updates) {
+            priceUpdates.actual_price = updates.actual_price;
+            delete otherUpdates.actual_price;
+            hasPriceUpdates = true;
+          }
+
+          // If updating prices, update in the junction table for the ALL PERIODS IN THE YEAR
+          if (hasPriceUpdates) {
+            const year = parseInt(currentPeriodLabel.split('-')[0]);
+            if (!isNaN(year)) {
+              await dbService.updateProjectPriceForYear(id, year, priceUpdates);
+            } else {
+              await dbService.updateProjectPriceForPeriod(id, currentPeriodLabel, priceUpdates);
+            }
+          }
+
+          // If updating other fields, update global project
+          if (Object.keys(otherUpdates).length > 0) {
+            await dbService.updateProject(id, otherUpdates);
+          }
+
+          // Dispatch event only after successful save
+          window.dispatchEvent(new CustomEvent('dataUpdated'));
+        } catch (error) {
+          console.error("Failed to save project update", error);
+          // Could revert changes here if strict data integrity needed
+        }
+      };
+
+      // 3. Execute with debounce logic
+      if (debounceMs > 0) {
+        // Create a unique key for this project and the fields being updated
+        const key = `proj-${id}-${Object.keys(updates).sort().join('-')}`;
+
+        // Clear existing timer for this specific update key
+        if (debounceTimers.current[key]) {
+          clearTimeout(debounceTimers.current[key]);
+        }
+
+        debounceTimers.current[key] = setTimeout(async () => {
+          await performSave();
+          delete debounceTimers.current[key];
+        }, debounceMs);
+      } else {
+        // Immediate execution
+        await performSave();
+      }
 
     } catch (error) {
       console.error("Failed to update project", error);
@@ -362,12 +375,28 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
     }
   };
 
+  const handleProjectFieldChange = (id: string, field: keyof Project, value: string) => {
+    // Use 500ms debounce for text fields to balance responsiveness and API load
+    handleUpdateProject(id, { [field]: value }, 500);
+  };
+
   if (loading) {
     return <div className="flex justify-center items-center h-64"><Loader2 className="animate-spin h-8 w-8 text-blue-600" /></div>;
   }
 
+
   // Use shared table styling constants
-  const { no: LEFT_NO_WIDTH, code: LEFT_CODE_WIDTH, name: LEFT_NAME_WIDTH, software: LEFT_SOFTWARE_WIDTH, businessContent: BUSINESS_CONTENT_WIDTH, month: MONTH_WIDTH, actions: RIGHT_ACTIONS_WIDTH } = TABLE_COLUMN_WIDTHS;
+  const {
+    no: LEFT_NO_WIDTH,
+    exclusionMark: LEFT_EXCLUSION_WIDTH,
+    code: LEFT_CODE_WIDTH,
+    name: LEFT_NAME_WIDTH,
+    notes: LEFT_NOTES_WIDTH,
+    software: LEFT_SOFTWARE_WIDTH,
+    businessContent: BUSINESS_CONTENT_WIDTH,
+    month: MONTH_WIDTH,
+    actions: RIGHT_ACTIONS_WIDTH
+  } = TABLE_COLUMN_WIDTHS;
 
   // New column width for Price
   const PRICE_WIDTH = 100;
@@ -376,6 +405,13 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
 
   const pendingCount = Object.keys(pendingChanges).length;
   const hasPendingChanges = pendingCount > 0;
+
+  // Calculate sticky positions
+  const POS_EXCLUSION = LEFT_NO_WIDTH;
+  const POS_CODE = POS_EXCLUSION + LEFT_EXCLUSION_WIDTH;
+  const POS_NAME = POS_CODE + LEFT_CODE_WIDTH;
+  const POS_NOTES = POS_NAME + LEFT_NAME_WIDTH;
+  const POS_SOFTWARE = POS_NOTES + LEFT_NOTES_WIDTH;
 
   return (
     <div className="flex flex-col h-full bg-slate-50 p-2 sm:p-4 md:p-6 overflow-hidden">
@@ -424,13 +460,19 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                 <th scope="col" style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
                   {t('tracker.no')}
                 </th>
-                <th scope="col" style={{ left: `${LEFT_NO_WIDTH}px`, width: `${LEFT_CODE_WIDTH}px` }} className={`px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                <th scope="col" style={{ left: `${POS_EXCLUSION}px`, width: `${LEFT_EXCLUSION_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                  {t('tracker.exclusion', '除外')}
+                </th>
+                <th scope="col" style={{ left: `${POS_CODE}px`, width: `${LEFT_CODE_WIDTH}px` }} className={`px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
                   {t('tracker.code')}
                 </th>
-                <th scope="col" style={{ left: `${LEFT_NO_WIDTH + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                <th scope="col" style={{ left: `${POS_NAME}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
                   {t('tracker.projectName')}
                 </th>
-                <th scope="col" style={{ left: `${LEFT_NO_WIDTH + LEFT_CODE_WIDTH + LEFT_NAME_WIDTH}px`, width: `${LEFT_SOFTWARE_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                <th scope="col" style={{ left: `${POS_NOTES}px`, width: `${LEFT_NOTES_WIDTH}px` }} className={`px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                  {t('tracker.notes', '補足')}
+                </th>
+                <th scope="col" style={{ left: `${POS_SOFTWARE}px`, width: `${LEFT_SOFTWARE_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
                   {t('tracker.software')}
                 </th>
 
@@ -469,17 +511,35 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                       <td rowSpan={2} style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-2 py-3 text-center text-sm font-medium text-gray-500 ${stickyLeftClass} align-top`}>
                         {index + 1}
                       </td>
-                      <td rowSpan={2} style={{ left: `${LEFT_NO_WIDTH}px`, width: `${LEFT_CODE_WIDTH}px` }} className={`px-2 py-3 text-sm font-medium text-gray-900 ${stickyLeftClass} align-top`}>
+                      <td rowSpan={2} style={{ left: `${POS_EXCLUSION}px`, width: `${LEFT_EXCLUSION_WIDTH}px` }} className={`px-1 py-3 text-center text-sm font-medium text-gray-900 ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
+                        <input
+                          type="text"
+                          className="w-full text-center text-xs border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-transparent"
+                          value={project.exclusion_mark || ''}
+                          onChange={(e) => handleProjectFieldChange(project.id, 'exclusion_mark', e.target.value)}
+                          placeholder="-"
+                        />
+                      </td>
+                      <td rowSpan={2} style={{ left: `${POS_CODE}px`, width: `${LEFT_CODE_WIDTH}px` }} className={`px-2 py-3 text-sm font-medium text-gray-900 ${stickyLeftClass} align-top`}>
                         {project.code}
                       </td>
-                      <td rowSpan={2} style={{ left: `${LEFT_NO_WIDTH + LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-2 py-2 text-sm text-gray-700 border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
+                      <td rowSpan={2} style={{ left: `${POS_NAME}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-2 py-2 text-sm text-gray-700 border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
                         <div className="font-medium line-clamp-2" title={project.name}>{project.name}</div>
                       </td>
-                      <td rowSpan={2} style={{ left: `${LEFT_NO_WIDTH + LEFT_CODE_WIDTH + LEFT_NAME_WIDTH}px`, width: `${LEFT_SOFTWARE_WIDTH}px` }} className={`px-2 py-2 text-xs text-gray-600 text-center border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
+                      <td rowSpan={2} style={{ left: `${POS_NOTES}px`, width: `${LEFT_NOTES_WIDTH}px` }} className={`px-2 py-2 text-xs text-gray-600 border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
+                        <textarea
+                          className="w-full min-h-[50px] text-xs border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 px-1 py-1 bg-transparent resize-none overflow-hidden"
+                          value={project.notes || ''}
+                          onChange={(e) => handleProjectFieldChange(project.id, 'notes', e.target.value)}
+                          placeholder=""
+                          rows={2}
+                        />
+                      </td>
+                      <td rowSpan={2} style={{ left: `${POS_SOFTWARE}px`, width: `${LEFT_SOFTWARE_WIDTH}px` }} className={`px-2 py-2 text-xs text-gray-600 text-center border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
                         <textarea
                           className="w-full min-h-[50px] text-xs border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-center px-1 py-1 bg-transparent resize-none overflow-hidden"
                           value={project.software || ''}
-                          onChange={(e) => handleUpdateProject(project.id, { software: e.target.value })}
+                          onChange={(e) => handleProjectFieldChange(project.id, 'software', e.target.value)}
                           placeholder="CAD"
                           rows={2}
                         />
@@ -488,7 +548,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                         <textarea
                           className="w-full h-full min-h-[50px] border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-xs p-2 bg-transparent resize-none"
                           value={project.type || ''}
-                          onChange={(e) => handleUpdateProject(project.id, { type: e.target.value })}
+                          onChange={(e) => handleProjectFieldChange(project.id, 'type', e.target.value)}
                           placeholder={t('tracker.businessContent')}
                         />
                       </td>
@@ -568,7 +628,6 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
             </tbody>
           </table>
         </div>
-
         {filteredProjects.length === 0 && (
           <div className="p-4 sm:p-8 text-center text-gray-500 text-sm sm:text-base">
             {t('tracker.noResults')}
