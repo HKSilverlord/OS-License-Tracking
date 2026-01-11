@@ -18,6 +18,8 @@ dist-ssr
 *.txt
 *.env
 *.sql
+*.png
+*.jpg
 
 # Editor directories and files
 .vscode/*
