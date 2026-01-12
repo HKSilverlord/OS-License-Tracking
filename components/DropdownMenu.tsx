@@ -9,7 +9,7 @@ interface DropdownMenuProps {
 }
 
 export const DropdownMenu: React.FC<DropdownMenuProps> = ({ isOpen, onClose, triggerRef, children }) => {
-    const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+    const [position, setPosition] = useState<{ top?: number; bottom?: number; left: number } | null>(null);
     const menuRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -17,13 +17,24 @@ export const DropdownMenu: React.FC<DropdownMenuProps> = ({ isOpen, onClose, tri
             const updatePosition = () => {
                 const rect = triggerRef.current?.getBoundingClientRect();
                 if (rect) {
-                    // Align right edge of menu with right edge of trigger, and place below
-                    // We need to wait for render to get menu width, or default to some width
-                    // For now, let's just position it relative to the trigger
-                    setPosition({
-                        top: rect.bottom + window.scrollY + 4, // 4px gap
-                        left: rect.right + window.scrollX - 128 // 128px is approx menu width (w-32)
-                    });
+                    const spaceBelow = window.innerHeight - rect.bottom;
+                    const MENU_HEIGHT_ESTIMATE = 200; // conservative estimate for 4-5 items
+                    const showAbove = spaceBelow < MENU_HEIGHT_ESTIMATE && rect.top > MENU_HEIGHT_ESTIMATE;
+
+                    // Align right edge of menu with right edge of trigger
+                    const left = rect.right - 128; // 128px is approx menu width (w-32)
+
+                    if (showAbove) {
+                        setPosition({
+                            bottom: window.innerHeight - rect.top + 4,
+                            left: left
+                        });
+                    } else {
+                        setPosition({
+                            top: rect.bottom + 4,
+                            left: left
+                        });
+                    }
                 }
             };
 
@@ -65,8 +76,9 @@ export const DropdownMenu: React.FC<DropdownMenuProps> = ({ isOpen, onClose, tri
             ref={menuRef}
             className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-lg w-32 py-1"
             style={{
-                top: `${position.top - window.scrollY}px`,
-                left: `${position.left - window.scrollX}px`,
+                top: position.top !== undefined ? `${position.top}px` : 'auto',
+                bottom: position.bottom !== undefined ? `${position.bottom}px` : 'auto',
+                left: `${position.left}px`,
             }}
         >
             {children}
