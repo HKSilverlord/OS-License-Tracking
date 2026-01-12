@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Loader2, TrendingUp, Download, Copy, Image } from 'lucide-react';
+import { Loader2, TrendingUp, Download, Copy, Image, Palette } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipProps } from 'recharts';
 import { exportChartToSVG, exportChartToPNG, exportChartDataToCSV, generateChartFilename, copyChartToClipboard } from '../utils/chartExport';
@@ -14,10 +14,41 @@ interface LongTermPlanData {
   hourlyRateActual: number | null; // 平均時給実績（千円/時）
 }
 
+interface ChartColors {
+  salesPlan: string;
+  salesActual: string;
+  hourlyRatePlan: string;
+  hourlyRateActual: string;
+}
+
 export const LongTermPlanView: React.FC = () => {
   const { t, language } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [longTermData, setLongTermData] = useState<LongTermPlanData[]>([]);
+  const [showColorPicker, setShowColorPicker] = useState(false);
+
+  // Load initial colors from localStorage or default
+  const [chartColors, setChartColors] = useState<ChartColors>(() => {
+    const saved = localStorage.getItem('longTermPlan_chartColors');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse saved chart colors', e);
+      }
+    }
+    return {
+      salesPlan: '#87CEEB',
+      salesActual: '#000080',
+      hourlyRatePlan: '#32CD32',
+      hourlyRateActual: '#006400'
+    };
+  });
+
+  // Save changes to localStorage
+  useEffect(() => {
+    localStorage.setItem('longTermPlan_chartColors', JSON.stringify(chartColors));
+  }, [chartColors]);
 
   // Fetch real data from Supabase
   useEffect(() => {
@@ -67,7 +98,7 @@ export const LongTermPlanView: React.FC = () => {
           {data.salesPlan !== undefined && (
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#87CEEB' }}></div>
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesPlan }}></div>
                 <span className="text-slate-700">{t('longTermPlan.salesPlan', '売上計画')}:</span>
               </div>
               <span className="font-medium text-slate-900">{data.salesPlan.toLocaleString()} {t('longTermPlan.unit.sales', '万円')}</span>
@@ -77,7 +108,7 @@ export const LongTermPlanView: React.FC = () => {
           {data.salesActual !== undefined && (
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#000080' }}></div>
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesActual }}></div>
                 <span className="text-slate-700">{t('longTermPlan.salesActual', '売上実績')}:</span>
               </div>
               <span className="font-medium text-slate-900">{data.salesActual.toLocaleString()} {t('longTermPlan.unit.sales', '万円')}</span>
@@ -92,7 +123,7 @@ export const LongTermPlanView: React.FC = () => {
           {data.hourlyRatePlan !== undefined && (
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#32CD32' }}></div>
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.hourlyRatePlan }}></div>
                 <span className="text-slate-700">{t('longTermPlan.hourlyRatePlan', '平均時給計画')}:</span>
               </div>
               <span className="font-medium text-slate-900">{data.hourlyRatePlan.toLocaleString()} {t('longTermPlan.unit.hourlyRate', '千円/時')}</span>
@@ -102,7 +133,7 @@ export const LongTermPlanView: React.FC = () => {
           {data.hourlyRateActual !== undefined && (
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#006400' }}></div>
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.hourlyRateActual }}></div>
                 <span className="text-slate-700">{t('longTermPlan.hourlyRateActual', '平均時給実績')}:</span>
               </div>
               <span className="font-medium text-slate-900">{data.hourlyRateActual.toLocaleString()} {t('longTermPlan.unit.hourlyRate', '千円/時')}</span>
@@ -127,6 +158,14 @@ export const LongTermPlanView: React.FC = () => {
             {t('longTermPlan.title', 'OS事業長期計画')}
           </h3>
           <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setShowColorPicker(!showColorPicker)}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+              title="Customize chart colors"
+            >
+              <Palette className="w-4 h-4" />
+              Colors
+            </button>
             <button
               onClick={() => copyChartToClipboard('long-term-plan-chart')}
               className="flex items-center gap-1 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
@@ -161,6 +200,89 @@ export const LongTermPlanView: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Color Picker Section */}
+        {showColorPicker && (
+          <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+            <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+              <Palette className="w-4 h-4" />
+              Customize Chart Colors
+            </h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-600">{t('longTermPlan.salesPlan', '売上計画')}</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={chartColors.salesPlan}
+                    onChange={(e) => setChartColors({ ...chartColors, salesPlan: e.target.value })}
+                    className="w-10 h-8 rounded border border-slate-300 cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={chartColors.salesPlan}
+                    onChange={(e) => setChartColors({ ...chartColors, salesPlan: e.target.value })}
+                    className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-600">{t('longTermPlan.salesActual', '売上実績')}</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={chartColors.salesActual}
+                    onChange={(e) => setChartColors({ ...chartColors, salesActual: e.target.value })}
+                    className="w-10 h-8 rounded border border-slate-300 cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={chartColors.salesActual}
+                    onChange={(e) => setChartColors({ ...chartColors, salesActual: e.target.value })}
+                    className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-600">{t('longTermPlan.hourlyRatePlan', '平均時給計画')}</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={chartColors.hourlyRatePlan}
+                    onChange={(e) => setChartColors({ ...chartColors, hourlyRatePlan: e.target.value })}
+                    className="w-10 h-8 rounded border border-slate-300 cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={chartColors.hourlyRatePlan}
+                    onChange={(e) => setChartColors({ ...chartColors, hourlyRatePlan: e.target.value })}
+                    className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-600">{t('longTermPlan.hourlyRateActual', '平均時給実績')}</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={chartColors.hourlyRateActual}
+                    onChange={(e) => setChartColors({ ...chartColors, hourlyRateActual: e.target.value })}
+                    className="w-10 h-8 rounded border border-slate-300 cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={chartColors.hourlyRateActual}
+                    onChange={(e) => setChartColors({ ...chartColors, hourlyRateActual: e.target.value })}
+                    className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Chart Container */}
         <div id="long-term-plan-chart" className="flex-1 min-h-0">
@@ -220,7 +342,7 @@ export const LongTermPlanView: React.FC = () => {
                 yAxisId="left"
                 dataKey="salesPlan"
                 name={t('longTermPlan.legend.salesPlan', '売上計画（万円）')}
-                fill="#87CEEB"
+                fill={chartColors.salesPlan}
                 radius={[4, 4, 0, 0]}
                 maxBarSize={60}
               />
@@ -230,7 +352,7 @@ export const LongTermPlanView: React.FC = () => {
                 yAxisId="left"
                 dataKey="salesActual"
                 name={t('longTermPlan.legend.salesActual', '売上実績（万円）')}
-                fill="#000080"
+                fill={chartColors.salesActual}
                 radius={[4, 4, 0, 0]}
                 maxBarSize={60}
               />
@@ -241,9 +363,9 @@ export const LongTermPlanView: React.FC = () => {
                 type="monotone"
                 dataKey="hourlyRatePlan"
                 name={t('longTermPlan.legend.hourlyRatePlan', '平均時給計画')}
-                stroke="#32CD32"
+                stroke={chartColors.hourlyRatePlan}
                 strokeWidth={3}
-                dot={{ fill: '#32CD32', r: 5 }}
+                dot={{ fill: chartColors.hourlyRatePlan, r: 5 }}
                 connectNulls={false}
               />
 
@@ -253,9 +375,9 @@ export const LongTermPlanView: React.FC = () => {
                 type="monotone"
                 dataKey="hourlyRateActual"
                 name={t('longTermPlan.legend.hourlyRateActual', '平均時給実績')}
-                stroke="#006400"
+                stroke={chartColors.hourlyRateActual}
                 strokeWidth={3}
-                dot={{ fill: '#006400', r: 5 }}
+                dot={{ fill: chartColors.hourlyRateActual, r: 5 }}
                 connectNulls={false}
               />
             </ComposedChart>

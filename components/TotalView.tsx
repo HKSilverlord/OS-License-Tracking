@@ -22,12 +22,28 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   const [allRecords, setAllRecords] = useState<MonthlyRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showColorPicker, setShowColorPicker] = useState(false);
-  const [chartColors, setChartColors] = useState<ChartColors>({
-    plan: '#94a3b8',
-    actual: '#3b82f6',
-    accPlan: '#64748b',
-    accActual: '#10b981'
+  // Load initial colors from localStorage or default
+  const [chartColors, setChartColors] = useState<ChartColors>(() => {
+    const saved = localStorage.getItem('totalView_chartColors');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse saved chart colors', e);
+      }
+    }
+    return {
+      plan: '#94a3b8',
+      actual: '#3b82f6',
+      accPlan: '#64748b',
+      accActual: '#10b981'
+    };
   });
+
+  // Save changes to localStorage
+  useEffect(() => {
+    localStorage.setItem('totalView_chartColors', JSON.stringify(chartColors));
+  }, [chartColors]);
 
   // Constants for layout
   const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
