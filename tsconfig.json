@@ -2,6 +2,7 @@
   "compilerOptions": {
     "target": "ES2022",
     "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
     "useDefineForClassFields": false,
     "module": "ESNext",
     "lib": [
@@ -21,9 +22,31 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@domain/*": [
+        "./src/domain/*"
+      ],
+      "@data/*": [
+        "./src/data/*"
+      ],
+      "@presentation/*": [
+        "./src/presentation/*"
+      ],
+      "@ui/*": [
+        "./src/ui/*"
+      ],
+      "@core/*": [
+        "./src/core/*"
+      ],
+      "@ioc/*": [
+        "./src/ioc/*"
       ]
     },
     "allowImportingTsExtensions": true,
-    "noEmit": true
+    "noEmit": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
   }
 }
