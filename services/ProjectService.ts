@@ -337,47 +337,58 @@ export class ProjectService extends BaseService {
     // --- Reordering ---
 
     async moveProjectUp(projectId: string, periodLabel: string) {
-        // Get all projects for this period, sorted by display_order
-        const { data: allProjects, error: fetchError } = await this.supabase
-            .from('projects')
-            .select('id, display_order')
-            .order('display_order', { ascending: true });
+        // 1. Get projects FOR THIS PERIOD only, sorted by display_order
+        // We reuse getProjects(periodLabel) to ensure we see exactly what the user sees
+        const periodProjects = await this.getProjects(periodLabel);
 
-        if (fetchError) throw fetchError;
-        if (!allProjects || allProjects.length === 0) return;
+        if (!periodProjects || periodProjects.length === 0) return;
 
-        // Find current project and the one above it
-        const currentIndex = allProjects.findIndex(p => p.id === projectId);
-        if (currentIndex <= 0) return; // Already at top or not found
+        // 2. Find current project index in this filtered list
+        const currentIndex = periodProjects.findIndex(p => p.id === projectId);
+        if (currentIndex <= 0) return; // Already at top of this period's list
 
-        const currentProject = allProjects[currentIndex];
-        const aboveProject = allProjects[currentIndex - 1];
+        const currentProject = periodProjects[currentIndex];
+        const aboveProject = periodProjects[currentIndex - 1];
 
-        // Swap display_order values
-        await this.supabase.from('projects').update({ display_order: aboveProject.display_order }).eq('id', currentProject.id);
-        await this.supabase.from('projects').update({ display_order: currentProject.display_order }).eq('id', aboveProject.id);
+        // 3. Swap display_order values
+        // Note: We need to update the PROJECTS table, not the junction table, as display_order is likely on the Project entity.
+        // CHECK: If display_order is on projects table, it affects this project in ALL periods.
+        // If sorting is per-period, display_order should be on period_projects. 
+        // Based on previous code: "projects" table has "display_order".
+        // This implies Global Ordering. 
+        // IF we have global ordering but local filtering, "Move Up" is ambiguous.
+        // However, user wants to move it up visually in THIS period.
+        // If we swap display_order with the visible neighbor, it works for this view.
+        // It might affect other views, but that's the tradeoff of global order + local view.
+
+        // Critical: We must swap their display_order values.
+
+        const currentOrder = currentProject.display_order || 0;
+        const aboveOrder = aboveProject.display_order || 0;
+
+        // If orders are identical (bad data), force a spread? 
+        // For now, standard swap.
+
+        await this.supabase.from('projects').update({ display_order: aboveOrder }).eq('id', currentProject.id);
+        await this.supabase.from('projects').update({ display_order: currentOrder }).eq('id', aboveProject.id);
     }
 
     async moveProjectDown(projectId: string, periodLabel: string) {
-        // Get all projects for this period, sorted by display_order
-        const { data: allProjects, error: fetchError } = await this.supabase
-            .from('projects')
-            .select('id, display_order')
-            .order('display_order', { ascending: true });
+        const periodProjects = await this.getProjects(periodLabel);
 
-        if (fetchError) throw fetchError;
-        if (!allProjects || allProjects.length === 0) return;
+        if (!periodProjects || periodProjects.length === 0) return;
 
-        // Find current project and the one below it
-        const currentIndex = allProjects.findIndex(p => p.id === projectId);
-        if (currentIndex < 0 || currentIndex >= allProjects.length - 1) return; // Already at bottom or not found
+        const currentIndex = periodProjects.findIndex(p => p.id === projectId);
+        if (currentIndex < 0 || currentIndex >= periodProjects.length - 1) return;
 
-        const currentProject = allProjects[currentIndex];
-        const belowProject = allProjects[currentIndex + 1];
+        const currentProject = periodProjects[currentIndex];
+        const belowProject = periodProjects[currentIndex + 1];
 
-        // Swap display_order values
-        await this.supabase.from('projects').update({ display_order: belowProject.display_order }).eq('id', currentProject.id);
-        await this.supabase.from('projects').update({ display_order: currentProject.display_order }).eq('id', belowProject.id);
+        const currentOrder = currentProject.display_order || 0;
+        const belowOrder = belowProject.display_order || 0;
+
+        await this.supabase.from('projects').update({ display_order: belowOrder }).eq('id', currentProject.id);
+        await this.supabase.from('projects').update({ display_order: currentOrder }).eq('id', belowProject.id);
     }
 }
 

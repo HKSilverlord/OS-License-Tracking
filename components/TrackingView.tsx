@@ -188,7 +188,8 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
     } catch (error) {
       console.error("Failed to move project", error);
       // Revert on error? For now, we assume success or user will refresh
-      fetchData();
+      // fetchData(); // Prevent immediate reload to avoid race conditions/flicker
+      alert("Failed to move project. Please refresh."); // Inform user instead
     }
   };
 
