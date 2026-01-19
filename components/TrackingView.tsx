@@ -24,7 +24,8 @@ const ProjectActionsMenu: React.FC<{
   onMoveUp: () => void;
   onMoveDown: () => void;
   t: (key: string, defaultVal?: string) => string;
-}> = ({ project, onEdit, onDelete, onMoveUp, onMoveDown, t }) => {
+  disableReorder?: boolean;
+}> = ({ project, onEdit, onDelete, onMoveUp, onMoveDown, t, disableReorder }) => {
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -50,24 +51,36 @@ const ProjectActionsMenu: React.FC<{
         <div className="flex flex-col">
           <button
             type="button"
+            disabled={disableReorder}
             onClick={(e) => {
               e.stopPropagation();
               onMoveUp();
               setIsOpen(false);
             }}
-            className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${
+              disableReorder 
+                ? 'text-gray-400 cursor-not-allowed' 
+                : 'text-gray-700 hover:bg-gray-50'
+            }`}
+            title={disableReorder ? t('tracker.sortDisabled', 'Sort by No. to reorder') : ''}
           >
             <ArrowUp className="w-4 h-4" />
             {t('common.moveUp', 'Move Up')}
           </button>
           <button
             type="button"
+            disabled={disableReorder}
             onClick={(e) => {
               e.stopPropagation();
               onMoveDown();
               setIsOpen(false);
             }}
-            className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${
+              disableReorder 
+                ? 'text-gray-400 cursor-not-allowed' 
+                : 'text-gray-700 hover:bg-gray-50'
+            }`}
+            title={disableReorder ? t('tracker.sortDisabled', 'Sort by No. to reorder') : ''}
           >
             <ArrowDown className="w-4 h-4" />
             {t('common.moveDown', 'Move Down')}
@@ -102,6 +115,17 @@ const ProjectActionsMenu: React.FC<{
     </>
   );
 };
+// ... inside TrackingView component ...
+// ...
+                        <ProjectActionsMenu
+                          project={project}
+                          onEdit={() => setEditingProject(project)}
+                          onDelete={() => handleDeleteProjects([project.id])}
+                          onMoveUp={() => handleMoveProject(project.id, 'up')}
+                          onMoveDown={() => handleMoveProject(project.id, 'down')}
+                          t={t}
+                          disableReorder={sortConfig.key !== 'display_order'}
+                        />
 
 export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, searchQuery, refreshTrigger }) => {
   const { t, language } = useLanguage();

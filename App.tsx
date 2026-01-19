@@ -150,8 +150,8 @@ function App() {
           <nav className="flex-1 px-4 space-y-2">
             <NavLink to="/" icon={LayoutDashboard} label={t('nav.dashboard')} />
             <NavLink to="/tracking" icon={Table} label={t('nav.tracking')} />
-            <NavLink to="/total" icon={BarChart3} label={t('nav.totalView')} />
             <NavLink to="/yearly-data" icon={Table} label={t('nav.yearlyData')} />
+            <NavLink to="/total" icon={BarChart3} label={t('nav.totalView')} />
             <NavLink to="/long-term-plan" icon={TrendingUp} label={t('nav.longTermPlan')} />
             <NavLink to="/monthly-plan-actual" icon={BarChart3} label={t('nav.monthlyPlanActual')} />
             <NavLink to="/period-management" icon={CalendarIcon} label={t('nav.periodManagement')} />
@@ -191,8 +191,8 @@ function App() {
             <nav className="space-y-4">
               <Link to="/" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.dashboard')}</Link>
               <Link to="/tracking" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.tracking')}</Link>
-              <Link to="/total" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.totalView')}</Link>
               <Link to="/yearly-data" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.yearlyData')}</Link>
+              <Link to="/total" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.totalView')}</Link>
               <Link to="/long-term-plan" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.longTermPlan')}</Link>
               <Link to="/monthly-plan-actual" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.monthlyPlanActual')}</Link>
               <Link to="/period-management" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.periodManagement')}</Link>

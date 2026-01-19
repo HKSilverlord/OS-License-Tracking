@@ -38,8 +38,9 @@ db/*.sql
 db/*.md
 os_tracking_app.jsx
 
-# Project memory (local only)
-memorycontext.md
+# Project Knowledge Skill (Local)
+.agent/skills/project-knowledge/
+
 
 #local md file
 dashboard_specification.md
