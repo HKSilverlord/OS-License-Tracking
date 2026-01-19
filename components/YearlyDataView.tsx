@@ -184,7 +184,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {projects.map(project => {
+              {projects.map((project, index) => {
                 const projRecords = records[project.id] || [];
                 const monthlyData = months.map(m => {
                   const r = projRecords.find(rec => rec.month === m);
