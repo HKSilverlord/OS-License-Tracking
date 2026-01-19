@@ -3,8 +3,11 @@ import { Project, MonthlyRecord, PeriodType } from '../types';
 import { dbService } from '../services/dbService';
 import { getMonthsForPeriod } from '../utils/helpers';
 import { TABLE_COLUMN_WIDTHS, STICKY_CLASSES } from '../utils/tableStyles';
-import { Save, Loader2, MoreVertical, Edit, Trash, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Save, Loader2, MoreVertical, Edit, Trash, Search, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Check, ListChecks } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 // ... imports ...
 import { EditProjectModal } from './EditProjectModal';
@@ -16,6 +19,53 @@ interface TrackingViewProps {
   searchQuery: string;
   refreshTrigger?: number; // Trigger to refresh data when project is created
 }
+
+// Draggable Row Wrapper
+// Draggable Row Wrapper (tbody to hold multiple trs)
+const SortableRow = ({ children, id, disabled, className }: { children: React.ReactNode, id: string, disabled?: boolean, className?: string }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id, disabled });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : 'auto',
+    position: isDragging ? 'relative' as const : undefined,
+  };
+
+  return (
+    <tbody
+      ref={setNodeRef}
+      style={style}
+      className={isDragging ? 'opacity-80 shadow-lg bg-blue-50 ring-1 ring-blue-200 block' : className}
+      {...attributes}
+    >
+      <SortableRowContext.Provider value={{ listeners }}>
+        {children}
+      </SortableRowContext.Provider>
+    </tbody>
+  );
+};
+
+const SortableRowContext = React.createContext<{ listeners: any } | null>(null);
+
+const DragHandleCell = ({ disabled }: { disabled?: boolean }) => {
+  const context = React.useContext(SortableRowContext);
+  return (
+    <div
+      className={`touch-none flex items-center justify-center p-2 cursor-grab active:cursor-grabbing ${disabled ? 'opacity-30 cursor-not-allowed' : 'text-gray-400 hover:text-gray-600'}`}
+      {...(disabled ? {} : context?.listeners)}
+    >
+      <GripVertical className="w-4 h-4" />
+    </div>
+  );
+};
 
 const ProjectActionsMenu: React.FC<{
   project: Project;
@@ -125,10 +175,50 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
   const [pendingChanges, setPendingChanges] = useState<Record<string, MonthlyRecord>>({}); // Key: `${projectId}-${month}`
   const [isSaving, setIsSaving] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
 
   // Local Filter & Sort State
   const [localFilter, setLocalFilter] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof Project | null; direction: 'asc' | 'desc' }>({ key: 'display_order', direction: 'asc' });
+
+  // DnD Sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (active.id !== over?.id) {
+      setProjects((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over?.id);
+
+        const newItems = arrayMove(items, oldIndex, newIndex);
+
+        // Optimistic update of display_order
+        // We re-assign display_order based on the new array index (1-based)
+        const updatedItems = newItems.map((item, index) => ({
+          ...item,
+          display_order: index + 1
+        }));
+
+        // Trigger backend update
+        const updates = updatedItems.map(p => ({ id: p.id, display_order: p.display_order || 0 }));
+
+        // Fire and forget (or handle error quietly)
+        dbService.updateProjectDisplayOrders(updates).catch(err => {
+          console.error("Failed to update order", err);
+          alert("Failed to save new order. Please refresh.");
+        });
+
+        return updatedItems;
+      });
+    }
+  };
 
   // Debounce refs
   const debounceTimers = useRef<Record<string, any>>({});
@@ -558,6 +648,20 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
               />
             </div>
 
+            {/* Edit Order Toggle */}
+            <button
+              onClick={() => setIsEditMode(!isEditMode)}
+              disabled={sortConfig.key !== 'display_order'}
+              title={sortConfig.key !== 'display_order' ? t('tracker.reorderDisabledWithSort', 'Reordering disabled while sorted') : ''}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors ${isEditMode
+                ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                : (sortConfig.key !== 'display_order' ? 'opacity-50 cursor-not-allowed text-slate-400' : 'text-slate-600 hover:bg-slate-100')
+                }`}
+            >
+              {isEditMode ? <Check className="w-4 h-4" /> : <ListChecks className="w-4 h-4" />}
+              <span className="hidden sm:inline">{isEditMode ? t('tracker.done', 'Done') : t('tracker.editOrder', 'Edit Order')}</span>
+            </button>
+
             <button
               onClick={handleSaveAll}
               disabled={!hasPendingChanges || isSaving}
@@ -585,24 +689,25 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
           ref={scrollContainerRef}
           className="flex-1 min-h-0 overflow-auto relative isolate custom-scrollbar"
         >
-          <table key={currentPeriodLabel} className="w-full min-w-max border-separate border-spacing-0">
-            <thead className="bg-gray-50 sticky top-0 z-40">
-              <tr>
-                <th scope="col" style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                  <div className="flex items-center justify-center gap-1 cursor-pointer hover:bg-gray-100 rounded" onClick={() => handleSort('display_order')}>
-                    {t('tracker.no')}
-                    {sortConfig.key === 'display_order' && <ArrowUpDown className={`w-3 h-3 ${sortConfig.direction === 'asc' ? 'text-blue-600' : 'text-blue-600 rotate-180'}`} />}
-                  </div>
-                </th>
-                <th scope="col" style={{ left: `${POS_EXCLUSION}px`, width: `${LEFT_EXCLUSION_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                  <div className="flex items-center justify-center gap-1 cursor-pointer hover:bg-gray-100 rounded" onClick={() => handleSort('exclusion_mark')}>
-                    {t('tracker.exclusion', '除外')}
-                    {sortConfig.key === 'exclusion_mark' && <ArrowUpDown className={`w-3 h-3 ${sortConfig.direction === 'asc' ? 'text-blue-600' : 'text-blue-600 rotate-180'}`} />}
-                  </div>
-                </th>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <table key={currentPeriodLabel} className="w-full min-w-max border-separate border-spacing-0">
+              <thead className="bg-gray-50 sticky top-0 z-40">
+                <tr>
+                  <th scope="col" style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                    <div className="flex items-center justify-center gap-1 cursor-pointer hover:bg-gray-100 rounded" onClick={() => handleSort('display_order')}>
+                      {t('tracker.no')}
+                      {sortConfig.key === 'display_order' && <ArrowUpDown className={`w-3 h-3 ${sortConfig.direction === 'asc' ? 'text-blue-600' : 'text-blue-600 rotate-180'}`} />}
+                    </div>
+                  </th>
+                  <th scope="col" style={{ left: `${POS_EXCLUSION}px`, width: `${LEFT_EXCLUSION_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                    <div className="flex items-center justify-center gap-1 cursor-pointer hover:bg-gray-100 rounded" onClick={() => handleSort('exclusion_mark')}>
+                      {t('tracker.exclusion', '除外')}
+                      {sortConfig.key === 'exclusion_mark' && <ArrowUpDown className={`w-3 h-3 ${sortConfig.direction === 'asc' ? 'text-blue-600' : 'text-blue-600 rotate-180'}`} />}
+                    </div>
+                  </th>
 
-                {/* Code Column - Hidden (Width 0) */}
-                {/* <th ...> - Removed for UI cleanliness, or empty if width 0 is enough to hide? 
+                  {/* Code Column - Hidden (Width 0) */}
+                  {/* <th ...> - Removed for UI cleanliness, or empty if width 0 is enough to hide? 
                     Since width is 0 in tableStyles, it might still render border/padding. Better to skip rendering or ensure overflow hidden.
                     If we skip rendering, sticky calcs might break if simple CSS logic used. 
                     However, sticky styling is done via inline 'left' styles.
@@ -613,174 +718,176 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                     Let's remove it.
                  */}
 
-                <th scope="col" style={{ left: `${POS_NAME}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                  <div className="flex items-center justify-between gap-1 cursor-pointer hover:bg-gray-100 rounded" onClick={() => handleSort('name')}>
-                    {t('tracker.projectName')}
-                    {sortConfig.key === 'name' && <ArrowUpDown className={`w-3 h-3 ${sortConfig.direction === 'asc' ? 'text-blue-600' : 'text-blue-600 rotate-180'}`} />}
-                  </div>
-                </th>
-                <th scope="col" style={{ left: `${POS_NOTES}px`, width: `${LEFT_NOTES_WIDTH}px` }} className={`px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                  {t('tracker.notes', '補足')}
-                </th>
-                <th scope="col" style={{ left: `${POS_SOFTWARE}px`, width: `${LEFT_SOFTWARE_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                  {t('tracker.software')}
-                </th>
-
-                <th scope="col" style={{ width: `${BUSINESS_CONTENT_WIDTH}px` }} className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r">
-                  {t('tracker.businessContent')}
-                </th>
-
-                {/* Price Column */}
-                <th scope="col" style={{ width: `${PRICE_WIDTH}px` }} className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r">
-                  {t('totalView.tableHeader.price', 'Price')} (JPY/h)
-                </th>
-
-                <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r w-16">
-                  {t('tracker.type')}
-                </th>
-
-                {months.map((m) => (
-                  <th key={m} scope="col" style={{ width: `${MONTH_WIDTH}px` }} className={`px-1 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-r border-gray-200 ${stickyHeaderZ}`}>
-                    {formatMonthLabel(m)}
+                  <th scope="col" style={{ left: `${POS_NAME}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                    <div className="flex items-center justify-between gap-1 cursor-pointer hover:bg-gray-100 rounded" onClick={() => handleSort('name')}>
+                      {t('tracker.projectName')}
+                      {sortConfig.key === 'name' && <ArrowUpDown className={`w-3 h-3 ${sortConfig.direction === 'asc' ? 'text-blue-600' : 'text-blue-600 rotate-180'}`} />}
+                    </div>
                   </th>
-                ))}
+                  <th scope="col" style={{ left: `${POS_NOTES}px`, width: `${LEFT_NOTES_WIDTH}px` }} className={`px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                    {t('tracker.notes', '補足')}
+                  </th>
+                  <th scope="col" style={{ left: `${POS_SOFTWARE}px`, width: `${LEFT_SOFTWARE_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                    {t('tracker.software')}
+                  </th>
 
-                <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyRightHeaderClass} ${stickyCornerZ}`} style={{ right: 0, width: `${RIGHT_ACTIONS_WIDTH}px` }}>
-                  {t('tracker.actions')}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredAndSortedProjects.map((project, index) => {
-                const projRecords = records[project.id] || [];
+                  <th scope="col" style={{ width: `${BUSINESS_CONTENT_WIDTH}px` }} className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r">
+                    {t('tracker.businessContent')}
+                  </th>
 
-                return (
-                  <React.Fragment key={project.id}>
-                    {/* ROW 1: Plan */}
-                    <tr className="hover:bg-gray-50 group">
-                      <td rowSpan={2} style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-2 py-3 text-center text-sm font-medium text-gray-500 ${stickyLeftClass} align-top`}>
-                        {index + 1}
-                      </td>
-                      <td rowSpan={2} style={{ left: `${POS_EXCLUSION}px`, width: `${LEFT_EXCLUSION_WIDTH}px` }} className={`px-1 py-3 text-center text-sm font-medium text-gray-900 ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
-                        <input
-                          type="text"
-                          className="w-full text-center text-xs border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-transparent"
-                          value={project.exclusion_mark || ''}
-                          onChange={(e) => handleProjectFieldChange(project.id, 'exclusion_mark', e.target.value)}
-                          placeholder="-"
-                        />
-                      </td>
+                  {/* Price Column */}
+                  <th scope="col" style={{ width: `${PRICE_WIDTH}px` }} className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r">
+                    {t('totalView.tableHeader.price', 'Price')} (JPY/h)
+                  </th>
 
-                      {/* Code Column - Hidden */}
-                      {/* <td ...>{project.code}</td> */}
+                  <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r w-16">
+                    {t('tracker.type')}
+                  </th>
 
-                      <td rowSpan={2} style={{ left: `${POS_NAME}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-2 py-2 text-sm text-gray-700 border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
-                        <div className="font-medium line-clamp-2" title={project.name}>{project.name}</div>
-                      </td>
-                      <td rowSpan={2} style={{ left: `${POS_NOTES}px`, width: `${LEFT_NOTES_WIDTH}px` }} className={`px-2 py-2 text-xs text-gray-600 border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
-                        <textarea
-                          className="w-full min-h-[50px] text-xs border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 px-1 py-1 bg-transparent resize-none overflow-hidden"
-                          value={project.notes || ''}
-                          onChange={(e) => handleProjectFieldChange(project.id, 'notes', e.target.value)}
-                          placeholder=""
-                          rows={2}
-                        />
-                      </td>
-                      <td rowSpan={2} style={{ left: `${POS_SOFTWARE}px`, width: `${LEFT_SOFTWARE_WIDTH}px` }} className={`px-2 py-2 text-xs text-gray-600 text-center border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
-                        <textarea
-                          className="w-full min-h-[50px] text-xs border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-center px-1 py-1 bg-transparent resize-none overflow-hidden"
-                          value={project.software || ''}
-                          onChange={(e) => handleProjectFieldChange(project.id, 'software', e.target.value)}
-                          placeholder="CAD"
-                          rows={2}
-                        />
-                      </td>
-                      <td rowSpan={2} style={{ width: `${BUSINESS_CONTENT_WIDTH}px` }} className="px-2 py-2 text-xs text-gray-500 text-center border-r border-b bg-white align-top p-0 group-hover:bg-gray-50">
-                        <textarea
-                          className="w-full h-full min-h-[50px] border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-xs p-2 bg-transparent resize-none"
-                          value={project.type || ''}
-                          onChange={(e) => handleProjectFieldChange(project.id, 'type', e.target.value)}
-                          placeholder={t('tracker.businessContent')}
-                        />
-                      </td>
+                  {months.map((m) => (
+                    <th key={m} scope="col" style={{ width: `${MONTH_WIDTH}px` }} className={`px-1 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-r border-gray-200 ${stickyHeaderZ}`}>
+                      {formatMonthLabel(m)}
+                    </th>
+                  ))}
 
-                      {/* Price Column */}
-                      <td style={{ width: `${PRICE_WIDTH}px` }} className="px-2 py-2 text-xs text-gray-500 text-right border-r border-b bg-slate-50 font-mono">
-                        {(project.plan_price || project.unit_price || 0).toLocaleString()}
-                      </td>
+                  <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyRightHeaderClass} ${stickyCornerZ}`} style={{ right: 0, width: `${RIGHT_ACTIONS_WIDTH}px` }}>
+                    {t('tracker.actions')}
+                  </th>
+                </tr>
+              </thead>
 
-                      <td className="px-2 py-2 text-xs font-semibold text-gray-500 text-center border-r border-b bg-slate-50">
-                        {t('tracker.planShort')}
-                      </td>
+              <SortableContext items={filteredAndSortedProjects.map(p => p.id)} strategy={verticalListSortingStrategy}>
+                {filteredAndSortedProjects.map((project, index) => {
+                  const projRecords = records[project.id] || [];
 
-                      {months.map(m => {
-                        const record = projRecords.find(r => r.month === m);
-                        const plan = record?.planned_hours ?? 0;
-                        const isSaving = savingStatus[`${project.id}-${m}-planned_hours`];
+                  return (
+                    <SortableRow key={project.id} id={project.id} disabled={!isEditMode || sortConfig.key !== 'display_order'}>
+                      {/* ROW 1: Plan */}
+                      <tr className="hover:bg-gray-50 group">
+                        <td rowSpan={2} style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-2 py-3 text-center text-sm font-medium text-gray-500 ${stickyLeftClass} align-top`}>
+                          {isEditMode && sortConfig.key === 'display_order' ? <DragHandleCell /> : index + 1}
+                        </td>
+                        <td rowSpan={2} style={{ left: `${POS_EXCLUSION}px`, width: `${LEFT_EXCLUSION_WIDTH}px` }} className={`px-1 py-3 text-center text-sm font-medium text-gray-900 ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
+                          <input
+                            type="text"
+                            className="w-full text-center text-xs border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-transparent"
+                            value={project.exclusion_mark || ''}
+                            onChange={(e) => handleProjectFieldChange(project.id, 'exclusion_mark', e.target.value)}
+                            placeholder="-"
+                          />
+                        </td>
 
-                        return (
-                          <td key={`p-${m}`} className="px-0.5 py-1 border-r border-b relative" style={{ width: `${MONTH_WIDTH}px` }}>
-                            <input
-                              type="number"
-                              className="w-full text-xs border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500 text-right px-1 py-1 bg-white focus:bg-blue-50 transition-colors"
-                              value={plan === 0 ? '' : plan}
-                              placeholder="-"
-                              onChange={(e) => handleValueChange(project.id, m, 'planned_hours', e.target.value)}
-                            />
-                            {isSaving && <Save className="w-2 h-2 absolute top-1 right-1 text-blue-500 animate-pulse" />}
-                          </td>
-                        );
-                      })}
+                        {/* Code Column - Hidden */}
+                        {/* <td ...>{project.code}</td> */}
 
-                      <td rowSpan={2} className={`px-2 py-3 text-center border-b ${stickyRightClass} align-top`} style={{ right: 0, width: `${RIGHT_ACTIONS_WIDTH}px` }}>
-                        <ProjectActionsMenu
-                          project={project}
-                          onEdit={() => setEditingProject(project)}
-                          onDelete={() => handleDeleteProjects([project.id])}
-                          onMoveUp={() => handleMoveProject(project.id, 'up')}
-                          onMoveDown={() => handleMoveProject(project.id, 'down')}
-                          t={t}
-                          disableReorder={sortConfig.key !== 'display_order'}
-                        />
-                      </td>
-                    </tr>
+                        <td rowSpan={2} style={{ left: `${POS_NAME}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-2 py-2 text-sm text-gray-700 border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
+                          <div className="font-medium line-clamp-2" title={project.name}>{project.name}</div>
+                        </td>
+                        <td rowSpan={2} style={{ left: `${POS_NOTES}px`, width: `${LEFT_NOTES_WIDTH}px` }} className={`px-2 py-2 text-xs text-gray-600 border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
+                          <textarea
+                            className="w-full min-h-[50px] text-xs border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 px-1 py-1 bg-transparent resize-none overflow-hidden"
+                            value={project.notes || ''}
+                            onChange={(e) => handleProjectFieldChange(project.id, 'notes', e.target.value)}
+                            placeholder=""
+                            rows={2}
+                          />
+                        </td>
+                        <td rowSpan={2} style={{ left: `${POS_SOFTWARE}px`, width: `${LEFT_SOFTWARE_WIDTH}px` }} className={`px-2 py-2 text-xs text-gray-600 text-center border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
+                          <textarea
+                            className="w-full min-h-[50px] text-xs border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-center px-1 py-1 bg-transparent resize-none overflow-hidden"
+                            value={project.software || ''}
+                            onChange={(e) => handleProjectFieldChange(project.id, 'software', e.target.value)}
+                            placeholder="CAD"
+                            rows={2}
+                          />
+                        </td>
+                        <td rowSpan={2} style={{ width: `${BUSINESS_CONTENT_WIDTH}px` }} className="px-2 py-2 text-xs text-gray-500 text-center border-r border-b bg-white align-top p-0 group-hover:bg-gray-50">
+                          <textarea
+                            className="w-full h-full min-h-[50px] border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-xs p-2 bg-transparent resize-none"
+                            value={project.type || ''}
+                            onChange={(e) => handleProjectFieldChange(project.id, 'type', e.target.value)}
+                            placeholder={t('tracker.businessContent')}
+                          />
+                        </td>
 
-                    {/* ROW 2: Actual */}
-                    <tr className="hover:bg-gray-50 group">
+                        {/* Price Column */}
+                        <td style={{ width: `${PRICE_WIDTH}px` }} className="px-2 py-2 text-xs text-gray-500 text-right border-r border-b bg-slate-50 font-mono">
+                          {(project.plan_price || project.unit_price || 0).toLocaleString()}
+                        </td>
 
-                      {/* Price Column */}
-                      <td style={{ width: `${PRICE_WIDTH}px` }} className="px-2 py-2 text-xs text-emerald-600 text-right border-r border-b bg-emerald-50/10 font-mono">
-                        {(project.actual_price || project.unit_price || 0).toLocaleString()}
-                      </td>
+                        <td className="px-2 py-2 text-xs font-semibold text-gray-500 text-center border-r border-b bg-slate-50">
+                          {t('tracker.planShort')}
+                        </td>
 
-                      <td className="px-2 py-2 text-xs font-bold text-blue-600 text-center border-r border-b bg-blue-50/30">
-                        {t('tracker.actualShort')}
-                      </td>
+                        {months.map(m => {
+                          const record = projRecords.find(r => r.month === m);
+                          const plan = record?.planned_hours ?? 0;
+                          const isSaving = savingStatus[`${project.id}-${m}-planned_hours`];
 
-                      {months.map(m => {
-                        const record = projRecords.find(r => r.month === m);
-                        const actual = record?.actual_hours ?? 0;
-                        const isSaving = savingStatus[`${project.id}-${m}-actual_hours`];
+                          return (
+                            <td key={`p-${m}`} className="px-0.5 py-1 border-r border-b relative" style={{ width: `${MONTH_WIDTH}px` }}>
+                              <input
+                                type="number"
+                                className="w-full text-xs border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500 text-right px-1 py-1 bg-white focus:bg-blue-50 transition-colors"
+                                value={plan === 0 ? '' : plan}
+                                placeholder="-"
+                                onChange={(e) => handleValueChange(project.id, m, 'planned_hours', e.target.value)}
+                              />
+                              {isSaving && <Save className="w-2 h-2 absolute top-1 right-1 text-blue-500 animate-pulse" />}
+                            </td>
+                          );
+                        })}
 
-                        return (
-                          <td key={`a-${m}`} className="px-0.5 py-1 border-r border-b relative" style={{ width: `${MONTH_WIDTH}px` }}>
-                            <input
-                              type="number"
-                              className={`w-full text-xs border-gray-300 rounded focus:ring-green-500 focus:border-green-500 text-right px-1 py-1 transition-colors ${actual > 0 ? 'bg-green-50 font-medium text-green-700' : 'bg-white'}`}
-                              value={actual === 0 ? '' : actual}
-                              placeholder="-"
-                              onChange={(e) => handleValueChange(project.id, m, 'actual_hours', e.target.value)}
-                            />
-                            {isSaving && <Save className="w-2 h-2 absolute top-1 right-1 text-green-500 animate-pulse" />}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
+                        <td rowSpan={2} className={`px-2 py-3 text-center border-b ${stickyRightClass} align-top`} style={{ right: 0, width: `${RIGHT_ACTIONS_WIDTH}px` }}>
+                          <ProjectActionsMenu
+                            project={project}
+                            onEdit={() => setEditingProject(project)}
+                            onDelete={() => handleDeleteProjects([project.id])}
+                            onMoveUp={() => handleMoveProject(project.id, 'up')}
+                            onMoveDown={() => handleMoveProject(project.id, 'down')}
+                            t={t}
+                            disableReorder={sortConfig.key !== 'display_order'}
+                          />
+                        </td>
+                      </tr>
+
+                      {/* ROW 2: Actual */}
+                      <tr className="hover:bg-gray-50 group">
+
+                        {/* Price Column */}
+                        <td style={{ width: `${PRICE_WIDTH}px` }} className="px-2 py-2 text-xs text-emerald-600 text-right border-r border-b bg-emerald-50/10 font-mono">
+                          {(project.actual_price || project.unit_price || 0).toLocaleString()}
+                        </td>
+
+                        <td className="px-2 py-2 text-xs font-bold text-blue-600 text-center border-r border-b bg-blue-50/30">
+                          {t('tracker.actualShort')}
+                        </td>
+
+                        {months.map(m => {
+                          const record = projRecords.find(r => r.month === m);
+                          const actual = record?.actual_hours ?? 0;
+                          const isSaving = savingStatus[`${project.id}-${m}-actual_hours`];
+
+                          return (
+                            <td key={`a-${m}`} className="px-0.5 py-1 border-r border-b relative" style={{ width: `${MONTH_WIDTH}px` }}>
+                              <input
+                                type="number"
+                                className={`w-full text-xs border-gray-300 rounded focus:ring-green-500 focus:border-green-500 text-right px-1 py-1 transition-colors ${actual > 0 ? 'bg-green-50 font-medium text-green-700' : 'bg-white'}`}
+                                value={actual === 0 ? '' : actual}
+                                placeholder="-"
+                                onChange={(e) => handleValueChange(project.id, m, 'actual_hours', e.target.value)}
+                              />
+                              {isSaving && <Save className="w-2 h-2 absolute top-1 right-1 text-green-500 animate-pulse" />}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    </SortableRow>
+                  );
+                })}
+              </SortableContext>
+            </table>
+          </DndContext>
         </div>
         {filteredAndSortedProjects.length === 0 && (
           <div className="p-4 sm:p-8 text-center text-gray-500 text-sm sm:text-base">
@@ -789,15 +896,17 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
         )}
       </div>
 
-      {editingProject && (
-        <EditProjectModal
-          project={editingProject}
-          isOpen={!!editingProject}
-          onClose={() => setEditingProject(null)}
-          onSave={handleUpdateProject}
-        />
-      )}
+      {
+        editingProject && (
+          <EditProjectModal
+            project={editingProject}
+            isOpen={!!editingProject}
+            onClose={() => setEditingProject(null)}
+            onSave={handleUpdateProject}
+          />
+        )
+      }
 
-    </div>
+    </div >
   );
 };

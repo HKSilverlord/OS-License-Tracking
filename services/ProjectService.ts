@@ -390,6 +390,19 @@ export class ProjectService extends BaseService {
         await this.supabase.from('projects').update({ display_order: belowOrder }).eq('id', currentProject.id);
         await this.supabase.from('projects').update({ display_order: currentOrder }).eq('id', belowProject.id);
     }
+    async updateProjectDisplayOrders(items: { id: string, display_order: number }[]) {
+        if (!items || items.length === 0) return;
+
+        // Perform parallel updates
+        const updates = items.map(item =>
+            this.supabase
+                .from('projects')
+                .update({ display_order: item.display_order })
+                .eq('id', item.id)
+        );
+
+        await Promise.all(updates);
+    }
 }
 
 export const projectService = new ProjectService();

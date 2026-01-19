@@ -19,6 +19,7 @@ export const dbService = {
   getAllProjectsForPeriodManagement: projectService.getAllProjectsForPeriodManagement.bind(projectService),
   moveProjectUp: projectService.moveProjectUp.bind(projectService),
   moveProjectDown: projectService.moveProjectDown.bind(projectService),
+  updateProjectDisplayOrders: projectService.updateProjectDisplayOrders.bind(projectService),
   generateNextProjectCode: projectService.generateNextProjectCode.bind(projectService),
 
   // Records
