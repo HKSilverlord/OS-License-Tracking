@@ -43,7 +43,7 @@ const SortableRow = ({ children, id, disabled, className }: { children: React.Re
     <tbody
       ref={setNodeRef}
       style={style}
-      className={isDragging ? 'opacity-80 shadow-lg bg-blue-50 ring-1 ring-blue-200 block' : className}
+      className={isDragging ? 'opacity-90 bg-blue-50 relative z-50' : className}
       {...attributes}
     >
       <SortableRowContext.Provider value={{ listeners }}>
@@ -207,13 +207,18 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
         }));
 
         // Trigger backend update
+        // Trigger backend update
         const updates = updatedItems.map(p => ({ id: p.id, display_order: p.display_order || 0 }));
 
-        // Fire and forget (or handle error quietly)
-        dbService.updateProjectDisplayOrders(updates).catch(err => {
-          console.error("Failed to update order", err);
-          alert("Failed to save new order. Please refresh.");
-        });
+        console.log("Saving new order for", updates.length, "items");
+
+        // Handle persistence
+        dbService.updateProjectDisplayOrders(updates)
+          .then(() => console.log("Order saved successfully"))
+          .catch(err => {
+            console.error("Failed to update order", err);
+            alert("Failed to save new order. Please refresh.");
+          });
 
         return updatedItems;
       });

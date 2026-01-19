@@ -393,15 +393,24 @@ export class ProjectService extends BaseService {
     async updateProjectDisplayOrders(items: { id: string, display_order: number }[]) {
         if (!items || items.length === 0) return;
 
+        console.log(`[ProjectService] Updating display_order for ${items.length} items`);
+
         // Perform parallel updates
         const updates = items.map(item =>
             this.supabase
                 .from('projects')
                 .update({ display_order: item.display_order })
                 .eq('id', item.id)
+                .then(({ error }) => {
+                    if (error) {
+                        console.error(`[ProjectService] Failed to update project ${item.id}:`, error);
+                        throw error;
+                    }
+                })
         );
 
         await Promise.all(updates);
+        console.log(`[ProjectService] Successfully updated ${items.length} items`);
     }
 }
 
