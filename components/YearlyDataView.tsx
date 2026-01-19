@@ -21,7 +21,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
   const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
   // Use shared table styling constants
-  const { codeReadOnly: LEFT_CODE_WIDTH, nameReadOnly: LEFT_NAME_WIDTH } = TABLE_COLUMN_WIDTHS;
+  const { no: LEFT_NO_WIDTH, nameReadOnly: LEFT_NAME_WIDTH } = TABLE_COLUMN_WIDTHS;
   const { leftCell: stickyLeftClass, leftHeader: stickyLeftHeaderClass, header: stickyHeaderZ, corner: stickyCornerZ } = STICKY_CLASSES;
 
   const fetchData = async () => {
@@ -160,10 +160,10 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
           <table className="w-full min-w-max border-separate border-spacing-0">
             <thead className="bg-gray-50 sticky top-0 z-40">
               <tr>
-                <th scope="col" style={{ left: 0, width: `${LEFT_CODE_WIDTH}px` }} className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                  {t('tracker.code')}
+                <th scope="col" style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                  {t('tracker.no')}
                 </th>
-                <th scope="col" style={{ left: `${LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                <th scope="col" style={{ left: `${LEFT_NO_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
                   {t('tracker.projectName')}
                 </th>
                 <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r`}>
@@ -201,10 +201,10 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
                   <React.Fragment key={project.id}>
                     {/* Plan Row */}
                     <tr className="bg-white hover:bg-gray-50">
-                      <td rowSpan={2} style={{ left: 0, width: `${LEFT_CODE_WIDTH}px` }} className={`px-3 py-3 text-sm font-medium text-gray-900 border-b ${stickyLeftClass} align-top`}>
-                        {project.code}
+                      <td rowSpan={2} style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-3 py-3 text-sm font-medium text-gray-900 border-b ${stickyLeftClass} align-top text-center`}>
+                        {index + 1}
                       </td>
-                      <td rowSpan={2} style={{ left: `${LEFT_CODE_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-sm text-gray-500 border-b ${stickyLeftClass} align-top`}>
+                      <td rowSpan={2} style={{ left: `${LEFT_NO_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-sm text-gray-500 border-b ${stickyLeftClass} align-top`}>
                         <div className="truncate w-44" title={project.name}>{project.name}</div>
                       </td>
                       <td className="px-2 py-2 text-xs font-semibold text-gray-500 text-center border-r border-b bg-slate-50">

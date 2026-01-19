@@ -14,7 +14,7 @@ import { NewProjectModal } from './components/modals/NewProjectModal';
 import { NewPeriodModal } from './components/modals/NewPeriodModal';
 import { dbService } from './services/dbService';
 import { exportToExcel } from './services/exportService';
-import { LayoutDashboard, Table, Plus, LogOut, Download, Menu, X, Search, Languages, BarChart3, Calendar as CalendarIcon, TrendingUp, Wrench } from 'lucide-react';
+import { LayoutDashboard, Table, Plus, LogOut, Download, Menu, X, Search, Languages, BarChart3, Calendar as CalendarIcon, TrendingUp, Wrench, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLanguage } from './contexts/LanguageContext';
 import { supabase } from './lib/supabase';
 import type { Session } from '@supabase/supabase-js';
@@ -33,8 +33,12 @@ function App() {
 
   const [session, setSession] = useState<Session | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [currentPeriod, setCurrentPeriod] = useState(''); // Will be set by init
-  const [availablePeriods, setAvailablePeriods] = useState<string[]>([]);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Period State - Now Year based
+  const [currentYear, setCurrentYear] = useState<number>(new Date().getFullYear());
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
+  const [availablePeriods, setAvailablePeriods] = useState<string[]>([]); // Keep full list for modals/logic
   const [searchQuery, setSearchQuery] = useState('');
 
   // Modals
@@ -64,9 +68,13 @@ function App() {
     const init = async () => {
       const periods = await dbService.getPeriods();
       setAvailablePeriods(periods);
-      if (periods.length > 0) {
-        // Default to the most recent period (first in the list as it's sorted desc)
-        setCurrentPeriod(periods[0]);
+
+      // Extract unique years
+      const years = Array.from(new Set(periods.map(p => parseInt(p.split('-')[0])))).sort((a, b) => b - a);
+      setAvailableYears(years);
+
+      if (years.length > 0) {
+        setCurrentYear(years[0]);
       }
     };
     if (session) {
@@ -75,13 +83,19 @@ function App() {
   }, [session]);
 
   // Listen for period created events to refresh the period list
+  // Listen for period created events to refresh the period list
   useEffect(() => {
     const handlePeriodCreated = async (event: any) => {
       const periods = await dbService.getPeriods();
       setAvailablePeriods(periods);
-      // Set current period to the newly created one
+
+      const years = Array.from(new Set(periods.map(p => parseInt(p.split('-')[0])))).sort((a, b) => b - a);
+      setAvailableYears(years);
+
+      // Set current period to the newly created one's year
       if (event.detail?.periodLabel) {
-        setCurrentPeriod(event.detail.periodLabel);
+        const year = parseInt(event.detail.periodLabel.split('-')[0]);
+        if (!isNaN(year)) setCurrentYear(year);
       }
     };
 
@@ -96,7 +110,12 @@ function App() {
 
   const handleOpenProjectModal = async () => {
     try {
-      const nextCode = await dbService.getNextProjectCode(currentPeriod);
+      // Default to H1 of current year for new projects if possible, or just pass currentYear and let modal handle
+      // But getNextProjectCode requires a full period label.
+      // Let's assume H1 for now or find the latest period in the current year.
+      const targetPeriod = availablePeriods.find(p => p.startsWith(`${currentYear}-`)) || `${currentYear}-H1`;
+
+      const nextCode = await dbService.getNextProjectCode(targetPeriod);
       setNextProjectCode(nextCode);
       setIsProjectModalOpen(true);
     } catch (error) {
@@ -113,7 +132,12 @@ function App() {
   const handlePeriodSuccess = async (newPeriodLabel: string) => {
     const periods = await dbService.getPeriods();
     setAvailablePeriods(periods);
-    setCurrentPeriod(newPeriodLabel);
+
+    const years = Array.from(new Set(periods.map(p => parseInt(p.split('-')[0])))).sort((a, b) => b - a);
+    setAvailableYears(years);
+
+    const year = parseInt(newPeriodLabel.split('-')[0]);
+    if (!isNaN(year)) setCurrentYear(year);
   };
 
   const handleExport = async () => {
@@ -127,7 +151,9 @@ function App() {
         });
         return { ...p, records: pRecords };
       });
-      exportToExcel(exportData, currentPeriod);
+      // Export for the whole year? or just active view? 
+      // Original was currentPeriod. Let's use currentYear for now as filename suffix
+      exportToExcel(exportData, currentYear.toString());
     } catch (e) {
       console.error(e);
       alert(t('alerts.exportFailed'));
@@ -136,44 +162,78 @@ function App() {
 
   if (!session) return <Auth />;
 
-  const currentYear = parseInt(currentPeriod.split('-')[0]) || new Date().getFullYear();
+  if (!session) return <Auth />;
+
+  // Computed prop for modals/views that might still need a specific period string fallback
+  // For TrackingView, we will update it to accept year and handle H1/H2 internally.
+
 
   return (
     <Router>
       <div className="flex h-screen bg-slate-50 overflow-hidden">
         {/* Sidebar Desktop */}
-        <aside className="hidden md:flex flex-col w-64 bg-slate-900 text-white shadow-xl z-20 shrink-0">
-          <div className="p-6">
-            <h1 className="text-xl font-bold tracking-tight text-blue-400">{t('app.title')}</h1>
-            <p className="text-xs text-slate-400 mt-1">{t('app.subtitle')}</p>
+        <aside
+          className={`hidden md:flex flex-col bg-slate-900 text-white shadow-xl z-20 shrink-0 transition-all duration-300 ${sidebarCollapsed ? 'w-16' : 'w-64'
+            }`}
+        >
+          <div className={`p-4 flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
+            {!sidebarCollapsed && (
+              <div>
+                <h1 className="text-xl font-bold tracking-tight text-blue-400">{t('app.title')}</h1>
+              </div>
+            )}
+            <button
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+            >
+              {sidebarCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+            </button>
           </div>
-          <nav className="flex-1 px-4 space-y-2">
-            <NavLink to="/" icon={LayoutDashboard} label={t('nav.dashboard')} />
-            <NavLink to="/tracking" icon={Table} label={t('nav.tracking')} />
-            <NavLink to="/yearly-data" icon={Table} label={t('nav.yearlyData')} />
-            <NavLink to="/total" icon={BarChart3} label={t('nav.totalView')} />
-            <NavLink to="/long-term-plan" icon={TrendingUp} label={t('nav.longTermPlan')} />
-            <NavLink to="/monthly-plan-actual" icon={BarChart3} label={t('nav.monthlyPlanActual')} />
-            <NavLink to="/period-management" icon={CalendarIcon} label={t('nav.periodManagement')} />
-            <div className="pt-2 border-t border-slate-700"></div>
-            <NavLink to="/diagnostic" icon={Wrench} label="Database Fix" />
+
+          <nav className="flex-1 px-2 space-y-2 mt-2">
+            <NavLink to="/" icon={LayoutDashboard} label={t('nav.dashboard')} collapsed={sidebarCollapsed} />
+            <NavLink to="/tracking" icon={Table} label={t('nav.tracking')} collapsed={sidebarCollapsed} />
+            <NavLink to="/yearly-data" icon={Table} label={t('nav.yearlyData')} collapsed={sidebarCollapsed} />
+            <NavLink to="/total" icon={BarChart3} label={t('nav.totalView')} collapsed={sidebarCollapsed} />
+            <NavLink to="/long-term-plan" icon={TrendingUp} label={t('nav.longTermPlan')} collapsed={sidebarCollapsed} />
+            <NavLink to="/monthly-plan-actual" icon={BarChart3} label={t('nav.monthlyPlanActual')} collapsed={sidebarCollapsed} />
+            <NavLink to="/period-management" icon={CalendarIcon} label={t('nav.periodManagement')} collapsed={sidebarCollapsed} />
+            <div className="pt-2 border-t border-slate-700 mx-2"></div>
+            <NavLink to="/diagnostic" icon={Wrench} label="Database Fix" collapsed={sidebarCollapsed} />
           </nav>
           <div className="p-4 border-t border-slate-700">
-            <div className="flex items-center mb-4 px-2">
-              <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-sm font-bold">
-                {session.user.email?.charAt(0).toUpperCase()}
+            {!sidebarCollapsed ? (
+              <>
+                <div className="flex items-center mb-4 px-2">
+                  <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-sm font-bold shrink-0">
+                    {session.user.email?.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="ml-3 overflow-hidden">
+                    <p className="text-sm font-medium truncate">{session.user.email}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleSignOut}
+                  className="flex items-center w-full px-2 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                >
+                  <LogOut className="w-4 h-4 mr-3" />
+                  {t('nav.signOut')}
+                </button>
+              </>
+            ) : (
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-sm font-bold" title={session.user.email}>
+                  {session.user.email?.charAt(0).toUpperCase()}
+                </div>
+                <button
+                  onClick={handleSignOut}
+                  className="flex items-center justify-center w-full py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                  title={t('nav.signOut')}
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
               </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium truncate w-32">{session.user.email}</p>
-              </div>
-            </div>
-            <button
-              onClick={handleSignOut}
-              className="flex items-center w-full px-2 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors"
-            >
-              <LogOut className="w-4 h-4 mr-3" />
-              {t('nav.signOut')}
-            </button>
+            )}
           </div>
         </aside>
 
@@ -208,15 +268,15 @@ function App() {
           {/* Top Bar */}
           <header className="bg-white border-b border-slate-200 w-full flex flex-wrap items-center justify-between gap-3 px-4 md:px-6 py-3 shadow-sm z-10 shrink-0">
             <div className="flex items-center gap-2 w-full md:w-auto">
-              {/* Period Selector */}
+              {/* Period Selector (Year Only) */}
               <div className="flex items-center space-x-2 bg-slate-100 rounded-lg p-1">
                 <select
-                  value={currentPeriod}
-                  onChange={(e) => setCurrentPeriod(e.target.value)}
+                  value={currentYear}
+                  onChange={(e) => setCurrentYear(parseInt(e.target.value))}
                   className="bg-transparent border-none text-slate-900 text-sm focus:ring-0 font-medium cursor-pointer"
                 >
-                  {availablePeriods.map(p => (
-                    <option key={p} value={p}>{p}</option>
+                  {availableYears.map(year => (
+                    <option key={year} value={year}>{year}</option>
                   ))}
                 </select>
               </div>
@@ -276,7 +336,7 @@ function App() {
           <div className="flex-1 flex flex-col overflow-hidden relative">
             <Routes>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/tracking" element={<TrackingView currentPeriodLabel={currentPeriod} searchQuery={searchQuery} refreshTrigger={projectCreatedTrigger} />} />
+              <Route path="/tracking" element={<TrackingView currentYear={currentYear} searchQuery={searchQuery} refreshTrigger={projectCreatedTrigger} />} />
               <Route path="/total" element={<TotalView currentYear={currentYear} />} />
               <Route path="/yearly-data" element={<YearlyDataView currentYear={currentYear} />} />
               <Route path="/long-term-plan" element={<LongTermPlanView />} />
@@ -293,8 +353,9 @@ function App() {
         isOpen={isProjectModalOpen}
         onClose={() => setIsProjectModalOpen(false)}
         onSuccess={handleProjectSuccess}
+        onSuccess={handleProjectSuccess}
         initialCode={nextProjectCode}
-        currentPeriod={currentPeriod}
+        currentPeriod={availablePeriods.find(p => p.startsWith(`${currentYear}-`)) || `${currentYear}-H1`}
       />
 
       <NewPeriodModal
@@ -302,26 +363,27 @@ function App() {
         onClose={() => setIsPeriodModalOpen(false)}
         onSuccess={handlePeriodSuccess}
         availablePeriods={availablePeriods}
-        currentPeriod={currentPeriod}
+        currentPeriod={availablePeriods.find(p => p.startsWith(`${currentYear}-`)) || `${currentYear}-H1`}
       />
     </Router>
   );
 }
 
 // Nav Link Component
-const NavLink = ({ to, icon: Icon, label }: any) => {
+const NavLink = ({ to, icon: Icon, label, collapsed }: any) => {
   const location = useLocation();
   const isActive = location.pathname === to;
   return (
     <Link
       to={to}
-      className={`flex items-center px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${isActive
+      className={`flex items-center ${collapsed ? 'justify-center px-2' : 'px-4'} py-3 rounded-lg text-sm font-medium transition-all duration-200 ${isActive
         ? 'bg-blue-600 text-white shadow-md'
         : 'text-slate-400 hover:bg-slate-800 hover:text-white'
         }`}
+      title={collapsed ? label : ''}
     >
-      <Icon className={`w-5 h-5 mr-3 ${isActive ? 'text-white' : 'text-slate-500'}`} />
-      {label}
+      <Icon className={`w-5 h-5 ${collapsed ? '' : 'mr-3'} ${isActive ? 'text-white' : 'text-slate-500'}`} />
+      {!collapsed && label}
     </Link>
   );
 };

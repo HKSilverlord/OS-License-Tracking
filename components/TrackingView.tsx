@@ -15,7 +15,7 @@ import { DropdownMenu } from './DropdownMenu';
 import { formatCurrency } from '../utils/helpers';
 
 interface TrackingViewProps {
-  currentPeriodLabel: string; // e.g. "2024-H1"
+  currentYear: number;
   searchQuery: string;
   refreshTrigger?: number; // Trigger to refresh data when project is created
 }
@@ -165,8 +165,13 @@ const ProjectActionsMenu: React.FC<{
 };
 
 
-export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, searchQuery, refreshTrigger }) => {
+export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQuery, refreshTrigger }) => {
   const { t, language } = useLanguage();
+
+  // Tabs State
+  const [activeTerm, setActiveTerm] = useState<'H1' | 'H2'>('H1');
+  const currentPeriodLabel = `${currentYear}-${activeTerm}`;
+
   const [projects, setProjects] = useState<Project[]>([]);
   const [records, setRecords] = useState<Record<string, MonthlyRecord[]>>({}); // Key: ProjectId
   const [loading, setLoading] = useState(true);
@@ -639,6 +644,32 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                 {pendingCount} {t('unsavedChanges', 'unsaved changes')}
               </span>
             )}
+
+            {/* Period Tabs */}
+            <div className="ml-8 flex items-end gap-6">
+              <button
+                onClick={() => setActiveTerm('H1')}
+                className={`pb-2 text-sm font-bold transition-all border-b-2 ${activeTerm === 'H1'
+                    ? 'text-white border-blue-500' // Dark header? No, bg is slate-50 usually, but header div is slate-50 with border-b. 
+                    // Wait, text-white on slate-50 is invisible. 
+                    // The screenshot showed dark theme, but looking at App.tsx, aside is dark, logic is light.
+                    // The header where this is placed is "bg-slate-50".
+                    // So text should be dark.
+                    : 'text-slate-500 border-transparent hover:text-slate-700'
+                  } ${activeTerm === 'H1' ? '!text-slate-900 !border-blue-600' : ''}`}
+              >
+                H1 (Jan-Jun)
+              </button>
+              <button
+                onClick={() => setActiveTerm('H2')}
+                className={`pb-2 text-sm font-bold transition-all border-b-2 ${activeTerm === 'H2'
+                    ? '!text-slate-900 !border-blue-600'
+                    : 'text-slate-500 border-transparent hover:text-slate-700'
+                  }`}
+              >
+                H2 (Jul-Dec)
+              </button>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             {/* Local Filter Box */}
