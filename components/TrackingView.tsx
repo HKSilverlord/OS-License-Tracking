@@ -57,11 +57,10 @@ const ProjectActionsMenu: React.FC<{
               onMoveUp();
               setIsOpen(false);
             }}
-            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${
-              disableReorder 
-                ? 'text-gray-400 cursor-not-allowed' 
-                : 'text-gray-700 hover:bg-gray-50'
-            }`}
+            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${disableReorder
+              ? 'text-gray-400 cursor-not-allowed'
+              : 'text-gray-700 hover:bg-gray-50'
+              }`}
             title={disableReorder ? t('tracker.sortDisabled', 'Sort by No. to reorder') : ''}
           >
             <ArrowUp className="w-4 h-4" />
@@ -75,11 +74,10 @@ const ProjectActionsMenu: React.FC<{
               onMoveDown();
               setIsOpen(false);
             }}
-            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${
-              disableReorder 
-                ? 'text-gray-400 cursor-not-allowed' 
-                : 'text-gray-700 hover:bg-gray-50'
-            }`}
+            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${disableReorder
+              ? 'text-gray-400 cursor-not-allowed'
+              : 'text-gray-700 hover:bg-gray-50'
+              }`}
             title={disableReorder ? t('tracker.sortDisabled', 'Sort by No. to reorder') : ''}
           >
             <ArrowDown className="w-4 h-4" />
@@ -115,17 +113,7 @@ const ProjectActionsMenu: React.FC<{
     </>
   );
 };
-// ... inside TrackingView component ...
-// ...
-                        <ProjectActionsMenu
-                          project={project}
-                          onEdit={() => setEditingProject(project)}
-                          onDelete={() => handleDeleteProjects([project.id])}
-                          onMoveUp={() => handleMoveProject(project.id, 'up')}
-                          onMoveDown={() => handleMoveProject(project.id, 'down')}
-                          t={t}
-                          disableReorder={sortConfig.key !== 'display_order'}
-                        />
+
 
 export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, searchQuery, refreshTrigger }) => {
   const { t, language } = useLanguage();
@@ -751,6 +739,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentPeriodLabel, 
                           onMoveUp={() => handleMoveProject(project.id, 'up')}
                           onMoveDown={() => handleMoveProject(project.id, 'down')}
                           t={t}
+                          disableReorder={sortConfig.key !== 'display_order'}
                         />
                       </td>
                     </tr>
