@@ -14,7 +14,11 @@ export const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [exchangeRate, setExchangeRate] = useState(172);
   const [licenseComputers, setLicenseComputers] = useState(7);
+  const [exchangeRate, setExchangeRate] = useState(172);
+  const [unitPrice, setUnitPrice] = useState(DEFAULT_UNIT_PRICE);
+  const [licenseComputers, setLicenseComputers] = useState(7);
   const [licensePerComputer, setLicensePerComputer] = useState(2517143);
+  const [rawRecords, setRawRecords] = useState<any[]>([]);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const { t, language } = useLanguage();
@@ -47,41 +51,10 @@ export const Dashboard: React.FC = () => {
         if (typeof settings.exchangeRate === 'number') setExchangeRate(settings.exchangeRate);
         if (typeof settings.licenseComputers === 'number') setLicenseComputers(settings.licenseComputers);
         if (typeof settings.licensePerComputer === 'number') setLicensePerComputer(settings.licensePerComputer);
+        if (typeof settings.unitPrice === 'number') setUnitPrice(settings.unitPrice);
 
         const records = await dbService.getDashboardStats(selectedYear);
-
-        // Aggregate by month
-        const locale = language === 'ja' ? 'ja-JP' : language === 'vn' ? 'vi-VN' : 'en-US';
-        const monthlyData = Array.from({ length: 12 }, (_, i) => ({
-          month: i + 1,
-          name: new Date(selectedYear, i).toLocaleString(locale, { month: 'short' }),
-          plannedHours: 0,
-          actualHours: 0,
-          plannedRevenue: 0,
-          actualRevenue: 0,
-        }));
-
-        records.forEach((r: any) => {
-           if (r.month >= 1 && r.month <= 12) {
-             const target = monthlyData[r.month - 1];
-             target.plannedHours += Number(r.planned_hours) || 0;
-             target.actualHours += Number(r.actual_hours) || 0;
-             const price = r.projects?.unit_price || DEFAULT_UNIT_PRICE;
-             target.plannedRevenue += (Number(r.planned_hours) || 0) * price;
-             target.actualRevenue += (Number(r.actual_hours) || 0) * price;
-           }
-        });
-
-        setStats(monthlyData);
-
-        let accPlan = 0;
-        let accAct = 0;
-        const accData = monthlyData.map(d => {
-          accPlan += d.plannedRevenue;
-          accAct += d.actualRevenue;
-          return { month: d.name, accPlannedRevenue: accPlan, accActualRevenue: accAct };
-        });
-        setAccumulatedStats(accData);
+        setRawRecords(records);
       } catch (e) {
         console.error(e);
       } finally {
@@ -89,12 +62,56 @@ export const Dashboard: React.FC = () => {
       }
     };
     load();
-  }, [selectedYear, language]);
+  }, [selectedYear]);
+
+  useEffect(() => {
+    if (!selectedYear) return;
+
+    // Aggregate by month
+    const locale = language === 'ja' ? 'ja-JP' : language === 'vn' ? 'vi-VN' : 'en-US';
+    const monthlyData = Array.from({ length: 12 }, (_, i) => ({
+      month: i + 1,
+      name: new Date(selectedYear, i).toLocaleString(locale, { month: 'short' }),
+      plannedHours: 0,
+      actualHours: 0,
+      plannedRevenue: 0,
+      actualRevenue: 0,
+    }));
+
+    rawRecords.forEach((r: any) => {
+      if (r.month >= 1 && r.month <= 12) {
+        const target = monthlyData[r.month - 1];
+        target.plannedHours += Number(r.planned_hours) || 0;
+        target.actualHours += Number(r.actual_hours) || 0;
+        // Use project specific price or fall back to the global unitPrice
+        const price = r.projects?.unit_price || unitPrice;
+        target.plannedRevenue += (Number(r.planned_hours) || 0) * price;
+        target.actualRevenue += (Number(r.actual_hours) || 0) * price;
+      }
+    });
+
+    setStats(monthlyData);
+
+    let accPlan = 0;
+    let accAct = 0;
+    const accData = monthlyData.map(d => {
+      accPlan += d.plannedRevenue;
+      accAct += d.actualRevenue;
+      return { month: d.name, accPlannedRevenue: accPlan, accActualRevenue: accAct };
+    });
+    setAccumulatedStats(accData);
+  }, [rawRecords, unitPrice, language, selectedYear]);
 
   const handleRateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value) || 0;
     setExchangeRate(val);
     dbService.saveSettings({ exchangeRate: val });
+  };
+
+  const handleUnitPriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = parseInt(e.target.value) || 0;
+    setUnitPrice(val);
+    dbService.saveSettings({ unitPrice: val });
   };
 
   const handleLicenseComputersChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -126,8 +143,8 @@ export const Dashboard: React.FC = () => {
   const totalPlanHours = stats.reduce((acc, curr) => acc + curr.plannedHours, 0);
   const totalActualHours = stats.reduce((acc, curr) => acc + curr.actualHours, 0);
 
-  const grossRevenuePlan = totalPlanHours * DEFAULT_UNIT_PRICE;
-  const grossRevenueActual = totalActualHours * DEFAULT_UNIT_PRICE;
+  const grossRevenuePlan = totalPlanHours * unitPrice;
+  const grossRevenueActual = totalActualHours * unitPrice;
   const licenseTotal = licenseComputers * licensePerComputer;
   const netRevenuePlan = grossRevenuePlan - licenseTotal;
   const netRevenueActual = grossRevenueActual - licenseTotal;
@@ -135,8 +152,8 @@ export const Dashboard: React.FC = () => {
   const profitMarginPlan = grossRevenuePlan !== 0 ? (netRevenuePlan / grossRevenuePlan) * 100 : 0;
   const profitMarginActual = grossRevenueActual !== 0 ? (netRevenueActual / grossRevenueActual) * 100 : 0;
   const licenseCostPerHour = totalPlanHours !== 0 ? licenseTotal / totalPlanHours : 0;
-  const netHourlyRate = DEFAULT_UNIT_PRICE - licenseCostPerHour;
-  const breakEvenHours = DEFAULT_UNIT_PRICE !== 0 ? licenseTotal / DEFAULT_UNIT_PRICE : 0;
+  const netHourlyRate = unitPrice - licenseCostPerHour;
+  const breakEvenHours = unitPrice !== 0 ? licenseTotal / unitPrice : 0;
   const remainingHours = Math.max(0, totalPlanHours - totalActualHours);
 
   const toMan = (val: number) => `${(val / 10000).toFixed(1)}万`;
@@ -153,75 +170,80 @@ export const Dashboard: React.FC = () => {
   return (
     <div className="h-full overflow-y-auto p-4 md:p-6 bg-slate-50">
       <div className="max-w-7xl mx-auto space-y-6">
-        
+
         {/* Header & Controls */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-           <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-3">
-                <h2 className="text-xl font-bold text-slate-800">{`${t('header.dashboardTitle', 'Dashboard')} ${selectedYear}`}</h2>
-                <select
-                  value={selectedYear ?? ''}
-                  onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
-                  className="text-sm border border-slate-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {availableYears.map(year => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl font-bold text-slate-800">{`${t('header.dashboardTitle', 'Dashboard')} ${selectedYear}`}</h2>
+              <select
+                value={selectedYear ?? ''}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
+                className="text-sm border border-slate-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {availableYears.map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
+            <p className="text-sm text-slate-500">{t('dashboard.header.desc', 'Review progress and revenue by year')}</p>
+          </div>
+
+          <div className="w-full lg:w-auto flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-3 bg-sky-50 px-4 py-2 rounded-lg border border-sky-100">
+              <Calculator className="w-5 h-5 text-blue-600" />
+              <div className="flex flex-col">
+                <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">{t('dashboard.fx.label', 'Exchange Rate')}</span>
+                <div className="flex items-center">
+                  <span className="text-sm font-medium text-slate-800 mr-2">1 JPY = </span>
+                  <input
+                    type="number"
+                    className="w-20 h-8 text-sm border-sky-200 rounded px-2 focus:ring-1 focus:ring-sky-500 text-right font-semibold text-slate-800 bg-white"
+                    value={exchangeRate}
+                    onChange={handleRateChange}
+                  />
+                  <span className="text-sm font-medium text-slate-800 ml-1">VND</span>
+                </div>
               </div>
-              <p className="text-sm text-slate-500">{t('dashboard.header.desc', 'Review progress and revenue by year')}</p>
-           </div>
-           
-           <div className="w-full lg:w-auto flex flex-col gap-2">
-             <div className="flex flex-wrap items-center gap-3 bg-sky-50 px-4 py-2 rounded-lg border border-sky-100">
-                <Calculator className="w-5 h-5 text-blue-600" />
-                <div className="flex flex-col">
-                   <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">{t('dashboard.fx.label', 'Exchange Rate')}</span>
-                   <div className="flex items-center">
-                      <span className="text-sm font-medium text-slate-800 mr-2">1 JPY = </span>
-                      <input 
-                        type="number" 
-                        className="w-20 h-8 text-sm border-sky-200 rounded px-2 focus:ring-1 focus:ring-sky-500 text-right font-semibold text-slate-800 bg-white"
-                        value={exchangeRate}
-                        onChange={handleRateChange}
-                      />
-                      <span className="text-sm font-medium text-slate-800 ml-1">VND</span>
-                   </div>
+              <div className="flex flex-col">
+                <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">{t('dashboard.fx.hourly', 'Hourly Rate (JPY)')}</span>
+                <input
+                  type="number"
+                  className="w-20 h-8 text-sm border-sky-200 rounded px-2 focus:ring-1 focus:ring-sky-500 text-right font-semibold text-slate-800 bg-white"
+                  value={unitPrice}
+                  onChange={handleUnitPriceChange}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-emerald-50 px-4 py-3 rounded-lg border border-emerald-200">
+              <div className="flex flex-col">
+                <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">{t('dashboard.license.count', 'License Seats')}</span>
+                <input
+                  type="number"
+                  min={0}
+                  className="mt-1 w-full h-9 text-sm border-emerald-200 rounded px-2 focus:ring-1 focus:ring-emerald-500 text-right font-semibold text-emerald-900 bg-white"
+                  value={licenseComputers}
+                  onChange={handleLicenseComputersChange}
+                />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">{t('dashboard.license.perSeat', 'Fee per Seat (JPY)')}</span>
+                <input
+                  type="number"
+                  min={0}
+                  className="mt-1 w-full h-9 text-sm border-emerald-200 rounded px-2 focus:ring-1 focus:ring-emerald-500 text-right font-semibold text-emerald-900 bg-white"
+                  value={licensePerComputer}
+                  onChange={handleLicensePerComputerChange}
+                />
+              </div>
+              <div className="flex flex-col justify-end">
+                <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">{t('dashboard.license.total', 'Annual License Cost')}</span>
+                <div className="mt-1 h-9 flex items-center justify-end text-sm font-bold text-emerald-900">
+                  {fmt(licenseTotal)} / {toMan(licenseTotal)}
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">{t('dashboard.fx.hourly', 'Hourly Rate (JPY)')}</span>
-                  <div className="text-sm font-semibold text-slate-900">{fmt(DEFAULT_UNIT_PRICE)}</div>
-                </div>
-             </div>
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-emerald-50 px-4 py-3 rounded-lg border border-emerald-200">
-                <div className="flex flex-col">
-                  <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">{t('dashboard.license.count', 'License Seats')}</span>
-                  <input
-                    type="number"
-                    min={0}
-                    className="mt-1 w-full h-9 text-sm border-emerald-200 rounded px-2 focus:ring-1 focus:ring-emerald-500 text-right font-semibold text-emerald-900 bg-white"
-                    value={licenseComputers}
-                    onChange={handleLicenseComputersChange}
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">{t('dashboard.license.perSeat', 'Fee per Seat (JPY)')}</span>
-                  <input
-                    type="number"
-                    min={0}
-                    className="mt-1 w-full h-9 text-sm border-emerald-200 rounded px-2 focus:ring-1 focus:ring-emerald-500 text-right font-semibold text-emerald-900 bg-white"
-                    value={licensePerComputer}
-                    onChange={handleLicensePerComputerChange}
-                  />
-                </div>
-                <div className="flex flex-col justify-end">
-                  <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">{t('dashboard.license.total', 'Annual License Cost')}</span>
-                  <div className="mt-1 h-9 flex items-center justify-end text-sm font-bold text-emerald-900">
-                    {fmt(licenseTotal)} / {toMan(licenseTotal)}
-                  </div>
-                </div>
-             </div>
-           </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Row 1: Core KPIs */}
@@ -255,8 +277,8 @@ export const Dashboard: React.FC = () => {
               <div className="text-xs font-semibold text-slate-700 uppercase tracking-wider">{t('dashboard.kpi.unitPriceLabel', 'Unit Rate')}</div>
               <DollarSign className="w-5 h-5 text-slate-500" />
             </div>
-            <div className="mt-2 text-2xl font-bold text-slate-900">{fmt(DEFAULT_UNIT_PRICE)}</div>
-            <div className="text-xs text-slate-500 mt-1">{toMan(DEFAULT_UNIT_PRICE)}{t('dashboard.perHour', ' / hour')}</div>
+            <div className="mt-2 text-2xl font-bold text-slate-900">{fmt(unitPrice)}</div>
+            <div className="text-xs text-slate-500 mt-1">{toMan(unitPrice)}{t('dashboard.perHour', ' / hour')}</div>
           </div>
         </div>
 
@@ -304,7 +326,7 @@ export const Dashboard: React.FC = () => {
             <div className="mt-3 text-3xl font-bold">{fmt(grossRevenuePlan)}</div>
             <div className="text-sm text-sky-100">{toMan(grossRevenuePlan)}</div>
             <div className="mt-3 text-xs text-sky-100 border-t border-white/30 pt-2">
-              {t('dashboard.kpi.planHoursLabel', 'Planned Hours')} {fmtHours(totalPlanHours)} × {t('dashboard.kpi.unitPriceLabel', 'Unit Rate')} {fmt(DEFAULT_UNIT_PRICE)}
+              {t('dashboard.kpi.planHoursLabel', 'Planned Hours')} {fmtHours(totalPlanHours)} × {t('dashboard.kpi.unitPriceLabel', 'Unit Rate')} {fmt(unitPrice)}
             </div>
           </div>
           <div className="col-span-1 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl p-5 shadow-md text-white">
@@ -318,7 +340,7 @@ export const Dashboard: React.FC = () => {
             <div className="mt-3 text-3xl font-bold">{fmt(grossRevenueActual)}</div>
             <div className="text-sm text-emerald-100">{toMan(grossRevenueActual)}</div>
             <div className="mt-3 text-xs text-emerald-100 border-t border-white/30 pt-2">
-              {t('dashboard.kpi.actualHoursLabel', 'Actual Hours')} {fmtHours(totalActualHours)} × {t('dashboard.kpi.unitPriceLabel', 'Unit Rate')} {fmt(DEFAULT_UNIT_PRICE)}
+              {t('dashboard.kpi.actualHoursLabel', 'Actual Hours')} {fmtHours(totalActualHours)} × {t('dashboard.kpi.unitPriceLabel', 'Unit Rate')} {fmt(unitPrice)}
             </div>
           </div>
         </div>
@@ -390,71 +412,71 @@ export const Dashboard: React.FC = () => {
 
         {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-           <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-md font-bold text-slate-700 flex items-center">
-                  <TrendingUp className="w-4 h-4 mr-2 text-blue-500" />
-                  {t('dashboard.charts.monthly', 'Monthly Revenue (Plan vs Actual)')}
-                </h3>
-                <button
-                  onClick={() => exportChartToSVG('dashboard-monthly-chart', generateChartFilename(`monthly_revenue_${selectedYear}`, 'svg'))}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-                  title="Export as SVG (vector)"
-                >
-                  <Download className="w-4 h-4" />
-                  SVG
-                </button>
-              </div>
-              <div id="dashboard-monthly-chart" className="h-72">
-                 <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={stats}>
-                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                       <XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={12} />
-                       <YAxis axisLine={false} tickLine={false} fontSize={11} tickFormatter={(val) => `${(val/10000).toFixed(1)}万`} />
-                       <Tooltip formatter={(val: number) => fmt(val as number)} />
-                       <Legend wrapperStyle={{fontSize: '12px'}} />
-                       <Bar dataKey="plannedRevenue" name={planShort} fill="#94a3b8" radius={[4, 4, 0, 0]} />
-                       <Bar dataKey="actualRevenue" name={actualShort} fill="#2563eb" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                 </ResponsiveContainer>
-              </div>
-           </div>
+          <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-md font-bold text-slate-700 flex items-center">
+                <TrendingUp className="w-4 h-4 mr-2 text-blue-500" />
+                {t('dashboard.charts.monthly', 'Monthly Revenue (Plan vs Actual)')}
+              </h3>
+              <button
+                onClick={() => exportChartToSVG('dashboard-monthly-chart', generateChartFilename(`monthly_revenue_${selectedYear}`, 'svg'))}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                title="Export as SVG (vector)"
+              >
+                <Download className="w-4 h-4" />
+                SVG
+              </button>
+            </div>
+            <div id="dashboard-monthly-chart" className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stats}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={12} />
+                  <YAxis axisLine={false} tickLine={false} fontSize={11} tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
+                  <Tooltip formatter={(val: number) => fmt(val as number)} />
+                  <Legend wrapperStyle={{ fontSize: '12px' }} />
+                  <Bar dataKey="plannedRevenue" name={planShort} fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="actualRevenue" name={actualShort} fill="#2563eb" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
 
-           <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-md font-bold text-slate-700 flex items-center">
-                  <TrendingUp className="w-4 h-4 mr-2 text-green-500" />
-                  {t('dashboard.charts.cumulative', 'Cumulative Revenue (Plan vs Actual)')}
-                </h3>
-                <button
-                  onClick={() => exportChartToSVG('dashboard-cumulative-chart', generateChartFilename(`cumulative_revenue_${selectedYear}`, 'svg'))}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-                  title="Export as SVG (vector)"
-                >
-                  <Download className="w-4 h-4" />
-                  SVG
-                </button>
-              </div>
-              <div id="dashboard-cumulative-chart" className="h-72">
-                 <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={accumulatedStats}>
-                       <defs>
-                          <linearGradient id="colorAct" x1="0" y1="0" x2="0" y2="1">
-                             <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
-                             <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                          </linearGradient>
-                       </defs>
-                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                       <XAxis dataKey="month" axisLine={false} tickLine={false} fontSize={12} />
-                       <YAxis axisLine={false} tickLine={false} fontSize={11} tickFormatter={(val) => `${(val/10000).toFixed(1)}万`} />
-                       <Tooltip formatter={(val: number) => fmt(val as number)} />
-                       <Legend wrapperStyle={{fontSize: '12px'}} />
-                       <Area type="monotone" dataKey="accActualRevenue" name={t('dashboard.chart.accActual', actualShort)} stroke="#10b981" fillOpacity={1} fill="url(#colorAct)" strokeWidth={2} />
-                       <Line type="monotone" strokeDasharray="3 3" dataKey="accPlannedRevenue" name={t('dashboard.chart.accPlan', planShort)} stroke="#94a3b8" strokeWidth={2} dot={false} />
-                    </ComposedChart>
-                 </ResponsiveContainer>
-              </div>
-           </div>
+          <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-md font-bold text-slate-700 flex items-center">
+                <TrendingUp className="w-4 h-4 mr-2 text-green-500" />
+                {t('dashboard.charts.cumulative', 'Cumulative Revenue (Plan vs Actual)')}
+              </h3>
+              <button
+                onClick={() => exportChartToSVG('dashboard-cumulative-chart', generateChartFilename(`cumulative_revenue_${selectedYear}`, 'svg'))}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                title="Export as SVG (vector)"
+              >
+                <Download className="w-4 h-4" />
+                SVG
+              </button>
+            </div>
+            <div id="dashboard-cumulative-chart" className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={accumulatedStats}>
+                  <defs>
+                    <linearGradient id="colorAct" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="month" axisLine={false} tickLine={false} fontSize={12} />
+                  <YAxis axisLine={false} tickLine={false} fontSize={11} tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
+                  <Tooltip formatter={(val: number) => fmt(val as number)} />
+                  <Legend wrapperStyle={{ fontSize: '12px' }} />
+                  <Area type="monotone" dataKey="accActualRevenue" name={t('dashboard.chart.accActual', actualShort)} stroke="#10b981" fillOpacity={1} fill="url(#colorAct)" strokeWidth={2} />
+                  <Line type="monotone" strokeDasharray="3 3" dataKey="accPlannedRevenue" name={t('dashboard.chart.accPlan', planShort)} stroke="#94a3b8" strokeWidth={2} dot={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         </div>
 
         {/* Financial Summary */}

@@ -5,7 +5,9 @@ import { DashboardRecord, Settings } from '../types';
 const DEFAULT_SETTINGS = {
     exchangeRate: 165,
     licenseComputers: 7,
-    licensePerComputer: 2517143
+    licenseComputers: 7,
+    licensePerComputer: 2517143,
+    unitPrice: 2300
 };
 
 export class DashboardService extends BaseService {
@@ -25,7 +27,9 @@ export class DashboardService extends BaseService {
         return {
             exchangeRate: data.exchange_rate,
             licenseComputers: data.license_computers,
-            licensePerComputer: data.license_per_computer
+            licenseComputers: data.license_computers,
+            licensePerComputer: data.license_per_computer,
+            unitPrice: data.unit_price
         };
     }
 
@@ -40,7 +44,10 @@ export class DashboardService extends BaseService {
                 label: 'default',
                 exchange_rate: merged.exchangeRate,
                 license_computers: merged.licenseComputers,
-                license_per_computer: merged.licensePerComputer
+                exchange_rate: merged.exchangeRate,
+                license_computers: merged.licenseComputers,
+                license_per_computer: merged.licensePerComputer,
+                unit_price: merged.unitPrice
             }, { onConflict: 'label' })
             .select()
             .single();
@@ -50,7 +57,10 @@ export class DashboardService extends BaseService {
         return {
             exchangeRate: data.exchange_rate,
             licenseComputers: data.license_computers,
-            licensePerComputer: data.license_per_computer
+            exchangeRate: data.exchange_rate,
+            licenseComputers: data.license_computers,
+            licensePerComputer: data.license_per_computer,
+            unitPrice: data.unit_price
         };
     }
 

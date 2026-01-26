@@ -82,4 +82,5 @@ export interface Settings {
   exchange_rate: number;
   license_computers: number;
   license_per_computer: number;
+  unit_price: number;
 }
