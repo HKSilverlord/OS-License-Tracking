@@ -12,8 +12,7 @@ export const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<MonthlyStats[]>([]);
   const [accumulatedStats, setAccumulatedStats] = useState<AccumulatedStats[]>([]);
   const [loading, setLoading] = useState(true);
-  const [exchangeRate, setExchangeRate] = useState(172);
-  const [licenseComputers, setLicenseComputers] = useState(7);
+
   const [exchangeRate, setExchangeRate] = useState(172);
   const [unitPrice, setUnitPrice] = useState(DEFAULT_UNIT_PRICE);
   const [licenseComputers, setLicenseComputers] = useState(7);
