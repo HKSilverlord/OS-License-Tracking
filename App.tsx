@@ -353,7 +353,6 @@ function App() {
         isOpen={isProjectModalOpen}
         onClose={() => setIsProjectModalOpen(false)}
         onSuccess={handleProjectSuccess}
-        onSuccess={handleProjectSuccess}
         initialCode={nextProjectCode}
         currentPeriod={availablePeriods.find(p => p.startsWith(`${currentYear}-`)) || `${currentYear}-H1`}
       />
