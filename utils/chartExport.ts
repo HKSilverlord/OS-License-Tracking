@@ -253,3 +253,14 @@ export const copyChartToClipboard = async (elementId: string): Promise<void> => 
     alert('Failed to copy chart to clipboard: ' + (error as Error).message);
   }
 };
+
+/**
+ * Generate a filename with timestamp
+ * @param prefix - Prefix for the filename
+ * @param extension - File extension (default: 'svg')
+ */
+export const generateChartFilename = (prefix: string, extension: string = 'svg'): string => {
+  const now = new Date();
+  const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-');
+  return `${prefix}_${timestamp}.${extension}`;
+};
