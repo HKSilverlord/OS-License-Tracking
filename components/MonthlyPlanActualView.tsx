@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Loader2, Calendar, Download, Copy, Image } from 'lucide-react';
+import { Loader2, TrendingUp } from 'lucide-react';
+import { ChartExportMenu } from './ChartExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipProps, Cell, LabelList } from 'recharts';
-import { exportChartToSVG, exportChartToPNG, exportChartDataToCSV, generateChartFilename, copyChartToClipboard } from '../utils/chartExport';
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipProps, Cell, LabelList, ReferenceLine } from 'recharts';
 import { dbService } from '../services/dbService';
 
 // Monthly plan-actual data interface
@@ -166,44 +166,17 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
         <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
           <div>
             <h3 className="text-md font-bold text-pink-600 flex items-center">
-              <Calendar className="w-4 h-4 mr-2" />
+              <TrendingUp className="w-4 h-4 mr-2" />
               {currentYear}{t('monthlyPlanActual.title', '年 OS事業受託状況予実')}
             </h3>
             <p className="text-xs text-slate-500 mt-1">{t('monthlyPlanActual.subtitle', '月次計画と実績の比較')}</p>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={() => copyChartToClipboard('monthly-plan-actual-chart')}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-              title={t('monthlyPlanActual.copyToClipboard', 'Copy chart to clipboard')}
-            >
-              <Copy className="w-4 h-4" />
-              {t('buttons.copy', 'Copy')}
-            </button>
-            <button
-              onClick={() => exportChartToPNG('monthly-plan-actual-chart', generateChartFilename(`monthly_plan_actual_${currentYear}`, 'png'))}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors"
-              title={t('monthlyPlanActual.exportPNG', 'Export as PNG image')}
-            >
-              <Image className="w-4 h-4" />
-              PNG
-            </button>
-            <button
-              onClick={() => exportChartToSVG('monthly-plan-actual-chart', generateChartFilename(`monthly_plan_actual_${currentYear}`, 'svg'))}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-              title={t('monthlyPlanActual.exportSVG', 'Export as SVG (vector, best quality)')}
-            >
-              <Download className="w-4 h-4" />
-              SVG
-            </button>
-            <button
-              onClick={() => exportChartDataToCSV(monthlyData, generateChartFilename(`monthly_plan_actual_data_${currentYear}`, 'csv'))}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              title={t('monthlyPlanActual.exportData', 'Export chart data as CSV')}
-            >
-              <Download className="w-4 h-4" />
-              Data
-            </button>
+            <ChartExportMenu
+              chartId="monthly-plan-actual-chart"
+              filenameRequest={`monthly_plan_actual_${currentYear}`}
+              data={monthlyData}
+            />
           </div>
         </div>
 
