@@ -3,7 +3,7 @@ import { Loader2, TrendingUp, Palette } from 'lucide-react';
 import { ChartExportMenu } from './ChartExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipProps } from 'recharts';
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipProps } from 'recharts';
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipProps, LabelList } from 'recharts';
 import { dbService } from '../services/dbService';
 
 // Long-term plan data interface
@@ -323,7 +323,9 @@ export const LongTermPlanView: React.FC = () => {
                 fill={chartColors.salesPlan}
                 radius={[4, 4, 0, 0]}
                 maxBarSize={60}
-              />
+              >
+                <LabelList dataKey="salesPlan" position="top" formatter={(val: number) => val?.toLocaleString()} fontSize={10} fill={chartColors.salesPlan} />
+              </Bar>
 
               {/* Series 2: Sales Actual - Column (Y1) */}
               <Bar
@@ -333,7 +335,9 @@ export const LongTermPlanView: React.FC = () => {
                 fill={chartColors.salesActual}
                 radius={[4, 4, 0, 0]}
                 maxBarSize={60}
-              />
+              >
+                <LabelList dataKey="salesActual" position="top" formatter={(val: number) => val?.toLocaleString()} fontSize={11} fill={chartColors.salesActual} fontWeight="bold" />
+              </Bar>
 
               {/* Series 3: Hourly Rate Plan - Line (Y2) */}
               <Line
@@ -345,7 +349,9 @@ export const LongTermPlanView: React.FC = () => {
                 strokeWidth={3}
                 dot={{ fill: chartColors.hourlyRatePlan, r: 5 }}
                 connectNulls={false}
-              />
+              >
+                <LabelList dataKey="hourlyRatePlan" position="top" formatter={(val: number) => val?.toLocaleString()} fontSize={10} fill={chartColors.hourlyRatePlan} offset={10} />
+              </Line>
 
               {/* Series 4: Hourly Rate Actual - Line (Y2) */}
               <Line
@@ -357,7 +363,9 @@ export const LongTermPlanView: React.FC = () => {
                 strokeWidth={3}
                 dot={{ fill: chartColors.hourlyRateActual, r: 5 }}
                 connectNulls={false}
-              />
+              >
+                <LabelList dataKey="hourlyRateActual" position="top" formatter={(val: number) => val?.toLocaleString()} fontSize={11} fill={chartColors.hourlyRateActual} fontWeight="bold" offset={10} />
+              </Line>
             </ComposedChart>
           </ResponsiveContainer>
         </div>

@@ -240,7 +240,9 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 strokeWidth={2}
                 strokeDasharray="5 5"
                 dot={false}
-              />
+              >
+                <LabelList dataKey="capacityLine" position="left" formatter={(val: number) => val + 'h'} fontSize={10} fill="#808080" />
+              </Line>
 
               {/* Series 2: Working Hours Plan - Pink Stacked Column (Y2) */}
               <Bar
@@ -283,13 +285,13 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 fill="#000080"
                 radius={[4, 4, 0, 0]}
                 maxBarSize={40}
-              >
-                <LabelList content={renderZeroLabel} />
-              </Bar>
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
+                <LabelList dataKey="salesActual" position="top" formatter={(val: number) => val > 0 ? val.toLocaleString() : ''} fontSize={11} fill="#000080" fontWeight="bold" />
+              <LabelList content={renderZeroLabel} />
+            </Bar>
+          </ComposedChart>
+        </ResponsiveContainer>
       </div>
     </div>
+    </div >
   );
 };

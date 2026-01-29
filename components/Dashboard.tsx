@@ -3,7 +3,7 @@ import { dbService } from '../services/dbService';
 import { formatCurrency } from '../utils/helpers';
 import { exportChartToSVG, generateChartFilename } from '../utils/chartExport';
 import { MonthlyStats, AccumulatedStats } from '../types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Area, Line } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Area, Line, LabelList } from 'recharts';
 import { Loader2, TrendingUp, DollarSign, Clock, Calculator } from 'lucide-react';
 import { ChartExportMenu } from './ChartExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -432,8 +432,12 @@ export const Dashboard: React.FC = () => {
                   <YAxis axisLine={false} tickLine={false} fontSize={11} tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
                   <Tooltip formatter={(val: number) => fmt(val as number)} />
                   <Legend wrapperStyle={{ fontSize: '12px' }} />
-                  <Bar dataKey="plannedRevenue" name={planShort} fill="#94a3b8" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="actualRevenue" name={actualShort} fill="#2563eb" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="plannedRevenue" name={planShort} fill="#94a3b8" radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="plannedRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill="#64748b" />
+                  </Bar>
+                  <Bar dataKey="actualRevenue" name={actualShort} fill="#2563eb" radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="actualRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill="#1e40af" fontWeight="bold" />
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -465,8 +469,12 @@ export const Dashboard: React.FC = () => {
                   <YAxis axisLine={false} tickLine={false} fontSize={11} tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
                   <Tooltip formatter={(val: number) => fmt(val as number)} />
                   <Legend wrapperStyle={{ fontSize: '12px' }} />
-                  <Area type="monotone" dataKey="accActualRevenue" name={t('dashboard.chart.accActual', actualShort)} stroke="#10b981" fillOpacity={1} fill="url(#colorAct)" strokeWidth={2} />
-                  <Line type="monotone" strokeDasharray="3 3" dataKey="accPlannedRevenue" name={t('dashboard.chart.accPlan', planShort)} stroke="#94a3b8" strokeWidth={2} dot={false} />
+                  <Area type="monotone" dataKey="accActualRevenue" name={t('dashboard.chart.accActual', actualShort)} stroke="#10b981" fillOpacity={1} fill="url(#colorAct)" strokeWidth={2}>
+                    <LabelList dataKey="accActualRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill="#10b981" fontWeight="bold" offset={10} />
+                  </Area>
+                  <Line type="monotone" strokeDasharray="3 3" dataKey="accPlannedRevenue" name={t('dashboard.chart.accPlan', planShort)} stroke="#94a3b8" strokeWidth={2} dot={false}>
+                    <LabelList dataKey="accPlannedRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill="#94a3b8" offset={-10} />
+                  </Line>
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
