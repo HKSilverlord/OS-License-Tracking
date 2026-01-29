@@ -418,90 +418,86 @@ export const Dashboard: React.FC = () => {
                 <TrendingUp className="w-4 h-4 mr-2 text-blue-500" />
                 {t('dashboard.charts.monthly', 'Monthly Revenue (Plan vs Actual)')}
               </h3>
-              {t('dashboard.charts.monthly', 'Monthly Revenue (Plan vs Actual)')}
-            </h3>
-            <ChartExportMenu
-              chartId="dashboard-monthly-chart"
-              filenameRequest={`monthly_revenue_${selectedYear}`}
-              data={stats}
-            />
+              <ChartExportMenu
+                chartId="dashboard-monthly-chart"
+                filenameRequest={`monthly_revenue_${selectedYear}`}
+                data={stats}
+              />
+            </div>
+            <div id="dashboard-monthly-chart" className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stats}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={12} />
+                  <YAxis axisLine={false} tickLine={false} fontSize={11} tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
+                  <Tooltip formatter={(val: number) => fmt(val as number)} />
+                  <Legend wrapperStyle={{ fontSize: '12px' }} />
+                  <Bar dataKey="plannedRevenue" name={planShort} fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="actualRevenue" name={actualShort} fill="#2563eb" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-          <div id="dashboard-monthly-chart" className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={12} />
-                <YAxis axisLine={false} tickLine={false} fontSize={11} tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
-                <Tooltip formatter={(val: number) => fmt(val as number)} />
-                <Legend wrapperStyle={{ fontSize: '12px' }} />
-                <Bar dataKey="plannedRevenue" name={planShort} fill="#94a3b8" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="actualRevenue" name={actualShort} fill="#2563eb" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+
+          <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-md font-bold text-slate-700 flex items-center">
+                <TrendingUp className="w-4 h-4 mr-2 text-green-500" />
+                {t('dashboard.charts.cumulative', 'Cumulative Revenue (Plan vs Actual)')}
+              </h3>
+              <ChartExportMenu
+                chartId="dashboard-cumulative-chart"
+                filenameRequest={`cumulative_revenue_${selectedYear}`}
+                data={accumulatedStats}
+              />
+            </div>
+            <div id="dashboard-cumulative-chart" className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={accumulatedStats}>
+                  <defs>
+                    <linearGradient id="colorAct" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="month" axisLine={false} tickLine={false} fontSize={12} />
+                  <YAxis axisLine={false} tickLine={false} fontSize={11} tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
+                  <Tooltip formatter={(val: number) => fmt(val as number)} />
+                  <Legend wrapperStyle={{ fontSize: '12px' }} />
+                  <Area type="monotone" dataKey="accActualRevenue" name={t('dashboard.chart.accActual', actualShort)} stroke="#10b981" fillOpacity={1} fill="url(#colorAct)" strokeWidth={2} />
+                  <Line type="monotone" strokeDasharray="3 3" dataKey="accPlannedRevenue" name={t('dashboard.chart.accPlan', planShort)} stroke="#94a3b8" strokeWidth={2} dot={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-md font-bold text-slate-700 flex items-center">
-              <TrendingUp className="w-4 h-4 mr-2 text-green-500" />
-              {t('dashboard.charts.cumulative', 'Cumulative Revenue (Plan vs Actual)')}
-            </h3>
-            {t('dashboard.charts.cumulative', 'Cumulative Revenue (Plan vs Actual)')}
-          </h3>
-          <ChartExportMenu
-            chartId="dashboard-cumulative-chart"
-            filenameRequest={`cumulative_revenue_${selectedYear}`}
-            data={accumulatedStats}
-          />
+        {/* Financial Summary */}
+        <div className="bg-gradient-to-r from-slate-700 to-teal-600 text-white rounded-xl p-5 shadow-md">
+          <div className="grid md:grid-cols-4 gap-4">
+            <div className="bg-white/10 rounded-lg p-4 border border-white/15">
+              <p className="text-xs font-semibold text-indigo-100 uppercase">{t('dashboard.summary.gross', 'Gross (Actual)')}</p>
+              <p className="text-2xl font-bold mt-1">{fmt(grossRevenueActual)}</p>
+              <p className="text-sm text-indigo-100">{toMan(grossRevenueActual)}</p>
+            </div>
+            <div className="bg-white/10 rounded-lg p-4 border border-white/15">
+              <p className="text-xs font-semibold text-indigo-100 uppercase">{t('dashboard.summary.license', 'License Cost')}</p>
+              <p className="text-2xl font-bold mt-1">{fmt(licenseTotal)}</p>
+              <p className="text-sm text-indigo-100">{toMan(licenseTotal)}</p>
+            </div>
+            <div className="bg-white/10 rounded-lg p-4 border border-white/15">
+              <p className="text-xs font-semibold text-indigo-100 uppercase">{t('dashboard.summary.net', 'Net (Actual)')}</p>
+              <p className="text-2xl font-bold mt-1">{fmtSigned(netRevenueActual)}</p>
+              <p className="text-sm text-indigo-100">{toMan(netRevenueActual)}</p>
+            </div>
+            <div className="bg-white/10 rounded-lg p-4 border border-white/15">
+              <p className="text-xs font-semibold text-indigo-100 uppercase">{t('dashboard.summary.margin', 'Margin (Actual)')}</p>
+              <p className="text-2xl font-bold mt-1">{profitMarginActual.toFixed(1)}%</p>
+              <p className="text-sm text-indigo-100">Net / Gross</p>
+            </div>
+          </div>
         </div>
-        <div id="dashboard-cumulative-chart" className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={accumulatedStats}>
-              <defs>
-                <linearGradient id="colorAct" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} />
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="month" axisLine={false} tickLine={false} fontSize={12} />
-              <YAxis axisLine={false} tickLine={false} fontSize={11} tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
-              <Tooltip formatter={(val: number) => fmt(val as number)} />
-              <Legend wrapperStyle={{ fontSize: '12px' }} />
-              <Area type="monotone" dataKey="accActualRevenue" name={t('dashboard.chart.accActual', actualShort)} stroke="#10b981" fillOpacity={1} fill="url(#colorAct)" strokeWidth={2} />
-              <Line type="monotone" strokeDasharray="3 3" dataKey="accPlannedRevenue" name={t('dashboard.chart.accPlan', planShort)} stroke="#94a3b8" strokeWidth={2} dot={false} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-    </div>
-
-        {/* Financial Summary */ }
-  <div className="bg-gradient-to-r from-slate-700 to-teal-600 text-white rounded-xl p-5 shadow-md">
-    <div className="grid md:grid-cols-4 gap-4">
-      <div className="bg-white/10 rounded-lg p-4 border border-white/15">
-        <p className="text-xs font-semibold text-indigo-100 uppercase">{t('dashboard.summary.gross', 'Gross (Actual)')}</p>
-        <p className="text-2xl font-bold mt-1">{fmt(grossRevenueActual)}</p>
-        <p className="text-sm text-indigo-100">{toMan(grossRevenueActual)}</p>
-      </div>
-      <div className="bg-white/10 rounded-lg p-4 border border-white/15">
-        <p className="text-xs font-semibold text-indigo-100 uppercase">{t('dashboard.summary.license', 'License Cost')}</p>
-        <p className="text-2xl font-bold mt-1">{fmt(licenseTotal)}</p>
-        <p className="text-sm text-indigo-100">{toMan(licenseTotal)}</p>
-      </div>
-      <div className="bg-white/10 rounded-lg p-4 border border-white/15">
-        <p className="text-xs font-semibold text-indigo-100 uppercase">{t('dashboard.summary.net', 'Net (Actual)')}</p>
-        <p className="text-2xl font-bold mt-1">{fmtSigned(netRevenueActual)}</p>
-        <p className="text-sm text-indigo-100">{toMan(netRevenueActual)}</p>
-      </div>
-      <div className="bg-white/10 rounded-lg p-4 border border-white/15">
-        <p className="text-xs font-semibold text-indigo-100 uppercase">{t('dashboard.summary.margin', 'Margin (Actual)')}</p>
-        <p className="text-2xl font-bold mt-1">{profitMarginActual.toFixed(1)}%</p>
-        <p className="text-sm text-indigo-100">Net / Gross</p>
-      </div>
-    </div>
-  </div>
 
       </div >
     </div >
