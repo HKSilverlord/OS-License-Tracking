@@ -252,7 +252,9 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 fill="#FFB3B3"
                 stackId="working"
                 maxBarSize={60}
-              />
+              >
+                <LabelList dataKey="workingHoursPlan" position="insideTop" formatter={(val: number) => val > 0 ? val : ''} fontSize={10} fill="#5c0000" />
+              </Bar>
 
               {/* Series 3: Working Hours Actual - Red Stacked Column (Y2) */}
               <Bar
@@ -262,7 +264,9 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 fill="#CC0000"
                 stackId="working"
                 maxBarSize={60}
-              />
+              >
+                <LabelList dataKey="workingHoursActual" position="insideTop" formatter={(val: number) => val > 0 ? val : ''} fontSize={10} fill="#fff" fontWeight="bold" />
+              </Bar>
 
               {/* Series 4: Sales Plan - Cyan Line with Markers and Data Labels (Y1) */}
               <Line
@@ -285,13 +289,14 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 fill="#000080"
                 radius={[4, 4, 0, 0]}
                 maxBarSize={40}
+              >
                 <LabelList dataKey="salesActual" position="top" formatter={(val: number) => val > 0 ? val.toLocaleString() : ''} fontSize={11} fill="#000080" fontWeight="bold" />
-              <LabelList content={renderZeroLabel} />
-            </Bar>
-          </ComposedChart>
-        </ResponsiveContainer>
+                <LabelList content={renderZeroLabel} />
+              </Bar>
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
       </div>
-    </div>
     </div >
   );
 };
