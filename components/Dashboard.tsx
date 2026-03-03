@@ -31,7 +31,8 @@ export const Dashboard: React.FC = () => {
         const years = await dbService.getRecordYears();
         setAvailableYears(years);
         if (years.length > 0) {
-          setSelectedYear(years[0]);
+          const realYear = new Date().getFullYear();
+          setSelectedYear(years.includes(realYear) ? realYear : years[0]);
         } else {
           setLoading(false);
         }
