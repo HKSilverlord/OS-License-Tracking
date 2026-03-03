@@ -4,7 +4,8 @@ import { dbService } from '../services/dbService';
 import { formatCurrency } from '../utils/helpers';
 import { TABLE_COLUMN_WIDTHS, STICKY_CLASSES } from '../utils/tableStyles';
 import { exportTableToCSV, generateCSVFilename } from '../utils/csvExport';
-import { Loader2, FileDown } from 'lucide-react';
+import { Loader2, FileDown, Copy, Check } from 'lucide-react';
+import html2canvas from 'html2canvas';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface YearlyDataViewProps {
@@ -16,6 +17,8 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
   const [projects, setProjects] = useState<Project[]>([]);
   const [records, setRecords] = useState<Record<string, MonthlyRecord[]>>({});
   const [loading, setLoading] = useState(true);
+  const [isCopying, setIsCopying] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   // Constants for layout
   const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
@@ -69,7 +72,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
 
   useEffect(() => {
     fetchData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentYear]);
 
   // Compute monthly totals for all projects in this year
@@ -153,6 +156,58 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
     exportTableToCSV(headers, rows, generateCSVFilename(`yearly_data_${currentYear}`));
   };
 
+  const handleCopyImage = async () => {
+    const tableElement = document.getElementById('yearly-data-table');
+    if (!tableElement) return;
+
+    setIsCopying(true);
+    setCopySuccess(false);
+
+    try {
+      // Temporarily stash container styles that might cause clipping
+      const container = tableElement.parentElement;
+      const originalOverflow = container?.style.overflow;
+      const originalMaxHeight = container?.style.maxHeight;
+      if (container) {
+        container.style.overflow = 'visible';
+        container.style.maxHeight = 'none';
+      }
+
+      const canvas = await html2canvas(tableElement, {
+        scale: 2, // High resolution
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        windowWidth: tableElement.scrollWidth,
+        windowHeight: tableElement.scrollHeight,
+      });
+
+      // Restore container styles
+      if (container) {
+        container.style.overflow = originalOverflow || '';
+        container.style.maxHeight = originalMaxHeight || '';
+      }
+
+      canvas.toBlob(async (blob) => {
+        if (blob) {
+          try {
+            const item = new ClipboardItem({ 'image/png': blob });
+            await navigator.clipboard.write([item]);
+            setCopySuccess(true);
+            setTimeout(() => setCopySuccess(false), 2000);
+          } catch (err) {
+            console.error('Failed to write to clipboard:', err);
+            alert('Failed to copy image to clipboard. Try saving CSV instead.');
+          }
+        }
+      }, 'image/png', 1.0);
+    } catch (err) {
+      console.error('Failed to generate image:', err);
+      alert('Error generating table image.');
+    } finally {
+      setIsCopying(false);
+    }
+  };
+
   if (loading) {
     return <div className="flex justify-center items-center h-64"><Loader2 className="animate-spin h-8 w-8 text-blue-600" /></div>;
   }
@@ -166,17 +221,36 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
           <h3 className="text-md font-bold text-slate-700">
             {t('totalView.tableHeader.title', 'Yearly Data Table')} - {currentYear}
           </h3>
-          <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-            title={t('buttons.exportTable', 'Export Table')}
-          >
-            <FileDown className="w-4 h-4" />
-            CSV
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleCopyImage}
+              disabled={isCopying}
+              className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors shadow-sm ${copySuccess
+                  ? 'bg-green-100 text-green-700 border border-green-200'
+                  : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+                }`}
+            >
+              {isCopying ? (
+                <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
+              ) : copySuccess ? (
+                <Check className="w-4 h-4" />
+              ) : (
+                <Copy className="w-4 h-4 text-slate-500" />
+              )}
+              {isCopying ? 'Copying...' : copySuccess ? 'Copied!' : 'Copy Image'}
+            </button>
+            <button
+              onClick={handleExportCSV}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-sm"
+              title={t('buttons.exportTable', 'Export Table')}
+            >
+              <FileDown className="w-4 h-4" />
+              CSV
+            </button>
+          </div>
         </div>
         <div className="flex-1 min-h-0 overflow-auto relative isolate custom-scrollbar">
-          <table className="w-full min-w-max border-separate border-spacing-0">
+          <table id="yearly-data-table" className="w-full min-w-max border-separate border-spacing-0">
             <thead className="bg-gray-50 sticky top-0 z-40">
               <tr>
                 <th scope="col" style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
