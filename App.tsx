@@ -74,7 +74,9 @@ function App() {
       setAvailableYears(years);
 
       if (years.length > 0) {
-        setCurrentYear(years[0]);
+        const realYear = new Date().getFullYear();
+        // Default to current real-time year if available, otherwise latest DB year
+        setCurrentYear(years.includes(realYear) ? realYear : years[0]);
       }
     };
     if (session) {
