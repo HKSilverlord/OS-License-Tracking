@@ -250,7 +250,6 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 dataKey="workingHoursPlan"
                 name={t('monthlyPlanActual.legend.workingPlan', '稼働計画')}
                 fill="#FFB3B3"
-                stackId="working"
                 maxBarSize={60}
               >
                 <LabelList dataKey="workingHoursPlan" position="insideTop" formatter={(val: number) => val > 0 ? val : ''} fontSize={10} fill="#5c0000" />
@@ -262,7 +261,6 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 dataKey="workingHoursActual"
                 name={t('monthlyPlanActual.legend.workingActual', '稼働実績')}
                 fill="#CC0000"
-                stackId="working"
                 maxBarSize={60}
               >
                 <LabelList dataKey="workingHoursActual" position="insideTop" formatter={(val: number) => val > 0 ? val : ''} fontSize={10} fill="#fff" fontWeight="bold" />
