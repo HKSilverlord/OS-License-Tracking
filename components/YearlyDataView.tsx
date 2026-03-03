@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Project, MonthlyRecord } from '../types';
 import { dbService } from '../services/dbService';
 import { formatCurrency } from '../utils/helpers';
@@ -69,7 +69,26 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
 
   useEffect(() => {
     fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentYear]);
+
+  // Compute monthly totals for all projects in this year
+  const monthlyTotals = useMemo(() => {
+    const totals = months.map(m => {
+      let planSum = 0;
+      let actualSum = 0;
+      projects.forEach(project => {
+        const projRecords = records[project.id] || [];
+        const rec = projRecords.find(r => r.month === m);
+        if (rec) {
+          planSum += rec.planned_hours || 0;
+          actualSum += rec.actual_hours || 0;
+        }
+      });
+      return { month: m, plan: planSum, actual: actualSum };
+    });
+    return totals;
+  }, [projects, records]);
 
   // Listen for data updates from other tabs
   useEffect(() => {
@@ -181,6 +200,40 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
                 <th scope="col" className={`px-2 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider border-b border-l bg-amber-50`}>
                   {t('totalView.tableHeader.revenue')}
                 </th>
+              </tr>
+
+              {/* Summary Row: Plan Total */}
+              <tr className="bg-slate-100 border-b border-slate-300">
+                <td style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-3 py-2 text-xs font-bold text-slate-600 text-center border-b border-slate-300 ${stickyLeftHeaderClass} ${stickyCornerZ} bg-slate-100`} rowSpan={2}>
+                  Σ
+                </td>
+                <td style={{ left: `${LEFT_NO_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-2 text-xs font-bold text-slate-700 border-b border-slate-300 ${stickyLeftHeaderClass} ${stickyCornerZ} bg-slate-100`} rowSpan={2}>
+                  {t('totalView.tableHeader.total', 'TOTAL')}
+                </td>
+                <td className="px-2 py-2 text-xs font-semibold text-slate-500 text-center border-r border-b border-slate-300 bg-slate-100">
+                  {t('tracker.planShort')}
+                </td>
+                {monthlyTotals.map((d, idx) => (
+                  <td key={`sp-${idx}`} className="px-1 py-2 text-xs font-bold text-right text-slate-600 border-r border-b border-slate-300 bg-slate-100">
+                    {d.plan > 0 ? d.plan.toLocaleString() : '-'}
+                  </td>
+                ))}
+                <td className="px-2 py-2 border-l border-b border-slate-300 bg-slate-100"></td>
+                <td className="px-2 py-2 border-l border-b border-slate-300 bg-slate-100"></td>
+              </tr>
+
+              {/* Summary Row: Actual Total */}
+              <tr className="bg-blue-50/60 border-b-2 border-slate-400">
+                <td className="px-2 py-2 text-xs font-bold text-blue-600 text-center border-r border-b-2 border-slate-400 bg-blue-50/60">
+                  {t('tracker.actualShort')}
+                </td>
+                {monthlyTotals.map((d, idx) => (
+                  <td key={`sa-${idx}`} className="px-1 py-2 text-xs font-bold text-right text-blue-700 border-r border-b-2 border-slate-400 bg-blue-50/60">
+                    {d.actual > 0 ? d.actual.toLocaleString() : '-'}
+                  </td>
+                ))}
+                <td className="px-2 py-2 border-l border-b-2 border-slate-400 bg-blue-50/60"></td>
+                <td className="px-2 py-2 border-l border-b-2 border-slate-400 bg-blue-50/60"></td>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">

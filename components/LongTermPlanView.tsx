@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Loader2, TrendingUp, Palette } from 'lucide-react';
 import { ChartExportMenu } from './ChartExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipProps } from 'recharts';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipProps, LabelList } from 'recharts';
 import { dbService } from '../services/dbService';
 
