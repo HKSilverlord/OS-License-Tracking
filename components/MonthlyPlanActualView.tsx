@@ -191,8 +191,15 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
 
               {/* X-Axis: Months */}
               <XAxis
+                xAxisId="main"
                 dataKey="monthLabel"
                 fontSize={12}
+              />
+              {/* Hidden X-Axis for Bullet Chart Overlay */}
+              <XAxis
+                xAxisId="actualLayer"
+                dataKey="monthLabel"
+                hide={true}
               />
 
               {/* Y1-Axis (Left): Sales in 万円 */}
@@ -232,6 +239,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
 
               {/* Series 1: Capacity Line - Dashed Gray Line (Y2) */}
               <Line
+                xAxisId="main"
                 yAxisId="right"
                 type="monotone"
                 dataKey="capacityLine"
@@ -246,6 +254,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
 
               {/* Series 2: Working Hours Plan - Pink Stacked Column (Y2) */}
               <Bar
+                xAxisId="main"
                 yAxisId="right"
                 dataKey="workingHoursPlan"
                 name={t('monthlyPlanActual.legend.workingPlan', '稼働計画')}
@@ -255,19 +264,9 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 <LabelList dataKey="workingHoursPlan" position="insideTop" formatter={(val: number) => val > 0 ? val : ''} fontSize={10} fill="#5c0000" />
               </Bar>
 
-              {/* Series 3: Working Hours Actual - Red Stacked Column (Y2) */}
-              <Bar
-                yAxisId="right"
-                dataKey="workingHoursActual"
-                name={t('monthlyPlanActual.legend.workingActual', '稼働実績')}
-                fill="#CC0000"
-                maxBarSize={60}
-              >
-                <LabelList dataKey="workingHoursActual" position="insideTop" formatter={(val: number) => val > 0 ? val : ''} fontSize={10} fill="#fff" fontWeight="bold" />
-              </Bar>
-
               {/* Series 4: Sales Plan - Cyan Line with Markers and Data Labels (Y1) */}
               <Line
+                xAxisId="main"
                 yAxisId="left"
                 type="monotone"
                 dataKey="salesPlan"
@@ -281,6 +280,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
 
               {/* Series 5: Sales Actual - Navy Column (Y1) */}
               <Bar
+                xAxisId="main"
                 yAxisId="left"
                 dataKey="salesActual"
                 name={t('monthlyPlanActual.legend.salesActual', '売上実績')}
@@ -291,6 +291,30 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 <LabelList dataKey="salesActual" position="top" formatter={(val: number) => val > 0 ? val.toLocaleString() : ''} fontSize={11} fill="#000080" fontWeight="bold" />
                 <LabelList content={renderZeroLabel} />
               </Bar>
+
+              {/* === BULLET CHART ACTUAL LAYER === */}
+              {/* Series 3: Working Hours Actual - Red Column inside Plan Column */}
+              <Bar
+                xAxisId="actualLayer"
+                yAxisId="right"
+                dataKey="workingHoursActual"
+                name={t('monthlyPlanActual.legend.workingActual', '稼働実績')}
+                fill="#CC0000"
+                maxBarSize={30}
+              >
+                <LabelList dataKey="workingHoursActual" position="insideTop" formatter={(val: number) => val > 0 ? val : ''} fontSize={10} fill="#fff" fontWeight="bold" />
+              </Bar>
+
+              {/* Invisible spacer to maintain layout mapping for actualLayer */}
+              <Bar
+                xAxisId="actualLayer"
+                yAxisId="left"
+                dataKey="salesActual"
+                fill="transparent"
+                legendType="none"
+                tooltipType="none"
+                style={{ pointerEvents: 'none' }}
+              />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
