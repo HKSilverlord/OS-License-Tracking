@@ -33,6 +33,25 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
   const [loading, setLoading] = useState(true);
   const [monthlyData, setMonthlyData] = useState<MonthlyPlanActualData[]>([]);
 
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [chartColors, setChartColors] = useState<MonthlyChartColors>(() => {
+    const saved = localStorage.getItem('monthly_chartColors');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { /* ignore */ }
+    }
+    return {
+      capacityLine: '#808080',
+      workingHoursPlan: '#FFB3B3',
+      salesPlan: '#00BFFF',
+      salesActual: '#000080',
+      workingHoursActual: '#CC0000',
+    };
+  });
+
+  useEffect(() => {
+    localStorage.setItem('monthly_chartColors', JSON.stringify(chartColors));
+  }, [chartColors]);
+
   // Fetch real data from Supabase
   useEffect(() => {
     const fetchData = async () => {
