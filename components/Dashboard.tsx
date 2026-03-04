@@ -4,10 +4,17 @@ import { formatCurrency } from '../utils/helpers';
 import { exportChartToSVG, generateChartFilename } from '../utils/chartExport';
 import { MonthlyStats, AccumulatedStats } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Area, Line, LabelList } from 'recharts';
-import { Loader2, TrendingUp, DollarSign, Clock, Calculator } from 'lucide-react';
+import { Loader2, TrendingUp, DollarSign, Clock, Calculator, Palette } from 'lucide-react';
 import { ChartExportMenu } from './ChartExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DEFAULT_UNIT_PRICE } from '../constants';
+
+interface DashboardChartColors {
+  planRevenue: string;
+  actualRevenue: string;
+  accPlan: string;
+  accActual: string;
+}
 
 export const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<MonthlyStats[]>([]);
@@ -22,6 +29,18 @@ export const Dashboard: React.FC = () => {
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const { t, language } = useLanguage();
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [chartColors, setChartColors] = useState<DashboardChartColors>(() => {
+    const saved = localStorage.getItem('dashboard_chartColors');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { /* ignore */ }
+    }
+    return { planRevenue: '#94a3b8', actualRevenue: '#2563eb', accPlan: '#94a3b8', accActual: '#10b981' };
+  });
+
+  useEffect(() => {
+    localStorage.setItem('dashboard_chartColors', JSON.stringify(chartColors));
+  }, [chartColors]);
   const planShort = t('tracker.planShort', 'Plan');
   const actualShort = t('tracker.actualShort', 'Actual');
 
@@ -419,12 +438,61 @@ export const Dashboard: React.FC = () => {
                 <TrendingUp className="w-4 h-4 mr-2 text-blue-500" />
                 {t('dashboard.charts.monthly', 'Monthly Revenue (Plan vs Actual)')}
               </h3>
-              <ChartExportMenu
-                chartId="dashboard-monthly-chart"
-                filenameRequest={`monthly_revenue_${selectedYear}`}
-                data={stats}
-              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowColorPicker(!showColorPicker)}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                  title="Customize chart colors"
+                >
+                  <Palette className="w-4 h-4" />
+                  Colors
+                </button>
+                <ChartExportMenu
+                  chartId="dashboard-monthly-chart"
+                  filenameRequest={`monthly_revenue_${selectedYear}`}
+                  data={stats}
+                />
+              </div>
             </div>
+            {/* Color Picker Section */}
+            {showColorPicker && (
+              <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                  <Palette className="w-4 h-4" />
+                  Customize Chart Colors
+                </h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-slate-600">{planShort} Revenue</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={chartColors.planRevenue} onChange={(e) => setChartColors({ ...chartColors, planRevenue: e.target.value })} className="w-10 h-8 rounded border border-slate-300 cursor-pointer" />
+                      <input type="text" value={chartColors.planRevenue} onChange={(e) => setChartColors({ ...chartColors, planRevenue: e.target.value })} className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-slate-600">{actualShort} Revenue</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={chartColors.actualRevenue} onChange={(e) => setChartColors({ ...chartColors, actualRevenue: e.target.value })} className="w-10 h-8 rounded border border-slate-300 cursor-pointer" />
+                      <input type="text" value={chartColors.actualRevenue} onChange={(e) => setChartColors({ ...chartColors, actualRevenue: e.target.value })} className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-slate-600">{t('dashboard.chart.accPlan', 'Acc Plan')}</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={chartColors.accPlan} onChange={(e) => setChartColors({ ...chartColors, accPlan: e.target.value })} className="w-10 h-8 rounded border border-slate-300 cursor-pointer" />
+                      <input type="text" value={chartColors.accPlan} onChange={(e) => setChartColors({ ...chartColors, accPlan: e.target.value })} className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-slate-600">{t('dashboard.chart.accActual', 'Acc Actual')}</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={chartColors.accActual} onChange={(e) => setChartColors({ ...chartColors, accActual: e.target.value })} className="w-10 h-8 rounded border border-slate-300 cursor-pointer" />
+                      <input type="text" value={chartColors.accActual} onChange={(e) => setChartColors({ ...chartColors, accActual: e.target.value })} className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             <div id="dashboard-monthly-chart" className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={stats}>
@@ -433,11 +501,11 @@ export const Dashboard: React.FC = () => {
                   <YAxis axisLine={false} tickLine={false} fontSize={11} tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
                   <Tooltip formatter={(val: number) => fmt(val as number)} />
                   <Legend wrapperStyle={{ fontSize: '12px' }} />
-                  <Bar dataKey="plannedRevenue" name={planShort} fill="#94a3b8" radius={[4, 4, 0, 0]}>
-                    <LabelList dataKey="plannedRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill="#64748b" />
+                  <Bar dataKey="plannedRevenue" name={planShort} fill={chartColors.planRevenue} radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="plannedRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill={chartColors.planRevenue} />
                   </Bar>
-                  <Bar dataKey="actualRevenue" name={actualShort} fill="#2563eb" radius={[4, 4, 0, 0]}>
-                    <LabelList dataKey="actualRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill="#1e40af" fontWeight="bold" />
+                  <Bar dataKey="actualRevenue" name={actualShort} fill={chartColors.actualRevenue} radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="actualRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill={chartColors.actualRevenue} fontWeight="bold" />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -461,8 +529,8 @@ export const Dashboard: React.FC = () => {
                 <ComposedChart data={accumulatedStats}>
                   <defs>
                     <linearGradient id="colorAct" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      <stop offset="5%" stopColor={chartColors.accActual} stopOpacity={0.1} />
+                      <stop offset="95%" stopColor={chartColors.accActual} stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -470,11 +538,11 @@ export const Dashboard: React.FC = () => {
                   <YAxis axisLine={false} tickLine={false} fontSize={11} tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
                   <Tooltip formatter={(val: number) => fmt(val as number)} />
                   <Legend wrapperStyle={{ fontSize: '12px' }} />
-                  <Area type="monotone" dataKey="accActualRevenue" name={t('dashboard.chart.accActual', actualShort)} stroke="#10b981" fillOpacity={1} fill="url(#colorAct)" strokeWidth={2}>
-                    <LabelList dataKey="accActualRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill="#10b981" fontWeight="bold" offset={10} />
+                  <Area type="monotone" dataKey="accActualRevenue" name={t('dashboard.chart.accActual', actualShort)} stroke={chartColors.accActual} fillOpacity={1} fill="url(#colorAct)" strokeWidth={2}>
+                    <LabelList dataKey="accActualRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill={chartColors.accActual} fontWeight="bold" offset={10} />
                   </Area>
-                  <Line type="monotone" strokeDasharray="3 3" dataKey="accPlannedRevenue" name={t('dashboard.chart.accPlan', planShort)} stroke="#94a3b8" strokeWidth={2} dot={false}>
-                    <LabelList dataKey="accPlannedRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill="#94a3b8" offset={-10} />
+                  <Line type="monotone" strokeDasharray="3 3" dataKey="accPlannedRevenue" name={t('dashboard.chart.accPlan', planShort)} stroke={chartColors.accPlan} strokeWidth={2} dot={false}>
+                    <LabelList dataKey="accPlannedRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill={chartColors.accPlan} offset={-10} />
                   </Line>
                 </ComposedChart>
               </ResponsiveContainer>
