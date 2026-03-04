@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Loader2, TrendingUp } from 'lucide-react';
+import { Loader2, TrendingUp, Palette } from 'lucide-react';
 import { ChartExportMenu } from './ChartExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipProps, Cell, LabelList, ReferenceLine } from 'recharts';
@@ -14,6 +14,14 @@ interface MonthlyPlanActualData {
   workingHoursActual: number;  // 稼働実績
   salesPlan: number;           // 売上計画 (万円)
   salesActual: number;         // 売上実績 (万円)
+}
+
+interface MonthlyChartColors {
+  capacityLine: string;
+  workingHoursPlan: string;
+  salesPlan: string;
+  salesActual: string;
+  workingHoursActual: string;
 }
 
 interface MonthlyPlanActualViewProps {
@@ -90,7 +98,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
           {/* Working Hours Section */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded" style={{ backgroundColor: '#808080', borderStyle: 'dashed' }}></div>
+              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.capacityLine, borderStyle: 'dashed' }}></div>
               <span className="text-slate-700">{t('monthlyPlanActual.capacityLine', '能力線')}:</span>
             </div>
             <span className="font-medium text-slate-900">{data.capacityLine.toLocaleString()} {t('monthlyPlanActual.unit.hours', '時間')}</span>
@@ -98,7 +106,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
 
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded" style={{ backgroundColor: '#FFB3B3' }}></div>
+              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.workingHoursPlan }}></div>
               <span className="text-slate-700">{t('monthlyPlanActual.workingPlan', '稼働計画')}:</span>
             </div>
             <span className="font-medium text-slate-900">{data.workingHoursPlan.toLocaleString()} {t('monthlyPlanActual.unit.hours', '時間')}</span>
@@ -106,7 +114,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
 
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded" style={{ backgroundColor: '#CC0000' }}></div>
+              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.workingHoursActual }}></div>
               <span className="text-slate-700">{t('monthlyPlanActual.workingActual', '稼働実績')}:</span>
             </div>
             <span className="font-medium text-slate-900">{data.workingHoursActual.toLocaleString()} {t('monthlyPlanActual.unit.hours', '時間')}</span>
@@ -117,7 +125,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
 
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded" style={{ backgroundColor: '#00BFFF' }}></div>
+              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesPlan }}></div>
               <span className="text-slate-700">{t('monthlyPlanActual.salesPlan', '売上計画')}:</span>
             </div>
             <span className="font-medium text-slate-900">{data.salesPlan.toLocaleString()} {t('monthlyPlanActual.unit.sales', '万円')}</span>
@@ -125,7 +133,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
 
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded" style={{ backgroundColor: '#000080' }}></div>
+              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesActual }}></div>
               <span className="text-slate-700">{t('monthlyPlanActual.salesActual', '売上実績')}:</span>
             </div>
             <span className="font-medium text-slate-900">{data.salesActual.toLocaleString()} {t('monthlyPlanActual.unit.sales', '万円')}</span>
@@ -143,7 +151,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
         <text
           x={x + width / 2}
           y={y - 10}
-          fill="#FF0000"
+          fill={chartColors.workingHoursActual}
           fontSize={24}
           fontWeight="bold"
           textAnchor="middle"
@@ -172,6 +180,14 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
             <p className="text-xs text-slate-500 mt-1">{t('monthlyPlanActual.subtitle', '月次計画と実績の比較')}</p>
           </div>
           <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setShowColorPicker(!showColorPicker)}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+              title="Customize chart colors"
+            >
+              <Palette className="w-4 h-4" />
+              Colors
+            </button>
             <ChartExportMenu
               chartId="monthly-plan-actual-chart"
               filenameRequest={`monthly_plan_actual_${currentYear}`}
@@ -179,6 +195,53 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
             />
           </div>
         </div>
+
+        {/* Color Picker Section */}
+        {showColorPicker && (
+          <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+            <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+              <Palette className="w-4 h-4" />
+              Customize Chart Colors
+            </h4>
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-600 truncate">{t('monthlyPlanActual.legend.salesPlan', '売上計画')}</label>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={chartColors.salesPlan} onChange={(e) => setChartColors({ ...chartColors, salesPlan: e.target.value })} className="w-8 h-8 rounded border border-slate-300 cursor-pointer" />
+                  <input type="text" value={chartColors.salesPlan} onChange={(e) => setChartColors({ ...chartColors, salesPlan: e.target.value })} className="flex-1 w-16 px-1 py-1 text-xs border border-slate-300 rounded" />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-600 truncate">{t('monthlyPlanActual.legend.salesActual', '売上実績')}</label>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={chartColors.salesActual} onChange={(e) => setChartColors({ ...chartColors, salesActual: e.target.value })} className="w-8 h-8 rounded border border-slate-300 cursor-pointer" />
+                  <input type="text" value={chartColors.salesActual} onChange={(e) => setChartColors({ ...chartColors, salesActual: e.target.value })} className="flex-1 w-16 px-1 py-1 text-xs border border-slate-300 rounded" />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-600 truncate">{t('monthlyPlanActual.legend.workingPlan', '稼働計画')}</label>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={chartColors.workingHoursPlan} onChange={(e) => setChartColors({ ...chartColors, workingHoursPlan: e.target.value })} className="w-8 h-8 rounded border border-slate-300 cursor-pointer" />
+                  <input type="text" value={chartColors.workingHoursPlan} onChange={(e) => setChartColors({ ...chartColors, workingHoursPlan: e.target.value })} className="flex-1 w-16 px-1 py-1 text-xs border border-slate-300 rounded" />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-600 truncate">{t('monthlyPlanActual.legend.workingActual', '稼働実績')}</label>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={chartColors.workingHoursActual} onChange={(e) => setChartColors({ ...chartColors, workingHoursActual: e.target.value })} className="w-8 h-8 rounded border border-slate-300 cursor-pointer" />
+                  <input type="text" value={chartColors.workingHoursActual} onChange={(e) => setChartColors({ ...chartColors, workingHoursActual: e.target.value })} className="flex-1 w-16 px-1 py-1 text-xs border border-slate-300 rounded" />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-600 truncate">{t('monthlyPlanActual.legend.capacityLine', '能力線')}</label>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={chartColors.capacityLine} onChange={(e) => setChartColors({ ...chartColors, capacityLine: e.target.value })} className="w-8 h-8 rounded border border-slate-300 cursor-pointer" />
+                  <input type="text" value={chartColors.capacityLine} onChange={(e) => setChartColors({ ...chartColors, capacityLine: e.target.value })} className="flex-1 w-16 px-1 py-1 text-xs border border-slate-300 rounded" />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Chart Container */}
         <div id="monthly-plan-actual-chart" className="flex-1 min-h-0">
@@ -244,12 +307,12 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 type="monotone"
                 dataKey="capacityLine"
                 name={t('monthlyPlanActual.legend.capacityLine', '能力線')}
-                stroke="#808080"
+                stroke={chartColors.capacityLine}
                 strokeWidth={2}
                 strokeDasharray="5 5"
                 dot={false}
               >
-                <LabelList dataKey="capacityLine" position="left" formatter={(val: number) => val + 'h'} fontSize={10} fill="#808080" />
+                <LabelList dataKey="capacityLine" position="left" formatter={(val: number) => val + 'h'} fontSize={10} fill={chartColors.capacityLine} />
               </Line>
 
               {/* Series 2: Working Hours Plan - Pink Stacked Column (Y2) */}
@@ -258,7 +321,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 yAxisId="right"
                 dataKey="workingHoursPlan"
                 name={t('monthlyPlanActual.legend.workingPlan', '稼働計画')}
-                fill="#FFB3B3"
+                fill={chartColors.workingHoursPlan}
                 maxBarSize={60}
               >
                 <LabelList dataKey="workingHoursPlan" position="insideTop" formatter={(val: number) => val > 0 ? val : ''} fontSize={10} fill="#5c0000" />
@@ -271,11 +334,11 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 type="monotone"
                 dataKey="salesPlan"
                 name={t('monthlyPlanActual.legend.salesPlan', '売上計画')}
-                stroke="#00BFFF"
+                stroke={chartColors.salesPlan}
                 strokeWidth={3}
-                dot={{ fill: '#00BFFF', r: 5 }}
+                dot={{ fill: chartColors.salesPlan, r: 5 }}
               >
-                <LabelList dataKey="salesPlan" position="top" fontSize={10} formatter={(val: number) => val.toLocaleString()} />
+                <LabelList dataKey="salesPlan" position="top" fontSize={10} formatter={(val: number) => val.toLocaleString()} fill={chartColors.salesPlan} />
               </Line>
 
               {/* Series 5: Sales Actual - Navy Column (Y1) */}
@@ -284,11 +347,11 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 yAxisId="left"
                 dataKey="salesActual"
                 name={t('monthlyPlanActual.legend.salesActual', '売上実績')}
-                fill="#000080"
+                fill={chartColors.salesActual}
                 radius={[4, 4, 0, 0]}
                 maxBarSize={40}
               >
-                <LabelList dataKey="salesActual" position="top" formatter={(val: number) => val > 0 ? val.toLocaleString() : ''} fontSize={11} fill="#000080" fontWeight="bold" />
+                <LabelList dataKey="salesActual" position="top" formatter={(val: number) => val > 0 ? val.toLocaleString() : ''} fontSize={11} fill={chartColors.salesActual} fontWeight="bold" />
                 <LabelList content={renderZeroLabel} />
               </Bar>
 
@@ -299,7 +362,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 yAxisId="right"
                 dataKey="workingHoursActual"
                 name={t('monthlyPlanActual.legend.workingActual', '稼働実績')}
-                fill="#CC0000"
+                fill={chartColors.workingHoursActual}
                 maxBarSize={30}
               >
                 <LabelList dataKey="workingHoursActual" position="insideTop" formatter={(val: number) => val > 0 ? val : ''} fontSize={10} fill="#fff" fontWeight="bold" />
