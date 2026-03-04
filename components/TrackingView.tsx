@@ -3,7 +3,7 @@ import { Project, MonthlyRecord, PeriodType } from '../types';
 import { dbService } from '../services/dbService';
 import { getMonthsForPeriod } from '../utils/helpers';
 import { TABLE_COLUMN_WIDTHS, STICKY_CLASSES } from '../utils/tableStyles';
-import { Save, Loader2, MoreVertical, Edit, Trash, Search, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Check, ListChecks } from 'lucide-react';
+import { Save, Loader2, MoreVertical, Edit, Trash, Search, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Check, ListChecks, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -181,6 +181,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
   const [isSaving, setIsSaving] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Local Filter & Sort State
   const [localFilter, setLocalFilter] = useState('');
@@ -650,12 +651,12 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
               <button
                 onClick={() => setActiveTerm('H1')}
                 className={`pb-2 text-sm font-bold transition-all border-b-2 ${activeTerm === 'H1'
-                    ? 'text-white border-blue-500' // Dark header? No, bg is slate-50 usually, but header div is slate-50 with border-b. 
-                    // Wait, text-white on slate-50 is invisible. 
-                    // The screenshot showed dark theme, but looking at App.tsx, aside is dark, logic is light.
-                    // The header where this is placed is "bg-slate-50".
-                    // So text should be dark.
-                    : 'text-slate-500 border-transparent hover:text-slate-700'
+                  ? 'text-white border-blue-500' // Dark header? No, bg is slate-50 usually, but header div is slate-50 with border-b. 
+                  // Wait, text-white on slate-50 is invisible. 
+                  // The screenshot showed dark theme, but looking at App.tsx, aside is dark, logic is light.
+                  // The header where this is placed is "bg-slate-50".
+                  // So text should be dark.
+                  : 'text-slate-500 border-transparent hover:text-slate-700'
                   } ${activeTerm === 'H1' ? '!text-slate-900 !border-blue-600' : ''}`}
               >
                 H1 (Jan-Jun)
@@ -663,8 +664,8 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
               <button
                 onClick={() => setActiveTerm('H2')}
                 className={`pb-2 text-sm font-bold transition-all border-b-2 ${activeTerm === 'H2'
-                    ? '!text-slate-900 !border-blue-600'
-                    : 'text-slate-500 border-transparent hover:text-slate-700'
+                  ? '!text-slate-900 !border-blue-600'
+                  : 'text-slate-500 border-transparent hover:text-slate-700'
                   }`}
               >
                 H2 (Jul-Dec)
@@ -696,6 +697,16 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
             >
               {isEditMode ? <Check className="w-4 h-4" /> : <ListChecks className="w-4 h-4" />}
               <span className="hidden sm:inline">{isEditMode ? t('tracker.done', 'Done') : t('tracker.editOrder', 'Edit Order')}</span>
+            </button>
+
+            {/* Collapse Toggle */}
+            <button
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors text-slate-600 hover:bg-slate-100"
+              title={isCollapsed ? t('tracker.expand', 'Expand details') : t('tracker.collapse', 'Collapse details')}
+            >
+              {isCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+              <span className="hidden sm:inline">{isCollapsed ? t('tracker.expandBtn', 'Expand') : t('tracker.collapseBtn', 'Collapse')}</span>
             </button>
 
             <button
@@ -760,16 +771,20 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
                       {sortConfig.key === 'name' && <ArrowUpDown className={`w-3 h-3 ${sortConfig.direction === 'asc' ? 'text-blue-600' : 'text-blue-600 rotate-180'}`} />}
                     </div>
                   </th>
-                  <th scope="col" style={{ left: `${POS_NOTES}px`, width: `${LEFT_NOTES_WIDTH}px` }} className={`px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                    {t('tracker.notes', '補足')}
-                  </th>
-                  <th scope="col" style={{ left: `${POS_SOFTWARE}px`, width: `${LEFT_SOFTWARE_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                    {t('tracker.software')}
-                  </th>
+                  {!isCollapsed && (
+                    <>
+                      <th scope="col" style={{ left: `${POS_NOTES}px`, width: `${LEFT_NOTES_WIDTH}px` }} className={`px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                        {t('tracker.notes', '補足')}
+                      </th>
+                      <th scope="col" style={{ left: `${POS_SOFTWARE}px`, width: `${LEFT_SOFTWARE_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                        {t('tracker.software')}
+                      </th>
 
-                  <th scope="col" style={{ width: `${BUSINESS_CONTENT_WIDTH}px` }} className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r">
-                    {t('tracker.businessContent')}
-                  </th>
+                      <th scope="col" style={{ width: `${BUSINESS_CONTENT_WIDTH}px` }} className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r">
+                        {t('tracker.businessContent')}
+                      </th>
+                    </>
+                  )}
 
                   {/* Price Column */}
                   <th scope="col" style={{ width: `${PRICE_WIDTH}px` }} className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r">
@@ -819,32 +834,36 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
                         <td rowSpan={2} style={{ left: `${POS_NAME}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-2 py-2 text-sm text-gray-700 border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
                           <div className="font-medium line-clamp-2" title={project.name}>{project.name}</div>
                         </td>
-                        <td rowSpan={2} style={{ left: `${POS_NOTES}px`, width: `${LEFT_NOTES_WIDTH}px` }} className={`px-2 py-2 text-xs text-gray-600 border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
-                          <textarea
-                            className="w-full min-h-[50px] text-xs border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 px-1 py-1 bg-transparent resize-none overflow-hidden"
-                            value={project.notes || ''}
-                            onChange={(e) => handleProjectFieldChange(project.id, 'notes', e.target.value)}
-                            placeholder=""
-                            rows={2}
-                          />
-                        </td>
-                        <td rowSpan={2} style={{ left: `${POS_SOFTWARE}px`, width: `${LEFT_SOFTWARE_WIDTH}px` }} className={`px-2 py-2 text-xs text-gray-600 text-center border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
-                          <textarea
-                            className="w-full min-h-[50px] text-xs border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-center px-1 py-1 bg-transparent resize-none overflow-hidden"
-                            value={project.software || ''}
-                            onChange={(e) => handleProjectFieldChange(project.id, 'software', e.target.value)}
-                            placeholder="CAD"
-                            rows={2}
-                          />
-                        </td>
-                        <td rowSpan={2} style={{ width: `${BUSINESS_CONTENT_WIDTH}px` }} className="px-2 py-2 text-xs text-gray-500 text-center border-r border-b bg-white align-top p-0 group-hover:bg-gray-50">
-                          <textarea
-                            className="w-full h-full min-h-[50px] border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-xs p-2 bg-transparent resize-none"
-                            value={project.type || ''}
-                            onChange={(e) => handleProjectFieldChange(project.id, 'type', e.target.value)}
-                            placeholder={t('tracker.businessContent')}
-                          />
-                        </td>
+                        {!isCollapsed && (
+                          <>
+                            <td rowSpan={2} style={{ left: `${POS_NOTES}px`, width: `${LEFT_NOTES_WIDTH}px` }} className={`px-2 py-2 text-xs text-gray-600 border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
+                              <textarea
+                                className="w-full min-h-[50px] text-xs border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 px-1 py-1 bg-transparent resize-none overflow-hidden"
+                                value={project.notes || ''}
+                                onChange={(e) => handleProjectFieldChange(project.id, 'notes', e.target.value)}
+                                placeholder=""
+                                rows={2}
+                              />
+                            </td>
+                            <td rowSpan={2} style={{ left: `${POS_SOFTWARE}px`, width: `${LEFT_SOFTWARE_WIDTH}px` }} className={`px-2 py-2 text-xs text-gray-600 text-center border-b ${stickyLeftClass} align-top group-hover:bg-gray-50`}>
+                              <textarea
+                                className="w-full min-h-[50px] text-xs border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-center px-1 py-1 bg-transparent resize-none overflow-hidden"
+                                value={project.software || ''}
+                                onChange={(e) => handleProjectFieldChange(project.id, 'software', e.target.value)}
+                                placeholder="CAD"
+                                rows={2}
+                              />
+                            </td>
+                            <td rowSpan={2} style={{ width: `${BUSINESS_CONTENT_WIDTH}px` }} className="px-2 py-2 text-xs text-gray-500 text-center border-r border-b bg-white align-top p-0 group-hover:bg-gray-50">
+                              <textarea
+                                className="w-full h-full min-h-[50px] border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-xs p-2 bg-transparent resize-none"
+                                value={project.type || ''}
+                                onChange={(e) => handleProjectFieldChange(project.id, 'type', e.target.value)}
+                                placeholder={t('tracker.businessContent')}
+                              />
+                            </td>
+                          </>
+                        )}
 
                         {/* Price Column */}
                         <td style={{ width: `${PRICE_WIDTH}px` }} className="px-2 py-2 text-xs text-gray-500 text-right border-r border-b bg-slate-50 font-mono">
