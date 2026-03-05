@@ -10,11 +10,17 @@ interface TotalViewProps {
   currentYear: number;
 }
 
+interface SeriesStyle {
+  color: string;
+  opacity: number;
+  labelColor: string;
+}
+
 interface ChartColors {
-  plan: string;
-  actual: string;
-  accPlan: string;
-  accActual: string;
+  plan: SeriesStyle;
+  actual: SeriesStyle;
+  accPlan: SeriesStyle;
+  accActual: SeriesStyle;
 }
 
 export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
@@ -25,20 +31,41 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   // Load initial colors from localStorage or default
   const [chartColors, setChartColors] = useState<ChartColors>(() => {
     const saved = localStorage.getItem('totalView_chartColors');
+    const defaults: ChartColors = {
+      plan: { color: '#94a3b8', opacity: 1, labelColor: '#64748b' },
+      actual: { color: '#3b82f6', opacity: 1, labelColor: '#1d4ed8' },
+      accPlan: { color: '#64748b', opacity: 1, labelColor: '#64748b' },
+      accActual: { color: '#10b981', opacity: 1, labelColor: '#059669' },
+    };
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        // Migration: if old format (string), convert to SeriesStyle
+        if (typeof parsed.plan === 'string') {
+          return {
+            plan: { ...defaults.plan, color: parsed.plan },
+            actual: { ...defaults.actual, color: parsed.actual },
+            accPlan: { ...defaults.accPlan, color: parsed.accPlan },
+            accActual: { ...defaults.accActual, color: parsed.accActual },
+          };
+        }
+        return { ...defaults, ...parsed };
       } catch (e) {
         console.error('Failed to parse saved chart colors', e);
       }
     }
-    return {
-      plan: '#94a3b8',
-      actual: '#3b82f6',
-      accPlan: '#64748b',
-      accActual: '#10b981'
-    };
+    return defaults;
   });
+
+  const updateColor = (key: keyof ChartColors, field: keyof SeriesStyle, value: any) => {
+    setChartColors(prev => ({
+      ...prev,
+      [key]: {
+        ...prev[key],
+        [field]: value
+      }
+    }));
+  };
 
   // Save changes to localStorage
   useEffect(() => {
@@ -140,7 +167,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
           {/* Order: 計画, 実績, 累計計画, 累計実績 */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.plan }}></div>
+              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.plan.color }}></div>
               <span className="text-slate-700">{t('tracker.planShort')}:</span>
             </div>
             <span className="font-medium text-slate-900">{plan.toLocaleString()}</span>
@@ -148,7 +175,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
 
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.actual }}></div>
+              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.actual.color }}></div>
               <span className="text-slate-700">{t('tracker.actualShort')}:</span>
             </div>
             <span className="font-medium text-slate-900">{actual.toLocaleString()}</span>
@@ -156,7 +183,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
 
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded border-2" style={{ borderColor: chartColors.accPlan }}></div>
+              <div className="w-3 h-3 rounded border-2" style={{ borderColor: chartColors.accPlan.color }}></div>
               <span className="text-slate-700">{t('dashboard.chart.accPlan')}:</span>
             </div>
             <span className="font-medium text-slate-900">{accPlan.toLocaleString()}</span>
@@ -164,7 +191,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
 
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded border-2" style={{ borderColor: chartColors.accActual }}></div>
+              <div className="w-3 h-3 rounded border-2" style={{ borderColor: chartColors.accActual.color }}></div>
               <span className="text-slate-700">{t('dashboard.chart.accActual')}:</span>
             </div>
             <span className="font-medium text-slate-900">{accActual.toLocaleString()}</span>
@@ -256,77 +283,46 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
               Customize Chart Colors
             </h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-600">{t('tracker.planShort')}</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={chartColors.plan}
-                    onChange={(e) => setChartColors({ ...chartColors, plan: e.target.value })}
-                    className="w-10 h-8 rounded border border-slate-300 cursor-pointer"
-                  />
-                  <input
-                    type="text"
-                    value={chartColors.plan}
-                    onChange={(e) => setChartColors({ ...chartColors, plan: e.target.value })}
-                    className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded"
-                  />
-                </div>
-              </div>
+              {([
+                { key: 'plan', label: t('tracker.planShort') },
+                { key: 'actual', label: t('tracker.actualShort') },
+                { key: 'accPlan', label: t('dashboard.chart.accPlan') },
+                { key: 'accActual', label: t('dashboard.chart.accActual') },
+              ] as const).map(({ key, label }) => {
+                const style = chartColors[key];
+                return (
+                  <div key={key} className="flex flex-col gap-2 p-2 bg-white rounded border border-slate-100 shadow-sm">
+                    <label className="text-xs font-bold text-slate-700 truncate">{label}</label>
 
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-600">{t('tracker.actualShort')}</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={chartColors.actual}
-                    onChange={(e) => setChartColors({ ...chartColors, actual: e.target.value })}
-                    className="w-10 h-8 rounded border border-slate-300 cursor-pointer"
-                  />
-                  <input
-                    type="text"
-                    value={chartColors.actual}
-                    onChange={(e) => setChartColors({ ...chartColors, actual: e.target.value })}
-                    className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded"
-                  />
-                </div>
-              </div>
+                    {/* Color Row */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-slate-500 w-8">Color</span>
+                      <div className="flex items-center gap-1 flex-1">
+                        <input type="color" value={style.color} onChange={(e) => updateColor(key, 'color', e.target.value)} className="w-6 h-6 rounded cursor-pointer p-0 border-0" />
+                        <input type="text" value={style.color} onChange={(e) => updateColor(key, 'color', e.target.value)} className="flex-1 w-full px-1 py-0.5 text-xs border border-slate-300 rounded" />
+                      </div>
+                    </div>
 
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-600">{t('dashboard.chart.accPlan')}</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={chartColors.accPlan}
-                    onChange={(e) => setChartColors({ ...chartColors, accPlan: e.target.value })}
-                    className="w-10 h-8 rounded border border-slate-300 cursor-pointer"
-                  />
-                  <input
-                    type="text"
-                    value={chartColors.accPlan}
-                    onChange={(e) => setChartColors({ ...chartColors, accPlan: e.target.value })}
-                    className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded"
-                  />
-                </div>
-              </div>
+                    {/* Opacity Row */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-slate-500 w-8">Alpha</span>
+                      <div className="flex items-center gap-1 flex-1">
+                        <input type="range" min="0" max="1" step="0.1" value={style.opacity} onChange={(e) => updateColor(key, 'opacity', parseFloat(e.target.value))} className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer" />
+                        <span className="text-[10px] w-5 text-right font-medium">{Math.round(style.opacity * 100)}%</span>
+                      </div>
+                    </div>
 
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-600">{t('dashboard.chart.accActual')}</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={chartColors.accActual}
-                    onChange={(e) => setChartColors({ ...chartColors, accActual: e.target.value })}
-                    className="w-10 h-8 rounded border border-slate-300 cursor-pointer"
-                  />
-                  <input
-                    type="text"
-                    value={chartColors.accActual}
-                    onChange={(e) => setChartColors({ ...chartColors, accActual: e.target.value })}
-                    className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded"
-                  />
-                </div>
-              </div>
+                    {/* Label Color Row */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-slate-500 w-8">Text</span>
+                      <div className="flex items-center gap-1 flex-1">
+                        <input type="color" value={style.labelColor} onChange={(e) => updateColor(key, 'labelColor', e.target.value)} className="w-6 h-6 rounded cursor-pointer p-0 border-0" />
+                        <input type="text" value={style.labelColor} onChange={(e) => updateColor(key, 'labelColor', e.target.value)} className="flex-1 w-full px-1 py-0.5 text-xs border border-slate-300 rounded" />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -339,15 +335,15 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
               <YAxis yAxisId="right" orientation="right" fontSize={11} domain={[0, yAxisMax]} ticks={yAxisTicks} label={{ value: t('totalView.axis.accumulated'), angle: 90, position: 'insideRight' }} />
               <Tooltip content={<CustomTooltip />} />
               <Legend />
-              <Bar yAxisId="left" dataKey="plan" name={t('tracker.planShort')} fill={chartColors.plan} radius={[4, 4, 0, 0]}>
-                <LabelList dataKey="plan" position="top" fontSize={10} formatter={(val: number) => val > 0 ? val : ''} />
+              <Bar yAxisId="left" dataKey="plan" name={t('tracker.planShort')} fill={chartColors.plan.color} fillOpacity={chartColors.plan.opacity} radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="plan" position="top" fontSize={10} fill={chartColors.plan.labelColor} fontWeight="bold" formatter={(val: number) => val > 0 ? val : ''} />
               </Bar>
-              <Bar yAxisId="left" dataKey="actual" name={t('tracker.actualShort')} fill={chartColors.actual} radius={[4, 4, 0, 0]}>
-                <LabelList dataKey="actual" position="top" fontSize={10} formatter={(val: number) => val > 0 ? val : ''} />
+              <Bar yAxisId="left" dataKey="actual" name={t('tracker.actualShort')} fill={chartColors.actual.color} fillOpacity={chartColors.actual.opacity} radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="actual" position="top" fontSize={10} fill={chartColors.actual.labelColor} fontWeight="bold" formatter={(val: number) => val > 0 ? val : ''} />
               </Bar>
-              <Line yAxisId="right" type="monotone" dataKey="accPlan" name={t('dashboard.chart.accPlan')} stroke={chartColors.accPlan} strokeDasharray="5 5" dot={false} strokeWidth={2} />
-              <Line yAxisId="right" type="monotone" dataKey="accActual" name={t('dashboard.chart.accActual')} stroke={chartColors.accActual} strokeWidth={2}>
-                <LabelList dataKey="accActual" position="top" offset={10} fontSize={10} />
+              <Line yAxisId="right" type="monotone" dataKey="accPlan" name={t('dashboard.chart.accPlan')} stroke={chartColors.accPlan.color} strokeOpacity={chartColors.accPlan.opacity} strokeDasharray="5 5" dot={false} strokeWidth={2} />
+              <Line yAxisId="right" type="monotone" dataKey="accActual" name={t('dashboard.chart.accActual')} stroke={chartColors.accActual.color} strokeOpacity={chartColors.accActual.opacity} strokeWidth={2}>
+                <LabelList dataKey="accActual" position="top" offset={10} fontSize={10} fill={chartColors.accActual.labelColor} fontWeight="bold" />
               </Line>
             </ComposedChart>
           </ResponsiveContainer>
