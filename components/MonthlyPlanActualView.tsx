@@ -259,15 +259,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
     const planValue = payload.workingHoursPlan || 0;
     const actualValue = payload.workingHoursActual || 0;
 
-    // Calculate achievement percentage
-    let achievement = 0;
-    if (planValue > 0) {
-      achievement = Math.round((actualValue / planValue) * 100);
-    }
-
-    // We need to estimate where the Plan bar top is physically (y-coordinate)
-    // Unfortunately Recharts doesn't explicitly pass the other series Y coordinate here,
-    // but we can estimate it based on the ratio since they share the same right Y axis.
+    // Estimate where the Plan bar top is physically (y-coordinate)
     const containerHeight = y + height;
     const zeroY = containerHeight;
     const pixelsPerUnit = height / actualValue;
@@ -291,27 +283,6 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
               strokeWidth={1}
               strokeDasharray="3 3"
             />
-            {/* Achievement % pill overlapping the line at exactly midpoint */}
-            <rect
-              x={x + width / 2 - 16}
-              y={(y + planY) / 2 - 8}
-              width={32}
-              height={16}
-              fill="rgba(255,255,255,0.85)"
-              rx={8}
-              stroke={chartColors.workingHoursActual.color}
-              strokeWidth={1}
-            />
-            <text
-              x={x + width / 2}
-              y={(y + planY) / 2 + 3}
-              fill={chartColors.workingHoursActual.labelColor}
-              fontSize={9}
-              fontWeight="bold"
-              textAnchor="middle"
-            >
-              {achievement}%
-            </text>
           </g>
         )}
       </g>
