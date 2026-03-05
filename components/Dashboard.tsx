@@ -163,8 +163,8 @@ export const Dashboard: React.FC = () => {
   const totalPlanHours = stats.reduce((acc, curr) => acc + curr.plannedHours, 0);
   const totalActualHours = stats.reduce((acc, curr) => acc + curr.actualHours, 0);
 
-  const grossRevenuePlan = totalPlanHours * unitPrice;
-  const grossRevenueActual = totalActualHours * unitPrice;
+  const grossRevenuePlan = stats.reduce((acc, curr) => acc + curr.plannedRevenue, 0);
+  const grossRevenueActual = stats.reduce((acc, curr) => acc + curr.actualRevenue, 0);
   const licenseTotal = licenseComputers * licensePerComputer;
   const netRevenuePlan = grossRevenuePlan - licenseTotal;
   const netRevenueActual = grossRevenueActual - licenseTotal;
