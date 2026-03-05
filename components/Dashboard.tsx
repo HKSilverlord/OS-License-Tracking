@@ -103,10 +103,11 @@ export const Dashboard: React.FC = () => {
         const target = monthlyData[r.month - 1];
         target.plannedHours += Number(r.planned_hours) || 0;
         target.actualHours += Number(r.actual_hours) || 0;
-        // Use project specific price or fall back to the global unitPrice
-        const price = r.projects?.unit_price || unitPrice;
-        target.plannedRevenue += (Number(r.planned_hours) || 0) * price;
-        target.actualRevenue += (Number(r.actual_hours) || 0) * price;
+        // Use project specific prices matching YearlyDataView formula
+        const planPrice = r.projects?.plan_price || r.projects?.unit_price || unitPrice;
+        const actualPrice = r.projects?.actual_price || r.projects?.unit_price || unitPrice;
+        target.plannedRevenue += (Number(r.planned_hours) || 0) * planPrice;
+        target.actualRevenue += (Number(r.actual_hours) || 0) * actualPrice;
       }
     });
 
