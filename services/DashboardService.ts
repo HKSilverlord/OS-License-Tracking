@@ -61,10 +61,10 @@ export class DashboardService extends BaseService {
     // --- Statistics and Aggregation ---
 
     async getDashboardStats(year: number) {
-        // Fetch records and join with projects to get unit_price
+        // Fetch records and join with projects to get prices
         const { data, error } = await this.supabase
             .from('monthly_records')
-            .select('*, projects(unit_price)')
+            .select('*, projects(unit_price, plan_price, actual_price)')
             .eq('year', year);
 
         if (error) throw error;
