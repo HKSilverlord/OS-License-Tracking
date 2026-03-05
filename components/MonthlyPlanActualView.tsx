@@ -23,6 +23,7 @@ interface SeriesStyle {
   fontSize: number;
   bold: boolean;
   stroke: boolean;
+  barSize?: number;
 }
 
 interface MonthlyChartColors {
@@ -47,10 +48,10 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
     const saved = localStorage.getItem('monthly_chartColors');
     const defaults: MonthlyChartColors = {
       capacityLine: { color: '#808080', opacity: 1, labelColor: '#808080', fontSize: 10, bold: false, stroke: false },
-      workingHoursPlan: { color: '#FFB3B3', opacity: 1, labelColor: '#5c0000', fontSize: 10, bold: true, stroke: false },
+      workingHoursPlan: { color: '#FFB3B3', opacity: 1, labelColor: '#5c0000', fontSize: 10, bold: true, stroke: false, barSize: 60 },
       salesPlan: { color: '#00BFFF', opacity: 1, labelColor: '#006080', fontSize: 10, bold: false, stroke: false },
-      salesActual: { color: '#000080', opacity: 1, labelColor: '#000080', fontSize: 11, bold: true, stroke: true },
-      workingHoursActual: { color: '#CC0000', opacity: 1, labelColor: '#ffffff', fontSize: 10, bold: true, stroke: false },
+      salesActual: { color: '#000080', opacity: 1, labelColor: '#000080', fontSize: 11, bold: true, stroke: true, barSize: 40 },
+      workingHoursActual: { color: '#CC0000', opacity: 1, labelColor: '#ffffff', fontSize: 10, bold: true, stroke: false, barSize: 30 },
     };
 
     if (saved) {
@@ -66,8 +67,6 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
             workingHoursActual: { ...defaults.workingHoursActual, color: parsed.workingHoursActual },
           };
         }
-        return { ...defaults, ...parsed };
-        // Deep merge to pick up new fields since last save
         return {
           capacityLine: { ...defaults.capacityLine, ...parsed.capacityLine },
           workingHoursPlan: { ...defaults.workingHoursPlan, ...parsed.workingHoursPlan },
@@ -417,6 +416,17 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                       </div>
                     </div>
 
+                    {/* Bar Width Row (only for bar series) */}
+                    {style.barSize !== undefined && (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] text-slate-500 w-8">Width</span>
+                        <div className="flex items-center gap-1 flex-1">
+                          <input type="range" min="10" max="100" step="5" value={style.barSize} onChange={(e) => updateColor(key, 'barSize', parseInt(e.target.value))} className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer" />
+                          <span className="text-[10px] w-7 text-right font-medium">{style.barSize}px</span>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Bold + Stroke Row */}
                     <div className="flex items-center gap-3">
                       <label className="flex items-center gap-1 cursor-pointer">
@@ -536,7 +546,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 name={t('monthlyPlanActual.legend.workingPlan', '稼働計画')}
                 fill={chartColors.workingHoursPlan.color}
                 fillOpacity={chartColors.workingHoursPlan.opacity}
-                maxBarSize={60}
+                maxBarSize={chartColors.workingHoursPlan.barSize ?? 60}
               >
                 <LabelList dataKey="workingHoursPlan" position="insideTop" content={<CustomLabel position="insideTop" dataKey="workingHoursPlan" />} />
               </Bar>
@@ -565,7 +575,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 fill={chartColors.salesActual.color}
                 fillOpacity={chartColors.salesActual.opacity}
                 radius={[4, 4, 0, 0]}
-                maxBarSize={40}
+                maxBarSize={chartColors.salesActual.barSize ?? 40}
               >
                 <LabelList dataKey="salesActual" position="top" content={<CustomLabel position="top" dataKey="salesActual" />} />
                 <LabelList content={renderZeroLabel} />
@@ -580,7 +590,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 name={t('monthlyPlanActual.legend.workingActual', '稼働実績')}
                 fill={chartColors.workingHoursActual.color}
                 fillOpacity={chartColors.workingHoursActual.opacity}
-                maxBarSize={30}
+                maxBarSize={chartColors.workingHoursActual.barSize ?? 30}
                 shape={<WorkingHoursActualBar />}
               >
                 <LabelList dataKey="workingHoursActual" position="insideTop" content={<CustomLabel position="insideTop" dataKey="workingHoursActual" />} />
