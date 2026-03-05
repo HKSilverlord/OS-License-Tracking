@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Loader2, TrendingUp, Palette } from 'lucide-react';
 import { ChartExportMenu } from './ChartExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipProps, Cell, LabelList, ReferenceLine } from 'recharts';
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipProps, Cell, LabelList, ReferenceLine, ReferenceArea } from 'recharts';
 import { dbService } from '../services/dbService';
 
 // Monthly plan-actual data interface
@@ -20,6 +20,9 @@ interface SeriesStyle {
   color: string;
   opacity: number;
   labelColor: string;
+  fontSize: number;
+  bold: boolean;
+  stroke: boolean;
 }
 
 interface MonthlyChartColors {
@@ -43,11 +46,11 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
   const [chartColors, setChartColors] = useState<MonthlyChartColors>(() => {
     const saved = localStorage.getItem('monthly_chartColors');
     const defaults: MonthlyChartColors = {
-      capacityLine: { color: '#808080', opacity: 1, labelColor: '#808080' },
-      workingHoursPlan: { color: '#FFB3B3', opacity: 1, labelColor: '#5c0000' },
-      salesPlan: { color: '#00BFFF', opacity: 1, labelColor: '#00BFFF' },
-      salesActual: { color: '#000080', opacity: 1, labelColor: '#000080' },
-      workingHoursActual: { color: '#CC0000', opacity: 1, labelColor: '#ffffff' },
+      capacityLine: { color: '#808080', opacity: 1, labelColor: '#808080', fontSize: 10, bold: false, stroke: false },
+      workingHoursPlan: { color: '#FFB3B3', opacity: 1, labelColor: '#5c0000', fontSize: 10, bold: true, stroke: false },
+      salesPlan: { color: '#00BFFF', opacity: 1, labelColor: '#006080', fontSize: 10, bold: false, stroke: false },
+      salesActual: { color: '#000080', opacity: 1, labelColor: '#000080', fontSize: 11, bold: true, stroke: true },
+      workingHoursActual: { color: '#CC0000', opacity: 1, labelColor: '#ffffff', fontSize: 10, bold: true, stroke: false },
     };
 
     if (saved) {
@@ -64,6 +67,14 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
           };
         }
         return { ...defaults, ...parsed };
+        // Deep merge to pick up new fields since last save
+        return {
+          capacityLine: { ...defaults.capacityLine, ...parsed.capacityLine },
+          workingHoursPlan: { ...defaults.workingHoursPlan, ...parsed.workingHoursPlan },
+          salesPlan: { ...defaults.salesPlan, ...parsed.salesPlan },
+          salesActual: { ...defaults.salesActual, ...parsed.salesActual },
+          workingHoursActual: { ...defaults.workingHoursActual, ...parsed.workingHoursActual },
+        };
       } catch (e) { /* ignore */ }
     }
     return defaults;
@@ -78,6 +89,10 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
       }
     }));
   };
+
+  // Current month highlight
+  const currentMonth = new Date().getFullYear() === currentYear ? new Date().getMonth() + 1 : null;
+  const [showCurrentMonth, setShowCurrentMonth] = useState(true);
 
   useEffect(() => {
     localStorage.setItem('monthly_chartColors', JSON.stringify(chartColors));
@@ -207,13 +222,17 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
     return null;
   };
 
-  // Generic custom label with semi-transparent background pill
+  // Generic custom label with semi-transparent background pill + optional outline
   const CustomLabel = (props: any) => {
-    const { x, y, value, width, index, dataKey, offset = 10, position = 'top' } = props;
+    const { x, y, value, width, dataKey, offset = 10, position = 'top' } = props;
     if (value === 0 || !value) return null;
 
     const formatted = typeof value === 'number' && value > 1000 ? value.toLocaleString() : value;
-    const color = (chartColors as any)[dataKey]?.labelColor || '#333';
+    const style = (chartColors as any)[dataKey] as SeriesStyle;
+    const color = style?.labelColor || '#333';
+    const fSize = style?.fontSize || 10;
+    const isBold = style?.bold !== false;
+    const hasStroke = style?.stroke === true;
 
     let textX = x;
     let textY = y;
@@ -230,6 +249,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
 
     return (
       <g>
+        {/* Background pill */}
         <rect
           x={textX - 16}
           y={textY - 12}
@@ -238,12 +258,30 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
           fill="rgba(255,255,255,0.7)"
           rx={3}
         />
+        {/* Stroke (outline) layer */}
+        {hasStroke && (
+          <text
+            x={textX}
+            y={textY}
+            stroke="white"
+            strokeWidth={3}
+            strokeLinejoin="round"
+            paintOrder="stroke"
+            fontSize={fSize}
+            fontWeight="bold"
+            textAnchor="middle"
+            alignmentBaseline="middle"
+          >
+            {formatted}{dataKey === 'capacityLine' ? 'h' : ''}
+          </text>
+        )}
+        {/* Actual label */}
         <text
           x={textX}
           y={textY}
           fill={color}
-          fontSize={10}
-          fontWeight="bold"
+          fontSize={fSize}
+          fontWeight={isBold ? 'bold' : 'normal'}
           textAnchor="middle"
           alignmentBaseline="middle"
         >
@@ -369,9 +407,38 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                         <input type="text" value={style.labelColor} onChange={(e) => updateColor(key, 'labelColor', e.target.value)} className="flex-1 w-full px-1 py-0.5 text-xs border border-slate-300 rounded" />
                       </div>
                     </div>
+
+                    {/* Font Size Row */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-slate-500 w-8">Size</span>
+                      <div className="flex items-center gap-1 flex-1">
+                        <input type="range" min="8" max="20" step="1" value={style.fontSize ?? 10} onChange={(e) => updateColor(key, 'fontSize', parseInt(e.target.value))} className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer" />
+                        <span className="text-[10px] w-5 text-right font-medium">{style.fontSize ?? 10}</span>
+                      </div>
+                    </div>
+
+                    {/* Bold + Stroke Row */}
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <input type="checkbox" checked={style.bold ?? true} onChange={(e) => updateColor(key, 'bold', e.target.checked)} className="w-3 h-3" />
+                        <span className="text-[10px] text-slate-600 font-bold">Bold</span>
+                      </label>
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <input type="checkbox" checked={style.stroke ?? false} onChange={(e) => updateColor(key, 'stroke', e.target.checked)} className="w-3 h-3" />
+                        <span className="text-[10px] text-slate-600">Outline</span>
+                      </label>
+                    </div>
                   </div>
                 );
               })}
+            </div>
+
+            {/* Global: Highlight Current Month */}
+            <div className="mt-3 pt-3 border-t border-slate-200 flex items-center gap-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={showCurrentMonth} onChange={(e) => setShowCurrentMonth(e.target.checked)} className="w-4 h-4 accent-orange-500" />
+                <span className="text-xs font-semibold text-slate-700">🗓️ Highlight current month</span>
+              </label>
             </div>
           </div>
         )}
@@ -384,6 +451,18 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
               margin={{ top: 20, right: 60, left: 20, bottom: 20 }}
             >
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e0e0" />
+
+              {/* Current Month Highlight */}
+              {showCurrentMonth && currentMonth !== null && (() => {
+                const monthEntry = monthlyData.find(d => d.month === currentMonth);
+                const monthLabel = monthEntry?.monthLabel;
+                return monthLabel ? (
+                  <>
+                    <ReferenceArea xAxisId="main" x1={monthLabel} x2={monthLabel} fill="rgba(251,146,60,0.12)" />
+                    <ReferenceLine xAxisId="main" x={monthLabel} stroke="#f97316" strokeWidth={2} strokeDasharray="6 3" label={{ value: '今月', position: 'top', fontSize: 10, fill: '#f97316', fontWeight: 'bold' }} />
+                  </>
+                ) : null;
+              })()}
 
               {/* X-Axis: Months */}
               <XAxis

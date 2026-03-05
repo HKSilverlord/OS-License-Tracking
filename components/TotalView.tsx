@@ -4,7 +4,7 @@ import { dbService } from '../services/dbService';
 import { exportChartToSVG, exportChartToPNG, exportChartDataToCSV, generateChartFilename, copyChartToClipboard } from '../utils/chartExport';
 import { Loader2, TrendingUp, Download, Palette, Copy, Image } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, TooltipProps } from 'recharts';
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, TooltipProps, ReferenceArea, ReferenceLine } from 'recharts';
 
 interface TotalViewProps {
   currentYear: number;
@@ -14,6 +14,9 @@ interface SeriesStyle {
   color: string;
   opacity: number;
   labelColor: string;
+  fontSize: number;
+  bold: boolean;
+  stroke: boolean;
 }
 
 interface ChartColors {
@@ -32,10 +35,10 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   const [chartColors, setChartColors] = useState<ChartColors>(() => {
     const saved = localStorage.getItem('totalView_chartColors');
     const defaults: ChartColors = {
-      plan: { color: '#94a3b8', opacity: 1, labelColor: '#64748b' },
-      actual: { color: '#3b82f6', opacity: 1, labelColor: '#1d4ed8' },
-      accPlan: { color: '#64748b', opacity: 1, labelColor: '#64748b' },
-      accActual: { color: '#10b981', opacity: 1, labelColor: '#059669' },
+      plan: { color: '#94a3b8', opacity: 1, labelColor: '#64748b', fontSize: 10, bold: true, stroke: false },
+      actual: { color: '#3b82f6', opacity: 1, labelColor: '#1d4ed8', fontSize: 10, bold: true, stroke: false },
+      accPlan: { color: '#64748b', opacity: 1, labelColor: '#64748b', fontSize: 10, bold: false, stroke: false },
+      accActual: { color: '#10b981', opacity: 1, labelColor: '#059669', fontSize: 12, bold: true, stroke: true },
     };
     if (saved) {
       try {
@@ -49,7 +52,13 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
             accActual: { ...defaults.accActual, color: parsed.accActual },
           };
         }
-        return { ...defaults, ...parsed };
+        // Merge to pick up any new fields added since last save
+        return {
+          plan: { ...defaults.plan, ...parsed.plan },
+          actual: { ...defaults.actual, ...parsed.actual },
+          accPlan: { ...defaults.accPlan, ...parsed.accPlan },
+          accActual: { ...defaults.accActual, ...parsed.accActual },
+        };
       } catch (e) {
         console.error('Failed to parse saved chart colors', e);
       }
@@ -65,6 +74,31 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
         [field]: value
       }
     }));
+  };
+
+  // Current month highlight
+  const currentMonth = new Date().getFullYear() === currentYear ? new Date().getMonth() + 1 : null;
+  const [showCurrentMonth, setShowCurrentMonth] = useState(true);
+
+  // Custom outlined label renderer
+  const OutlinedLabel = ({ x, y, value, dataKey, width = 0 }: any) => {
+    if (!value || value === 0) return null;
+    const style = (chartColors as any)[dataKey] as SeriesStyle;
+    if (!style) return null;
+    const tx = typeof x === 'number' && typeof width === 'number' ? x + width / 2 : x;
+    const formatted = typeof value === 'number' && value > 999 ? value.toLocaleString() : value;
+    return (
+      <g>
+        {style.stroke && (
+          <text x={tx} y={y - 4} textAnchor="middle" fontSize={style.fontSize} fontWeight="bold" stroke="white" strokeWidth={3} strokeLinejoin="round" paintOrder="stroke">
+            {formatted}
+          </text>
+        )}
+        <text x={tx} y={y - 4} textAnchor="middle" fontSize={style.fontSize} fontWeight={style.bold ? 'bold' : 'normal'} fill={style.labelColor}>
+          {formatted}
+        </text>
+      </g>
+    );
   };
 
   // Save changes to localStorage
@@ -320,9 +354,38 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                         <input type="text" value={style.labelColor} onChange={(e) => updateColor(key, 'labelColor', e.target.value)} className="flex-1 w-full px-1 py-0.5 text-xs border border-slate-300 rounded" />
                       </div>
                     </div>
+
+                    {/* Font Size Row */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-slate-500 w-8">Size</span>
+                      <div className="flex items-center gap-1 flex-1">
+                        <input type="range" min="8" max="20" step="1" value={style.fontSize} onChange={(e) => updateColor(key, 'fontSize', parseInt(e.target.value))} className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer" />
+                        <span className="text-[10px] w-5 text-right font-medium">{style.fontSize}</span>
+                      </div>
+                    </div>
+
+                    {/* Bold + Stroke Row */}
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <input type="checkbox" checked={style.bold} onChange={(e) => updateColor(key, 'bold', e.target.checked)} className="w-3 h-3" />
+                        <span className="text-[10px] text-slate-600 font-bold">Bold</span>
+                      </label>
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <input type="checkbox" checked={style.stroke} onChange={(e) => updateColor(key, 'stroke', e.target.checked)} className="w-3 h-3" />
+                        <span className="text-[10px] text-slate-600">Outline</span>
+                      </label>
+                    </div>
                   </div>
                 );
               })}
+            </div>
+
+            {/* Global: Highlight Current Month */}
+            <div className="mt-3 pt-3 border-t border-slate-200 flex items-center gap-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={showCurrentMonth} onChange={(e) => setShowCurrentMonth(e.target.checked)} className="w-4 h-4 accent-orange-500" />
+                <span className="text-xs font-semibold text-slate-700">🗓️ Highlight current month</span>
+              </label>
             </div>
           </div>
         )}
@@ -335,15 +398,28 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
               <YAxis yAxisId="right" orientation="right" fontSize={11} domain={[0, yAxisMax]} ticks={yAxisTicks} label={{ value: t('totalView.axis.accumulated'), angle: 90, position: 'insideRight' }} />
               <Tooltip content={<CustomTooltip />} />
               <Legend />
+              {/* Current Month Highlight */}
+              {showCurrentMonth && currentMonth !== null && (() => {
+                const monthName = chartData.find(d => {
+                  const m = language === 'ja' ? `${currentMonth}月` : new Date(currentYear, currentMonth - 1).toLocaleString(language === 'vn' ? 'vi-VN' : 'en-US', { month: 'short' });
+                  return d.name === m;
+                })?.name;
+                return monthName ? (
+                  <>
+                    <ReferenceArea yAxisId="left" x1={monthName} x2={monthName} fill="rgba(251,146,60,0.12)" />
+                    <ReferenceLine yAxisId="left" x={monthName} stroke="#f97316" strokeWidth={2} strokeDasharray="6 3" label={{ value: '今月', position: 'top', fontSize: 10, fill: '#f97316', fontWeight: 'bold' }} />
+                  </>
+                ) : null;
+              })()}
               <Bar yAxisId="left" dataKey="plan" name={t('tracker.planShort')} fill={chartColors.plan.color} fillOpacity={chartColors.plan.opacity} radius={[4, 4, 0, 0]}>
-                <LabelList dataKey="plan" position="top" fontSize={10} fill={chartColors.plan.labelColor} fontWeight="bold" formatter={(val: number) => val > 0 ? val : ''} />
+                <LabelList dataKey="plan" position="top" content={<OutlinedLabel dataKey="plan" />} />
               </Bar>
               <Bar yAxisId="left" dataKey="actual" name={t('tracker.actualShort')} fill={chartColors.actual.color} fillOpacity={chartColors.actual.opacity} radius={[4, 4, 0, 0]}>
-                <LabelList dataKey="actual" position="top" fontSize={10} fill={chartColors.actual.labelColor} fontWeight="bold" formatter={(val: number) => val > 0 ? val : ''} />
+                <LabelList dataKey="actual" position="top" content={<OutlinedLabel dataKey="actual" />} />
               </Bar>
               <Line yAxisId="right" type="monotone" dataKey="accPlan" name={t('dashboard.chart.accPlan')} stroke={chartColors.accPlan.color} strokeOpacity={chartColors.accPlan.opacity} strokeDasharray="5 5" dot={false} strokeWidth={2} />
               <Line yAxisId="right" type="monotone" dataKey="accActual" name={t('dashboard.chart.accActual')} stroke={chartColors.accActual.color} strokeOpacity={chartColors.accActual.opacity} strokeWidth={2}>
-                <LabelList dataKey="accActual" position="top" offset={10} fontSize={10} fill={chartColors.accActual.labelColor} fontWeight="bold" />
+                <LabelList dataKey="accActual" position="top" content={<OutlinedLabel dataKey="accActual" />} />
               </Line>
             </ComposedChart>
           </ResponsiveContainer>
