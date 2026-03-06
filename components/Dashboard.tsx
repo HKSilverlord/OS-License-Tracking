@@ -6,6 +6,7 @@ import { MonthlyStats, AccumulatedStats } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Area, Line, LabelList } from 'recharts';
 import { Loader2, TrendingUp, DollarSign, Clock, Calculator, Palette } from 'lucide-react';
 import { ChartExportMenu } from './ChartExportMenu';
+import { SectionExportMenu } from './SectionExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DEFAULT_UNIT_PRICE } from '../constants';
 
@@ -43,6 +44,15 @@ const DEFAULT_KPI_COLORS: DashboardKpiColors = {
   summaryFrom: '#334155', // slate-700
   summaryTo: '#0d9488', // teal-600
 };
+
+const DASHBOARD_EXPORT_SECTIONS = [
+  { id: 'section-core-kpis', labelKey: 'export.coreKpis', defaultLabel: 'Core KPIs' },
+  { id: 'section-gross-revenue', labelKey: 'export.grossRevenue', defaultLabel: 'Gross Revenue' },
+  { id: 'section-net-revenue', labelKey: 'export.netRevenue', defaultLabel: 'Net Revenue' },
+  { id: 'section-license-card', labelKey: 'export.licenseCard', defaultLabel: 'CAD License' },
+  { id: 'section-cost-analysis', labelKey: 'export.costAnalysis', defaultLabel: 'Cost Analysis' },
+  { id: 'section-financial-summary', labelKey: 'export.financialSummary', defaultLabel: 'Financial Summary' },
+];
 
 export const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<MonthlyStats[]>([]);
@@ -302,6 +312,7 @@ export const Dashboard: React.FC = () => {
           </div>
 
           <div className="flex flex-col md:flex-row items-end md:items-center gap-4">
+            <SectionExportMenu sections={DASHBOARD_EXPORT_SECTIONS} />
             <button
               onClick={() => setShowKpiColorPicker(!showKpiColorPicker)}
               className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
@@ -366,467 +377,470 @@ export const Dashboard: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Dashboard KPI Color Picker Panel */}
-          {showKpiColorPicker && (
-            <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-6 animate-in slide-in-from-top-2">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                  <Palette className="w-4 h-4 text-purple-600" />
-                  Customize Dashboard Colors
-                </h4>
+        {/* Dashboard KPI Color Picker Panel */}
+        {showKpiColorPicker && (
+          <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-6 animate-in slide-in-from-top-2">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                <Palette className="w-4 h-4 text-purple-600" />
+                Customize Dashboard Colors
+              </h4>
+              <button
+                onClick={() => setDashboardColors(DEFAULT_KPI_COLORS)}
+                className="text-xs px-3 py-1 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded transition-colors"
+              >
+                Reset Defaults
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {/* Gross Plan */}
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                <p className="text-xs font-bold text-slate-600 mb-2">{t('dashboard.gross.plan', 'Gross Revenue (Plan)')} (Gradient)</p>
+                <div className="flex gap-4">
+                  <div className="flex flex-col gap-1 flex-1">
+                    <label className="text-[10px] uppercase text-slate-500">From</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={dashboardColors.grossPlanFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, grossPlanFrom: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
+                      <input type="text" value={dashboardColors.grossPlanFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, grossPlanFrom: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1 flex-1">
+                    <label className="text-[10px] uppercase text-slate-500">To</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={dashboardColors.grossPlanTo} onChange={(e) => setDashboardColors({ ...dashboardColors, grossPlanTo: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
+                      <input type="text" value={dashboardColors.grossPlanTo} onChange={(e) => setDashboardColors({ ...dashboardColors, grossPlanTo: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Gross Actual */}
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                <p className="text-xs font-bold text-slate-600 mb-2">{t('dashboard.gross.actual', 'Gross Revenue (Actual)')} (Gradient)</p>
+                <div className="flex gap-4">
+                  <div className="flex flex-col gap-1 flex-1">
+                    <label className="text-[10px] uppercase text-slate-500">From</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={dashboardColors.grossActualFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, grossActualFrom: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
+                      <input type="text" value={dashboardColors.grossActualFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, grossActualFrom: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1 flex-1">
+                    <label className="text-[10px] uppercase text-slate-500">To</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={dashboardColors.grossActualTo} onChange={(e) => setDashboardColors({ ...dashboardColors, grossActualTo: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
+                      <input type="text" value={dashboardColors.grossActualTo} onChange={(e) => setDashboardColors({ ...dashboardColors, grossActualTo: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* License */}
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                <p className="text-xs font-bold text-slate-600 mb-2">{t('dashboard.license.card.subtitle', 'Annual License Fee')} (Gradient)</p>
+                <div className="flex gap-4">
+                  <div className="flex flex-col gap-1 flex-1">
+                    <label className="text-[10px] uppercase text-slate-500">From</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={dashboardColors.licenseFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, licenseFrom: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
+                      <input type="text" value={dashboardColors.licenseFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, licenseFrom: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1 flex-1">
+                    <label className="text-[10px] uppercase text-slate-500">To</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={dashboardColors.licenseTo} onChange={(e) => setDashboardColors({ ...dashboardColors, licenseTo: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
+                      <input type="text" value={dashboardColors.licenseTo} onChange={(e) => setDashboardColors({ ...dashboardColors, licenseTo: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Summary */}
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                <p className="text-xs font-bold text-slate-600 mb-2">Financial Summary (Gradient)</p>
+                <div className="flex gap-4">
+                  <div className="flex flex-col gap-1 flex-1">
+                    <label className="text-[10px] uppercase text-slate-500">From</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={dashboardColors.summaryFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, summaryFrom: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
+                      <input type="text" value={dashboardColors.summaryFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, summaryFrom: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1 flex-1">
+                    <label className="text-[10px] uppercase text-slate-500">To</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={dashboardColors.summaryTo} onChange={(e) => setDashboardColors({ ...dashboardColors, summaryTo: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
+                      <input type="text" value={dashboardColors.summaryTo} onChange={(e) => setDashboardColors({ ...dashboardColors, summaryTo: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Solid Borders (Net Plan, Net Actual, Cost) */}
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 xl:col-span-2">
+                <p className="text-xs font-bold text-slate-600 mb-2">Card Borders (Solid)</p>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] uppercase text-slate-500">{t('dashboard.net.plan', 'Net Plan')}</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={dashboardColors.netPlanBorder} onChange={(e) => setDashboardColors({ ...dashboardColors, netPlanBorder: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
+                      <input type="text" value={dashboardColors.netPlanBorder} onChange={(e) => setDashboardColors({ ...dashboardColors, netPlanBorder: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] uppercase text-slate-500">{t('dashboard.net.actual', 'Net Actual')}</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={dashboardColors.netActualBorder} onChange={(e) => setDashboardColors({ ...dashboardColors, netActualBorder: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
+                      <input type="text" value={dashboardColors.netActualBorder} onChange={(e) => setDashboardColors({ ...dashboardColors, netActualBorder: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] uppercase text-slate-500">{t('dashboard.costAnalysis.title', 'Cost')}</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={dashboardColors.costAnalysisBorder} onChange={(e) => setDashboardColors({ ...dashboardColors, costAnalysisBorder: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
+                      <input type="text" value={dashboardColors.costAnalysisBorder} onChange={(e) => setDashboardColors({ ...dashboardColors, costAnalysisBorder: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Row 1: Core KPIs */}
+        <div id="section-core-kpis" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="bg-white border-l-4 border-sky-500 rounded-lg p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-semibold text-sky-600 uppercase tracking-wider">{t('dashboard.kpi.planHoursLabel', 'Planned Hours')}</div>
+              <Clock className="w-5 h-5 text-sky-500" />
+            </div>
+            <div className="mt-2 text-2xl font-bold text-slate-900">{fmtHours(totalPlanHours)}</div>
+            <div className="text-xs text-slate-500 mt-1">{t('dashboard.kpi.yearTotal', 'Year Total')}</div>
+          </div>
+          <div className="bg-white border-l-4 border-emerald-500 rounded-lg p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">{t('dashboard.kpi.actualHoursLabel', 'Actual Hours')}</div>
+              <Clock className="w-5 h-5 text-emerald-500" />
+            </div>
+            <div className="mt-2 text-2xl font-bold text-slate-900">{fmtHours(totalActualHours)}</div>
+            <div className="text-xs text-slate-500 mt-1">{achievementRate.toFixed(1)}% {t('dashboard.kpi.achievementLabel', 'Achievement')}</div>
+          </div>
+          <div className="bg-white border-l-4 border-teal-500 rounded-lg p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-semibold text-teal-600 uppercase tracking-wider">{t('dashboard.kpi.achievementLabel', 'Achievement')}</div>
+              <TrendingUp className="w-5 h-5 text-teal-500" />
+            </div>
+            <div className={`mt-2 text-2xl font-bold ${rateColor}`}>{achievementRate.toFixed(1)}%</div>
+            <div className="text-xs text-slate-500 mt-1">{t('dashboard.kpi.remainingLabel', 'Remaining Hours')} {fmtHours(remainingHours)}</div>
+          </div>
+          <div className="bg-white border-l-4 border-slate-500 rounded-lg p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-semibold text-slate-700 uppercase tracking-wider">{t('dashboard.kpi.unitPriceLabel', 'Unit Rate')}</div>
+              <DollarSign className="w-5 h-5 text-slate-500" />
+            </div>
+            <div className="mt-2 text-2xl font-bold text-slate-900">{fmt(unitPrice)}</div>
+            <div className="text-xs text-slate-500 mt-1">{toMan(unitPrice)}{t('dashboard.perHour', ' / hour')}</div>
+          </div>
+        </div>
+
+        {/* Row 2: Gross Revenue */}
+        <div id="section-gross-revenue" className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div
+            className="col-span-1 rounded-xl p-5 shadow-md text-white"
+            style={{ background: `linear-gradient(to right, ${dashboardColors.grossPlanFrom}, ${dashboardColors.grossPlanTo})` }}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wider text-sky-100 font-semibold">{t('dashboard.gross.plan', 'Gross Revenue (Plan)')}</p>
+                <p className="text-lg font-bold">{t('dashboard.gross.plan', 'Gross Revenue (Plan)')}</p>
+              </div>
+              <TrendingUp className="w-6 h-6 text-white" />
+            </div>
+            <div className="mt-3 text-3xl font-bold">{fmt(grossRevenuePlan)}</div>
+            <div className="text-sm text-sky-100">{toMan(grossRevenuePlan)}</div>
+            <div className="mt-3 text-xs text-sky-100 border-t border-white/30 pt-2">
+              {t('dashboard.kpi.calculatedPerProject', 'Calculated using period-specific project rates')}
+            </div>
+          </div>
+          <div
+            className="col-span-1 rounded-xl p-5 shadow-md text-white"
+            style={{ background: `linear-gradient(to right, ${dashboardColors.grossActualFrom}, ${dashboardColors.grossActualTo})` }}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wider text-emerald-100 font-semibold">{t('dashboard.gross.actual', 'Gross Revenue (Actual)')}</p>
+                <p className="text-lg font-bold">{t('dashboard.gross.actual', 'Gross Revenue (Actual)')}</p>
+              </div>
+              <DollarSign className="w-6 h-6 text-white" />
+            </div>
+            <div className="mt-3 text-3xl font-bold">{fmt(grossRevenueActual)}</div>
+            <div className="text-sm text-emerald-100">{toMan(grossRevenueActual)}</div>
+            <div className="mt-3 text-xs text-emerald-100 border-t border-white/30 pt-2">
+              {t('dashboard.kpi.calculatedPerProject', 'Calculated using period-specific project rates')}
+            </div>
+          </div>
+        </div>
+
+        {/* Row 3: Net Revenue */}
+        <div id="section-net-revenue" className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div
+            className="bg-white rounded-xl p-5 shadow-sm border col-span-1"
+            style={{ borderColor: dashboardColors.netPlanBorder, borderWidth: '2px' }}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wider text-teal-600 font-semibold">{t('dashboard.net.plan', 'Net Revenue (Plan)')}</p>
+                <p className="text-lg font-bold text-slate-900">{t('dashboard.net.plan', 'Net Revenue (Plan)')}</p>
+              </div>
+              <TrendingUp className="w-6 h-6 text-teal-500" />
+            </div>
+            <div className="mt-3 text-3xl font-bold text-slate-900">{fmtSigned(netRevenuePlan)}</div>
+            <div className="text-sm text-teal-600">{toMan(netRevenuePlan)}</div>
+            <div className="mt-3 text-xs text-slate-500 border-t border-slate-100 pt-2 space-y-1">
+              <div className="flex justify-between"><span>{t('dashboard.gross.plan', 'Gross Revenue (Plan)')}</span><span>{fmt(grossRevenuePlan)}</span></div>
+              <div className="flex justify-between text-red-600 font-semibold"><span>{t('dashboard.summary.license', 'License Cost')}</span><span>- {fmt(licenseTotal)}</span></div>
+              <div className="flex justify-between font-semibold text-teal-700"><span>{t('dashboard.net.plan', 'Net Revenue (Plan)')}</span><span>{fmtSigned(netRevenuePlan)}</span></div>
+              <div className="flex justify-between text-teal-600 font-semibold"><span>{t('dashboard.net.margin', 'Profit Margin')}</span><span>{profitMarginPlan.toFixed(1)}%</span></div>
+            </div>
+          </div>
+          <div
+            className="bg-white rounded-xl p-5 shadow-sm border col-span-1"
+            style={{ borderColor: dashboardColors.netActualBorder, borderWidth: '2px' }}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wider text-slate-600 font-semibold">{t('dashboard.net.actual', 'Net Revenue (Actual)')}</p>
+                <p className="text-lg font-bold text-slate-900">{t('dashboard.net.actual', 'Net Revenue (Actual)')}</p>
+              </div>
+              <DollarSign className="w-6 h-6" />
+            </div>
+            <div className={`mt-3 text-3xl font-bold ${netRevenueActual >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{fmtSigned(netRevenueActual)}</div>
+            <div className="text-sm text-slate-600">{toMan(netRevenueActual)}</div>
+            <div className="mt-3 text-xs text-slate-500 border-t border-slate-100 pt-2 space-y-1">
+              <div className="flex justify-between"><span>{t('dashboard.gross.actual', 'Gross Revenue (Actual)')}</span><span>{fmt(grossRevenueActual)}</span></div>
+              <div className="flex justify-between text-red-600 font-semibold"><span>{t('dashboard.summary.license', 'License Cost')}</span><span>- {fmt(licenseTotal)}</span></div>
+              <div className="flex justify-between font-semibold"><span>{t('dashboard.net.actual', 'Net Revenue (Actual)')}</span><span>{fmtSigned(netRevenueActual)}</span></div>
+              <div className={`flex justify-between font-semibold ${netRevenueActual >= 0 ? 'text-emerald-700' : 'text-red-700'}`}><span>{t('dashboard.net.margin', 'Profit Margin')}</span><span>{profitMarginActual.toFixed(1)}%</span></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Row 4: License Card */}
+        <div
+          id="section-license-card"
+          className="text-white rounded-xl p-5 shadow-md"
+          style={{ background: `linear-gradient(to right, ${dashboardColors.licenseFrom}, ${dashboardColors.licenseTo})` }}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-xs uppercase tracking-wider text-teal-100 font-semibold">{t('dashboard.license.card.title', 'CAD License Management')}</p>
+              <p className="text-lg font-bold">{t('dashboard.license.card.subtitle', 'Annual License Fee')}</p>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-bold">{fmt(licenseTotal)}</div>
+              <div className="text-sm text-teal-50">{toMan(licenseTotal)}</div>
+            </div>
+          </div>
+          <div className="grid md:grid-cols-3 gap-3">
+            <div className="bg-white/15 rounded-lg p-3 border border-white/20">
+              <div className="text-xs text-teal-50 font-semibold">{t('dashboard.license.count', 'License Seats')}</div>
+              <div className="text-xl font-bold">{licenseComputers.toLocaleString()} {t('dashboard.license.units', 'units')}</div>
+              <div className="text-xs text-teal-50 mt-1">{t('dashboard.license.targetPc', 'Target PCs')}</div>
+            </div>
+            <div className="bg-white/15 rounded-lg p-3 border border-white/20">
+              <div className="text-xs text-teal-50 font-semibold">{t('dashboard.license.perSeat', 'Fee per Seat (JPY)')}</div>
+              <div className="text-xl font-bold">{fmt(licensePerComputer)}</div>
+              <div className="text-xs text-teal-50 mt-1">{toMan(licensePerComputer)}</div>
+            </div>
+            <div className="bg-white/15 rounded-lg p-3 border border-white/20">
+              <div className="text-xs text-teal-50 font-semibold">{t('dashboard.license.card.costPerHour', 'Cost per Hour (plan)')}</div>
+              <div className="text-xl font-bold">{fmt(Math.max(0, licenseCostPerHour))}</div>
+              <div className="text-xs text-teal-50 mt-1">{t('dashboard.costAnalysis.subtitle', 'Understand license impact')}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Row 5: Cost Analysis */}
+        <div
+          id="section-cost-analysis"
+          className="bg-white rounded-xl p-5 shadow-sm border"
+          style={{ borderColor: dashboardColors.costAnalysisBorder, borderWidth: '2px' }}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-xs uppercase tracking-wider text-amber-700 font-semibold">{t('dashboard.costAnalysis.title', 'Cost Analysis')}</p>
+              <p className="text-lg font-bold text-slate-900">{t('dashboard.costAnalysis.subtitle', 'Understand license impact')}</p>
+            </div>
+          </div>
+          <div className="grid md:grid-cols-3 gap-4">
+            <div className="p-4 rounded-lg border border-amber-100 bg-amber-50">
+              <p className="text-xs font-semibold text-amber-800 uppercase">{t('dashboard.costAnalysis.licensePerHour', 'License / Hour')}</p>
+              <p className="text-2xl font-bold text-amber-900 mt-1">{fmt(licenseCostPerHour)}</p>
+              <p className="text-xs text-amber-700 mt-1">{t('dashboard.notes.allocatePlan', 'Allocated over planned hours')}</p>
+            </div>
+            <div className="p-4 rounded-lg border border-slate-200 bg-slate-50">
+              <p className="text-xs font-semibold text-slate-700 uppercase">{t('dashboard.costAnalysis.netRate', 'Net Hourly Rate')}</p>
+              <p className="text-2xl font-bold text-slate-900 mt-1">{fmt(netHourlyRate)}</p>
+              <p className="text-xs text-slate-600 mt-1">{t('dashboard.notes.unitMinusLicense', 'Unit rate - license/hour')}</p>
+            </div>
+            <div className="p-4 rounded-lg border border-slate-200 bg-slate-50">
+              <p className="text-xs font-semibold text-slate-700 uppercase">{t('dashboard.costAnalysis.breakEven', 'Break-even Hours')}</p>
+              <p className="text-2xl font-bold text-slate-900 mt-1">{Math.ceil(breakEvenHours).toLocaleString()} h</p>
+              <p className="text-xs text-slate-600 mt-1">{t('dashboard.notes.breakEven', 'License cost ÷ unit rate')}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-md font-bold text-slate-700 flex items-center">
+                <TrendingUp className="w-4 h-4 mr-2 text-blue-500" />
+                {t('dashboard.charts.monthly', 'Monthly Revenue (Plan vs Actual)')}
+              </h3>
+              <div className="flex gap-2">
                 <button
-                  onClick={() => setDashboardColors(DEFAULT_KPI_COLORS)}
-                  className="text-xs px-3 py-1 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded transition-colors"
+                  onClick={() => setShowColorPicker(!showColorPicker)}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                  title="Customize chart colors"
                 >
-                  Reset Defaults
+                  <Palette className="w-4 h-4" />
+                  Colors
                 </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {/* Gross Plan */}
-                <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                  <p className="text-xs font-bold text-slate-600 mb-2">{t('dashboard.gross.plan', 'Gross Revenue (Plan)')} (Gradient)</p>
-                  <div className="flex gap-4">
-                    <div className="flex flex-col gap-1 flex-1">
-                      <label className="text-[10px] uppercase text-slate-500">From</label>
-                      <div className="flex items-center gap-2">
-                        <input type="color" value={dashboardColors.grossPlanFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, grossPlanFrom: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
-                        <input type="text" value={dashboardColors.grossPlanFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, grossPlanFrom: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1 flex-1">
-                      <label className="text-[10px] uppercase text-slate-500">To</label>
-                      <div className="flex items-center gap-2">
-                        <input type="color" value={dashboardColors.grossPlanTo} onChange={(e) => setDashboardColors({ ...dashboardColors, grossPlanTo: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
-                        <input type="text" value={dashboardColors.grossPlanTo} onChange={(e) => setDashboardColors({ ...dashboardColors, grossPlanTo: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Gross Actual */}
-                <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                  <p className="text-xs font-bold text-slate-600 mb-2">{t('dashboard.gross.actual', 'Gross Revenue (Actual)')} (Gradient)</p>
-                  <div className="flex gap-4">
-                    <div className="flex flex-col gap-1 flex-1">
-                      <label className="text-[10px] uppercase text-slate-500">From</label>
-                      <div className="flex items-center gap-2">
-                        <input type="color" value={dashboardColors.grossActualFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, grossActualFrom: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
-                        <input type="text" value={dashboardColors.grossActualFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, grossActualFrom: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1 flex-1">
-                      <label className="text-[10px] uppercase text-slate-500">To</label>
-                      <div className="flex items-center gap-2">
-                        <input type="color" value={dashboardColors.grossActualTo} onChange={(e) => setDashboardColors({ ...dashboardColors, grossActualTo: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
-                        <input type="text" value={dashboardColors.grossActualTo} onChange={(e) => setDashboardColors({ ...dashboardColors, grossActualTo: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* License */}
-                <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                  <p className="text-xs font-bold text-slate-600 mb-2">{t('dashboard.license.card.subtitle', 'Annual License Fee')} (Gradient)</p>
-                  <div className="flex gap-4">
-                    <div className="flex flex-col gap-1 flex-1">
-                      <label className="text-[10px] uppercase text-slate-500">From</label>
-                      <div className="flex items-center gap-2">
-                        <input type="color" value={dashboardColors.licenseFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, licenseFrom: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
-                        <input type="text" value={dashboardColors.licenseFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, licenseFrom: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1 flex-1">
-                      <label className="text-[10px] uppercase text-slate-500">To</label>
-                      <div className="flex items-center gap-2">
-                        <input type="color" value={dashboardColors.licenseTo} onChange={(e) => setDashboardColors({ ...dashboardColors, licenseTo: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
-                        <input type="text" value={dashboardColors.licenseTo} onChange={(e) => setDashboardColors({ ...dashboardColors, licenseTo: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Summary */}
-                <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                  <p className="text-xs font-bold text-slate-600 mb-2">Financial Summary (Gradient)</p>
-                  <div className="flex gap-4">
-                    <div className="flex flex-col gap-1 flex-1">
-                      <label className="text-[10px] uppercase text-slate-500">From</label>
-                      <div className="flex items-center gap-2">
-                        <input type="color" value={dashboardColors.summaryFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, summaryFrom: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
-                        <input type="text" value={dashboardColors.summaryFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, summaryFrom: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1 flex-1">
-                      <label className="text-[10px] uppercase text-slate-500">To</label>
-                      <div className="flex items-center gap-2">
-                        <input type="color" value={dashboardColors.summaryTo} onChange={(e) => setDashboardColors({ ...dashboardColors, summaryTo: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
-                        <input type="text" value={dashboardColors.summaryTo} onChange={(e) => setDashboardColors({ ...dashboardColors, summaryTo: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Solid Borders (Net Plan, Net Actual, Cost) */}
-                <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 xl:col-span-2">
-                  <p className="text-xs font-bold text-slate-600 mb-2">Card Borders (Solid)</p>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] uppercase text-slate-500">{t('dashboard.net.plan', 'Net Plan')}</label>
-                      <div className="flex items-center gap-2">
-                        <input type="color" value={dashboardColors.netPlanBorder} onChange={(e) => setDashboardColors({ ...dashboardColors, netPlanBorder: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
-                        <input type="text" value={dashboardColors.netPlanBorder} onChange={(e) => setDashboardColors({ ...dashboardColors, netPlanBorder: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] uppercase text-slate-500">{t('dashboard.net.actual', 'Net Actual')}</label>
-                      <div className="flex items-center gap-2">
-                        <input type="color" value={dashboardColors.netActualBorder} onChange={(e) => setDashboardColors({ ...dashboardColors, netActualBorder: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
-                        <input type="text" value={dashboardColors.netActualBorder} onChange={(e) => setDashboardColors({ ...dashboardColors, netActualBorder: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] uppercase text-slate-500">{t('dashboard.costAnalysis.title', 'Cost')}</label>
-                      <div className="flex items-center gap-2">
-                        <input type="color" value={dashboardColors.costAnalysisBorder} onChange={(e) => setDashboardColors({ ...dashboardColors, costAnalysisBorder: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
-                        <input type="text" value={dashboardColors.costAnalysisBorder} onChange={(e) => setDashboardColors({ ...dashboardColors, costAnalysisBorder: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Row 1: Core KPIs */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            <div className="bg-white border-l-4 border-sky-500 rounded-lg p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className="text-xs font-semibold text-sky-600 uppercase tracking-wider">{t('dashboard.kpi.planHoursLabel', 'Planned Hours')}</div>
-                <Clock className="w-5 h-5 text-sky-500" />
-              </div>
-              <div className="mt-2 text-2xl font-bold text-slate-900">{fmtHours(totalPlanHours)}</div>
-              <div className="text-xs text-slate-500 mt-1">{t('dashboard.kpi.yearTotal', 'Year Total')}</div>
-            </div>
-            <div className="bg-white border-l-4 border-emerald-500 rounded-lg p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">{t('dashboard.kpi.actualHoursLabel', 'Actual Hours')}</div>
-                <Clock className="w-5 h-5 text-emerald-500" />
-              </div>
-              <div className="mt-2 text-2xl font-bold text-slate-900">{fmtHours(totalActualHours)}</div>
-              <div className="text-xs text-slate-500 mt-1">{achievementRate.toFixed(1)}% {t('dashboard.kpi.achievementLabel', 'Achievement')}</div>
-            </div>
-            <div className="bg-white border-l-4 border-teal-500 rounded-lg p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className="text-xs font-semibold text-teal-600 uppercase tracking-wider">{t('dashboard.kpi.achievementLabel', 'Achievement')}</div>
-                <TrendingUp className="w-5 h-5 text-teal-500" />
-              </div>
-              <div className={`mt-2 text-2xl font-bold ${rateColor}`}>{achievementRate.toFixed(1)}%</div>
-              <div className="text-xs text-slate-500 mt-1">{t('dashboard.kpi.remainingLabel', 'Remaining Hours')} {fmtHours(remainingHours)}</div>
-            </div>
-            <div className="bg-white border-l-4 border-slate-500 rounded-lg p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className="text-xs font-semibold text-slate-700 uppercase tracking-wider">{t('dashboard.kpi.unitPriceLabel', 'Unit Rate')}</div>
-                <DollarSign className="w-5 h-5 text-slate-500" />
-              </div>
-              <div className="mt-2 text-2xl font-bold text-slate-900">{fmt(unitPrice)}</div>
-              <div className="text-xs text-slate-500 mt-1">{toMan(unitPrice)}{t('dashboard.perHour', ' / hour')}</div>
-            </div>
-          </div>
-
-          {/* Row 2: Gross Revenue */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div
-              className="col-span-1 rounded-xl p-5 shadow-md text-white"
-              style={{ background: `linear-gradient(to right, ${dashboardColors.grossPlanFrom}, ${dashboardColors.grossPlanTo})` }}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-wider text-sky-100 font-semibold">{t('dashboard.gross.plan', 'Gross Revenue (Plan)')}</p>
-                  <p className="text-lg font-bold">{t('dashboard.gross.plan', 'Gross Revenue (Plan)')}</p>
-                </div>
-                <TrendingUp className="w-6 h-6 text-white" />
-              </div>
-              <div className="mt-3 text-3xl font-bold">{fmt(grossRevenuePlan)}</div>
-              <div className="text-sm text-sky-100">{toMan(grossRevenuePlan)}</div>
-              <div className="mt-3 text-xs text-sky-100 border-t border-white/30 pt-2">
-                {t('dashboard.kpi.calculatedPerProject', 'Calculated using period-specific project rates')}
-              </div>
-            </div>
-            <div
-              className="col-span-1 rounded-xl p-5 shadow-md text-white"
-              style={{ background: `linear-gradient(to right, ${dashboardColors.grossActualFrom}, ${dashboardColors.grossActualTo})` }}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-wider text-emerald-100 font-semibold">{t('dashboard.gross.actual', 'Gross Revenue (Actual)')}</p>
-                  <p className="text-lg font-bold">{t('dashboard.gross.actual', 'Gross Revenue (Actual)')}</p>
-                </div>
-                <DollarSign className="w-6 h-6 text-white" />
-              </div>
-              <div className="mt-3 text-3xl font-bold">{fmt(grossRevenueActual)}</div>
-              <div className="text-sm text-emerald-100">{toMan(grossRevenueActual)}</div>
-              <div className="mt-3 text-xs text-emerald-100 border-t border-white/30 pt-2">
-                {t('dashboard.kpi.calculatedPerProject', 'Calculated using period-specific project rates')}
-              </div>
-            </div>
-          </div>
-
-          {/* Row 3: Net Revenue */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div
-              className="bg-white rounded-xl p-5 shadow-sm border col-span-1"
-              style={{ borderColor: dashboardColors.netPlanBorder, borderWidth: '2px' }}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-wider text-teal-600 font-semibold">{t('dashboard.net.plan', 'Net Revenue (Plan)')}</p>
-                  <p className="text-lg font-bold text-slate-900">{t('dashboard.net.plan', 'Net Revenue (Plan)')}</p>
-                </div>
-                <TrendingUp className="w-6 h-6 text-teal-500" />
-              </div>
-              <div className="mt-3 text-3xl font-bold text-slate-900">{fmtSigned(netRevenuePlan)}</div>
-              <div className="text-sm text-teal-600">{toMan(netRevenuePlan)}</div>
-              <div className="mt-3 text-xs text-slate-500 border-t border-slate-100 pt-2 space-y-1">
-                <div className="flex justify-between"><span>{t('dashboard.gross.plan', 'Gross Revenue (Plan)')}</span><span>{fmt(grossRevenuePlan)}</span></div>
-                <div className="flex justify-between text-red-600 font-semibold"><span>{t('dashboard.summary.license', 'License Cost')}</span><span>- {fmt(licenseTotal)}</span></div>
-                <div className="flex justify-between font-semibold text-teal-700"><span>{t('dashboard.net.plan', 'Net Revenue (Plan)')}</span><span>{fmtSigned(netRevenuePlan)}</span></div>
-                <div className="flex justify-between text-teal-600 font-semibold"><span>{t('dashboard.net.margin', 'Profit Margin')}</span><span>{profitMarginPlan.toFixed(1)}%</span></div>
-              </div>
-            </div>
-            <div
-              className="bg-white rounded-xl p-5 shadow-sm border col-span-1"
-              style={{ borderColor: dashboardColors.netActualBorder, borderWidth: '2px' }}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-wider text-slate-600 font-semibold">{t('dashboard.net.actual', 'Net Revenue (Actual)')}</p>
-                  <p className="text-lg font-bold text-slate-900">{t('dashboard.net.actual', 'Net Revenue (Actual)')}</p>
-                </div>
-                <DollarSign className="w-6 h-6" />
-              </div>
-              <div className={`mt-3 text-3xl font-bold ${netRevenueActual >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{fmtSigned(netRevenueActual)}</div>
-              <div className="text-sm text-slate-600">{toMan(netRevenueActual)}</div>
-              <div className="mt-3 text-xs text-slate-500 border-t border-slate-100 pt-2 space-y-1">
-                <div className="flex justify-between"><span>{t('dashboard.gross.actual', 'Gross Revenue (Actual)')}</span><span>{fmt(grossRevenueActual)}</span></div>
-                <div className="flex justify-between text-red-600 font-semibold"><span>{t('dashboard.summary.license', 'License Cost')}</span><span>- {fmt(licenseTotal)}</span></div>
-                <div className="flex justify-between font-semibold"><span>{t('dashboard.net.actual', 'Net Revenue (Actual)')}</span><span>{fmtSigned(netRevenueActual)}</span></div>
-                <div className={`flex justify-between font-semibold ${netRevenueActual >= 0 ? 'text-emerald-700' : 'text-red-700'}`}><span>{t('dashboard.net.margin', 'Profit Margin')}</span><span>{profitMarginActual.toFixed(1)}%</span></div>
-              </div>
-            </div>
-          </div>
-
-          {/* Row 4: License Card */}
-          <div
-            className="text-white rounded-xl p-5 shadow-md"
-            style={{ background: `linear-gradient(to right, ${dashboardColors.licenseFrom}, ${dashboardColors.licenseTo})` }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-xs uppercase tracking-wider text-teal-100 font-semibold">{t('dashboard.license.card.title', 'CAD License Management')}</p>
-                <p className="text-lg font-bold">{t('dashboard.license.card.subtitle', 'Annual License Fee')}</p>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold">{fmt(licenseTotal)}</div>
-                <div className="text-sm text-teal-50">{toMan(licenseTotal)}</div>
-              </div>
-            </div>
-            <div className="grid md:grid-cols-3 gap-3">
-              <div className="bg-white/15 rounded-lg p-3 border border-white/20">
-                <div className="text-xs text-teal-50 font-semibold">{t('dashboard.license.count', 'License Seats')}</div>
-                <div className="text-xl font-bold">{licenseComputers.toLocaleString()} {t('dashboard.license.units', 'units')}</div>
-                <div className="text-xs text-teal-50 mt-1">{t('dashboard.license.targetPc', 'Target PCs')}</div>
-              </div>
-              <div className="bg-white/15 rounded-lg p-3 border border-white/20">
-                <div className="text-xs text-teal-50 font-semibold">{t('dashboard.license.perSeat', 'Fee per Seat (JPY)')}</div>
-                <div className="text-xl font-bold">{fmt(licensePerComputer)}</div>
-                <div className="text-xs text-teal-50 mt-1">{toMan(licensePerComputer)}</div>
-              </div>
-              <div className="bg-white/15 rounded-lg p-3 border border-white/20">
-                <div className="text-xs text-teal-50 font-semibold">{t('dashboard.license.card.costPerHour', 'Cost per Hour (plan)')}</div>
-                <div className="text-xl font-bold">{fmt(Math.max(0, licenseCostPerHour))}</div>
-                <div className="text-xs text-teal-50 mt-1">{t('dashboard.costAnalysis.subtitle', 'Understand license impact')}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Row 5: Cost Analysis */}
-          <div
-            className="bg-white rounded-xl p-5 shadow-sm border"
-            style={{ borderColor: dashboardColors.costAnalysisBorder, borderWidth: '2px' }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-xs uppercase tracking-wider text-amber-700 font-semibold">{t('dashboard.costAnalysis.title', 'Cost Analysis')}</p>
-                <p className="text-lg font-bold text-slate-900">{t('dashboard.costAnalysis.subtitle', 'Understand license impact')}</p>
-              </div>
-            </div>
-            <div className="grid md:grid-cols-3 gap-4">
-              <div className="p-4 rounded-lg border border-amber-100 bg-amber-50">
-                <p className="text-xs font-semibold text-amber-800 uppercase">{t('dashboard.costAnalysis.licensePerHour', 'License / Hour')}</p>
-                <p className="text-2xl font-bold text-amber-900 mt-1">{fmt(licenseCostPerHour)}</p>
-                <p className="text-xs text-amber-700 mt-1">{t('dashboard.notes.allocatePlan', 'Allocated over planned hours')}</p>
-              </div>
-              <div className="p-4 rounded-lg border border-slate-200 bg-slate-50">
-                <p className="text-xs font-semibold text-slate-700 uppercase">{t('dashboard.costAnalysis.netRate', 'Net Hourly Rate')}</p>
-                <p className="text-2xl font-bold text-slate-900 mt-1">{fmt(netHourlyRate)}</p>
-                <p className="text-xs text-slate-600 mt-1">{t('dashboard.notes.unitMinusLicense', 'Unit rate - license/hour')}</p>
-              </div>
-              <div className="p-4 rounded-lg border border-slate-200 bg-slate-50">
-                <p className="text-xs font-semibold text-slate-700 uppercase">{t('dashboard.costAnalysis.breakEven', 'Break-even Hours')}</p>
-                <p className="text-2xl font-bold text-slate-900 mt-1">{Math.ceil(breakEvenHours).toLocaleString()} h</p>
-                <p className="text-xs text-slate-600 mt-1">{t('dashboard.notes.breakEven', 'License cost ÷ unit rate')}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-md font-bold text-slate-700 flex items-center">
-                  <TrendingUp className="w-4 h-4 mr-2 text-blue-500" />
-                  {t('dashboard.charts.monthly', 'Monthly Revenue (Plan vs Actual)')}
-                </h3>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowColorPicker(!showColorPicker)}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                    title="Customize chart colors"
-                  >
-                    <Palette className="w-4 h-4" />
-                    Colors
-                  </button>
-                  <ChartExportMenu
-                    chartId="dashboard-monthly-chart"
-                    filenameRequest={`monthly_revenue_${selectedYear}`}
-                    data={stats}
-                  />
-                </div>
-              </div>
-              {/* Color Picker Section */}
-              {showColorPicker && (
-                <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                  <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-                    <Palette className="w-4 h-4" />
-                    Customize Chart Colors
-                  </h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs font-medium text-slate-600">{planShort} Revenue</label>
-                      <div className="flex items-center gap-2">
-                        <input type="color" value={chartColors.planRevenue} onChange={(e) => setChartColors({ ...chartColors, planRevenue: e.target.value })} className="w-10 h-8 rounded border border-slate-300 cursor-pointer" />
-                        <input type="text" value={chartColors.planRevenue} onChange={(e) => setChartColors({ ...chartColors, planRevenue: e.target.value })} className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded" />
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs font-medium text-slate-600">{actualShort} Revenue</label>
-                      <div className="flex items-center gap-2">
-                        <input type="color" value={chartColors.actualRevenue} onChange={(e) => setChartColors({ ...chartColors, actualRevenue: e.target.value })} className="w-10 h-8 rounded border border-slate-300 cursor-pointer" />
-                        <input type="text" value={chartColors.actualRevenue} onChange={(e) => setChartColors({ ...chartColors, actualRevenue: e.target.value })} className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded" />
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs font-medium text-slate-600">{t('dashboard.chart.accPlan', 'Acc Plan')}</label>
-                      <div className="flex items-center gap-2">
-                        <input type="color" value={chartColors.accPlan} onChange={(e) => setChartColors({ ...chartColors, accPlan: e.target.value })} className="w-10 h-8 rounded border border-slate-300 cursor-pointer" />
-                        <input type="text" value={chartColors.accPlan} onChange={(e) => setChartColors({ ...chartColors, accPlan: e.target.value })} className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded" />
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs font-medium text-slate-600">{t('dashboard.chart.accActual', 'Acc Actual')}</label>
-                      <div className="flex items-center gap-2">
-                        <input type="color" value={chartColors.accActual} onChange={(e) => setChartColors({ ...chartColors, accActual: e.target.value })} className="w-10 h-8 rounded border border-slate-300 cursor-pointer" />
-                        <input type="text" value={chartColors.accActual} onChange={(e) => setChartColors({ ...chartColors, accActual: e.target.value })} className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-              <div id="dashboard-monthly-chart" className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={12} />
-                    <YAxis axisLine={false} tickLine={false} fontSize={11} tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
-                    <Tooltip formatter={(val: number) => fmt(val as number)} />
-                    <Legend wrapperStyle={{ fontSize: '12px' }} />
-                    <Bar dataKey="plannedRevenue" name={planShort} fill={chartColors.planRevenue} radius={[4, 4, 0, 0]}>
-                      <LabelList dataKey="plannedRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill={chartColors.planRevenue} />
-                    </Bar>
-                    <Bar dataKey="actualRevenue" name={actualShort} fill={chartColors.actualRevenue} radius={[4, 4, 0, 0]}>
-                      <LabelList dataKey="actualRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill={chartColors.actualRevenue} fontWeight="bold" />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-md font-bold text-slate-700 flex items-center">
-                  <TrendingUp className="w-4 h-4 mr-2 text-green-500" />
-                  {t('dashboard.charts.cumulative', 'Cumulative Revenue (Plan vs Actual)')}
-                </h3>
                 <ChartExportMenu
-                  chartId="dashboard-cumulative-chart"
-                  filenameRequest={`cumulative_revenue_${selectedYear}`}
-                  data={accumulatedStats}
+                  chartId="dashboard-monthly-chart"
+                  filenameRequest={`monthly_revenue_${selectedYear}`}
+                  data={stats}
                 />
               </div>
-              <div id="dashboard-cumulative-chart" className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={accumulatedStats}>
-                    <defs>
-                      <linearGradient id="colorAct" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={chartColors.accActual} stopOpacity={0.1} />
-                        <stop offset="95%" stopColor={chartColors.accActual} stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="month" axisLine={false} tickLine={false} fontSize={12} />
-                    <YAxis axisLine={false} tickLine={false} fontSize={11} tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
-                    <Tooltip formatter={(val: number) => fmt(val as number)} />
-                    <Legend wrapperStyle={{ fontSize: '12px' }} />
-                    <Area type="monotone" dataKey="accActualRevenue" name={t('dashboard.chart.accActual', actualShort)} stroke={chartColors.accActual} fillOpacity={1} fill="url(#colorAct)" strokeWidth={2}>
-                      <LabelList dataKey="accActualRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill={chartColors.accActual} fontWeight="bold" offset={10} />
-                    </Area>
-                    <Line type="monotone" strokeDasharray="3 3" dataKey="accPlannedRevenue" name={t('dashboard.chart.accPlan', planShort)} stroke={chartColors.accPlan} strokeWidth={2} dot={false}>
-                      <LabelList dataKey="accPlannedRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill={chartColors.accPlan} offset={-10} />
-                    </Line>
-                  </ComposedChart>
-                </ResponsiveContainer>
+            </div>
+            {/* Color Picker Section */}
+            {showColorPicker && (
+              <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                  <Palette className="w-4 h-4" />
+                  Customize Chart Colors
+                </h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-slate-600">{planShort} Revenue</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={chartColors.planRevenue} onChange={(e) => setChartColors({ ...chartColors, planRevenue: e.target.value })} className="w-10 h-8 rounded border border-slate-300 cursor-pointer" />
+                      <input type="text" value={chartColors.planRevenue} onChange={(e) => setChartColors({ ...chartColors, planRevenue: e.target.value })} className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-slate-600">{actualShort} Revenue</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={chartColors.actualRevenue} onChange={(e) => setChartColors({ ...chartColors, actualRevenue: e.target.value })} className="w-10 h-8 rounded border border-slate-300 cursor-pointer" />
+                      <input type="text" value={chartColors.actualRevenue} onChange={(e) => setChartColors({ ...chartColors, actualRevenue: e.target.value })} className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-slate-600">{t('dashboard.chart.accPlan', 'Acc Plan')}</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={chartColors.accPlan} onChange={(e) => setChartColors({ ...chartColors, accPlan: e.target.value })} className="w-10 h-8 rounded border border-slate-300 cursor-pointer" />
+                      <input type="text" value={chartColors.accPlan} onChange={(e) => setChartColors({ ...chartColors, accPlan: e.target.value })} className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-slate-600">{t('dashboard.chart.accActual', 'Acc Actual')}</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={chartColors.accActual} onChange={(e) => setChartColors({ ...chartColors, accActual: e.target.value })} className="w-10 h-8 rounded border border-slate-300 cursor-pointer" />
+                      <input type="text" value={chartColors.accActual} onChange={(e) => setChartColors({ ...chartColors, accActual: e.target.value })} className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded" />
+                    </div>
+                  </div>
+                </div>
               </div>
+            )}
+            <div id="dashboard-monthly-chart" className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stats}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={12} />
+                  <YAxis axisLine={false} tickLine={false} fontSize={11} tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
+                  <Tooltip formatter={(val: number) => fmt(val as number)} />
+                  <Legend wrapperStyle={{ fontSize: '12px' }} />
+                  <Bar dataKey="plannedRevenue" name={planShort} fill={chartColors.planRevenue} radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="plannedRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill={chartColors.planRevenue} />
+                  </Bar>
+                  <Bar dataKey="actualRevenue" name={actualShort} fill={chartColors.actualRevenue} radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="actualRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill={chartColors.actualRevenue} fontWeight="bold" />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </div>
 
-          {/* Financial Summary */}
-          <div
-            className="text-white rounded-xl p-5 shadow-md flex-shrink-0"
-            style={{ background: `linear-gradient(to right, ${dashboardColors.summaryFrom}, ${dashboardColors.summaryTo})` }}
-          >
-            <div className="grid md:grid-cols-4 gap-4">
-              <div className="bg-white/10 rounded-lg p-4 border border-white/15">
-                <p className="text-xs font-semibold text-indigo-100 uppercase">{t('dashboard.summary.gross', 'Gross (Actual)')}</p>
-                <p className="text-2xl font-bold mt-1">{fmt(grossRevenueActual)}</p>
-                <p className="text-sm text-indigo-100">{toMan(grossRevenueActual)}</p>
-              </div>
-              <div className="bg-white/10 rounded-lg p-4 border border-white/15">
-                <p className="text-xs font-semibold text-indigo-100 uppercase">{t('dashboard.summary.license', 'License Cost')}</p>
-                <p className="text-2xl font-bold mt-1">{fmt(licenseTotal)}</p>
-                <p className="text-sm text-indigo-100">{toMan(licenseTotal)}</p>
-              </div>
-              <div className="bg-white/10 rounded-lg p-4 border border-white/15">
-                <p className="text-xs font-semibold text-indigo-100 uppercase">{t('dashboard.summary.net', 'Net (Actual)')}</p>
-                <p className="text-2xl font-bold mt-1">{fmtSigned(netRevenueActual)}</p>
-                <p className="text-sm text-indigo-100">{toMan(netRevenueActual)}</p>
-              </div>
-              <div className="bg-white/10 rounded-lg p-4 border border-white/15">
-                <p className="text-xs font-semibold text-indigo-100 uppercase">{t('dashboard.summary.margin', 'Margin (Actual)')}</p>
-                <p className="text-2xl font-bold mt-1">{profitMarginActual.toFixed(1)}%</p>
-                <p className="text-sm text-indigo-100">Net / Gross</p>
-              </div>
+          <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-md font-bold text-slate-700 flex items-center">
+                <TrendingUp className="w-4 h-4 mr-2 text-green-500" />
+                {t('dashboard.charts.cumulative', 'Cumulative Revenue (Plan vs Actual)')}
+              </h3>
+              <ChartExportMenu
+                chartId="dashboard-cumulative-chart"
+                filenameRequest={`cumulative_revenue_${selectedYear}`}
+                data={accumulatedStats}
+              />
+            </div>
+            <div id="dashboard-cumulative-chart" className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={accumulatedStats}>
+                  <defs>
+                    <linearGradient id="colorAct" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={chartColors.accActual} stopOpacity={0.1} />
+                      <stop offset="95%" stopColor={chartColors.accActual} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="month" axisLine={false} tickLine={false} fontSize={12} />
+                  <YAxis axisLine={false} tickLine={false} fontSize={11} tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
+                  <Tooltip formatter={(val: number) => fmt(val as number)} />
+                  <Legend wrapperStyle={{ fontSize: '12px' }} />
+                  <Area type="monotone" dataKey="accActualRevenue" name={t('dashboard.chart.accActual', actualShort)} stroke={chartColors.accActual} fillOpacity={1} fill="url(#colorAct)" strokeWidth={2}>
+                    <LabelList dataKey="accActualRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill={chartColors.accActual} fontWeight="bold" offset={10} />
+                  </Area>
+                  <Line type="monotone" strokeDasharray="3 3" dataKey="accPlannedRevenue" name={t('dashboard.chart.accPlan', planShort)} stroke={chartColors.accPlan} strokeWidth={2} dot={false}>
+                    <LabelList dataKey="accPlannedRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill={chartColors.accPlan} offset={-10} />
+                  </Line>
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+        {/* Financial Summary */}
+        <div
+          id="section-financial-summary"
+          className="text-white rounded-xl p-5 shadow-md flex-shrink-0"
+          style={{ background: `linear-gradient(to right, ${dashboardColors.summaryFrom}, ${dashboardColors.summaryTo})` }}
+        >
+          <div className="grid md:grid-cols-4 gap-4">
+            <div className="bg-white/10 rounded-lg p-4 border border-white/15">
+              <p className="text-xs font-semibold text-indigo-100 uppercase">{t('dashboard.summary.gross', 'Gross (Actual)')}</p>
+              <p className="text-2xl font-bold mt-1">{fmt(grossRevenueActual)}</p>
+              <p className="text-sm text-indigo-100">{toMan(grossRevenueActual)}</p>
+            </div>
+            <div className="bg-white/10 rounded-lg p-4 border border-white/15">
+              <p className="text-xs font-semibold text-indigo-100 uppercase">{t('dashboard.summary.license', 'License Cost')}</p>
+              <p className="text-2xl font-bold mt-1">{fmt(licenseTotal)}</p>
+              <p className="text-sm text-indigo-100">{toMan(licenseTotal)}</p>
+            </div>
+            <div className="bg-white/10 rounded-lg p-4 border border-white/15">
+              <p className="text-xs font-semibold text-indigo-100 uppercase">{t('dashboard.summary.net', 'Net (Actual)')}</p>
+              <p className="text-2xl font-bold mt-1">{fmtSigned(netRevenueActual)}</p>
+              <p className="text-sm text-indigo-100">{toMan(netRevenueActual)}</p>
+            </div>
+            <div className="bg-white/10 rounded-lg p-4 border border-white/15">
+              <p className="text-xs font-semibold text-indigo-100 uppercase">{t('dashboard.summary.margin', 'Margin (Actual)')}</p>
+              <p className="text-2xl font-bold mt-1">{profitMarginActual.toFixed(1)}%</p>
+              <p className="text-sm text-indigo-100">Net / Gross</p>
             </div>
           </div>
         </div>
