@@ -352,38 +352,7 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Row 2: License Card */}
-        <div className="bg-gradient-to-r from-teal-600 to-emerald-500 text-white rounded-xl p-5 shadow-md">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <p className="text-xs uppercase tracking-wider text-teal-100 font-semibold">{t('dashboard.license.card.title', 'CAD License Management')}</p>
-              <p className="text-lg font-bold">{t('dashboard.license.card.subtitle', 'Annual License Fee')}</p>
-            </div>
-            <div className="text-right">
-              <div className="text-2xl font-bold">{fmt(licenseTotal)}</div>
-              <div className="text-sm text-teal-50">{toMan(licenseTotal)}</div>
-            </div>
-          </div>
-          <div className="grid md:grid-cols-3 gap-3">
-            <div className="bg-white/15 rounded-lg p-3 border border-white/20">
-              <div className="text-xs text-teal-50 font-semibold">{t('dashboard.license.count', 'License Seats')}</div>
-              <div className="text-xl font-bold">{licenseComputers.toLocaleString()} {t('dashboard.license.units', 'units')}</div>
-              <div className="text-xs text-teal-50 mt-1">{t('dashboard.license.targetPc', 'Target PCs')}</div>
-            </div>
-            <div className="bg-white/15 rounded-lg p-3 border border-white/20">
-              <div className="text-xs text-teal-50 font-semibold">{t('dashboard.license.perSeat', 'Fee per Seat (JPY)')}</div>
-              <div className="text-xl font-bold">{fmt(licensePerComputer)}</div>
-              <div className="text-xs text-teal-50 mt-1">{toMan(licensePerComputer)}</div>
-            </div>
-            <div className="bg-white/15 rounded-lg p-3 border border-white/20">
-              <div className="text-xs text-teal-50 font-semibold">{t('dashboard.license.card.costPerHour', 'Cost per Hour (plan)')}</div>
-              <div className="text-xl font-bold">{fmt(Math.max(0, licenseCostPerHour))}</div>
-              <div className="text-xs text-teal-50 mt-1">{t('dashboard.costAnalysis.subtitle', 'Understand license impact')}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Row 3: Gross Revenue */}
+        {/* Row 2: Gross Revenue */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="col-span-1 bg-gradient-to-r from-sky-500 to-sky-600 rounded-xl p-5 shadow-md text-white">
             <div className="flex items-center justify-between">
@@ -415,7 +384,7 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Row 4: Net Revenue */}
+        {/* Row 3: Net Revenue */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="bg-white rounded-xl p-5 shadow-sm border border-teal-100 col-span-1">
             <div className="flex items-center justify-between">
@@ -449,6 +418,37 @@ export const Dashboard: React.FC = () => {
               <div className="flex justify-between text-red-600 font-semibold"><span>{t('dashboard.summary.license', 'License Cost')}</span><span>- {fmt(licenseTotal)}</span></div>
               <div className="flex justify-between font-semibold"><span>{t('dashboard.net.actual', 'Net Revenue (Actual)')}</span><span>{fmtSigned(netRevenueActual)}</span></div>
               <div className={`flex justify-between font-semibold ${netRevenueActual >= 0 ? 'text-emerald-700' : 'text-red-700'}`}><span>{t('dashboard.net.margin', 'Profit Margin')}</span><span>{profitMarginActual.toFixed(1)}%</span></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Row 4: License Card */}
+        <div className="bg-gradient-to-r from-teal-600 to-emerald-500 text-white rounded-xl p-5 shadow-md">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-xs uppercase tracking-wider text-teal-100 font-semibold">{t('dashboard.license.card.title', 'CAD License Management')}</p>
+              <p className="text-lg font-bold">{t('dashboard.license.card.subtitle', 'Annual License Fee')}</p>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-bold">{fmt(licenseTotal)}</div>
+              <div className="text-sm text-teal-50">{toMan(licenseTotal)}</div>
+            </div>
+          </div>
+          <div className="grid md:grid-cols-3 gap-3">
+            <div className="bg-white/15 rounded-lg p-3 border border-white/20">
+              <div className="text-xs text-teal-50 font-semibold">{t('dashboard.license.count', 'License Seats')}</div>
+              <div className="text-xl font-bold">{licenseComputers.toLocaleString()} {t('dashboard.license.units', 'units')}</div>
+              <div className="text-xs text-teal-50 mt-1">{t('dashboard.license.targetPc', 'Target PCs')}</div>
+            </div>
+            <div className="bg-white/15 rounded-lg p-3 border border-white/20">
+              <div className="text-xs text-teal-50 font-semibold">{t('dashboard.license.perSeat', 'Fee per Seat (JPY)')}</div>
+              <div className="text-xl font-bold">{fmt(licensePerComputer)}</div>
+              <div className="text-xs text-teal-50 mt-1">{toMan(licensePerComputer)}</div>
+            </div>
+            <div className="bg-white/15 rounded-lg p-3 border border-white/20">
+              <div className="text-xs text-teal-50 font-semibold">{t('dashboard.license.card.costPerHour', 'Cost per Hour (plan)')}</div>
+              <div className="text-xl font-bold">{fmt(Math.max(0, licenseCostPerHour))}</div>
+              <div className="text-xs text-teal-50 mt-1">{t('dashboard.costAnalysis.subtitle', 'Understand license impact')}</div>
             </div>
           </div>
         </div>
