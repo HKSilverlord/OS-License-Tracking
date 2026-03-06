@@ -396,7 +396,7 @@ export const Dashboard: React.FC = () => {
             <div className="mt-3 text-3xl font-bold">{fmt(grossRevenuePlan)}</div>
             <div className="text-sm text-sky-100">{toMan(grossRevenuePlan)}</div>
             <div className="mt-3 text-xs text-sky-100 border-t border-white/30 pt-2">
-              {t('dashboard.kpi.planHoursLabel', 'Planned Hours')} {fmtHours(totalPlanHours)} × {t('dashboard.kpi.unitPriceLabel', 'Unit Rate')} {fmt(unitPrice)}
+              {t('dashboard.kpi.calculatedPerProject', 'Calculated using period-specific project rates')}
             </div>
           </div>
           <div className="col-span-1 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl p-5 shadow-md text-white">
@@ -410,7 +410,7 @@ export const Dashboard: React.FC = () => {
             <div className="mt-3 text-3xl font-bold">{fmt(grossRevenueActual)}</div>
             <div className="text-sm text-emerald-100">{toMan(grossRevenueActual)}</div>
             <div className="mt-3 text-xs text-emerald-100 border-t border-white/30 pt-2">
-              {t('dashboard.kpi.actualHoursLabel', 'Actual Hours')} {fmtHours(totalActualHours)} × {t('dashboard.kpi.unitPriceLabel', 'Unit Rate')} {fmt(unitPrice)}
+              {t('dashboard.kpi.calculatedPerProject', 'Calculated using period-specific project rates')}
             </div>
           </div>
         </div>
