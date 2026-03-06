@@ -64,6 +64,8 @@ export const Dashboard: React.FC = () => {
   }, []);
 
   const [yearlyData, setYearlyData] = useState<{ salesPlan: number, salesActual: number | null }>({ salesPlan: 0, salesActual: 0 });
+  // Price map from period_projects junction table (same source as YearlyDataView)
+  const [projectPriceMap, setProjectPriceMap] = useState<Record<string, { planPrice: number, actPrice: number }>>({});
 
   useEffect(() => {
     if (selectedYear === null) return;
@@ -78,14 +80,25 @@ export const Dashboard: React.FC = () => {
         const records = await dbService.getDashboardStats(selectedYear);
         setRawRecords(records);
 
-        // Fetch exact YearlyDataView aggregated values to ensure 100% match
-        const yearlyAggData = await dbService.getYearlyAggregatedData(selectedYear, selectedYear);
-        if (yearlyAggData && yearlyAggData.length > 0) {
-          setYearlyData({
-            salesPlan: yearlyAggData[0].salesPlan * 10000,
-            salesActual: yearlyAggData[0].salesActual !== null ? yearlyAggData[0].salesActual * 10000 : 0
-          });
-        }
+        // Fetch projects via period_projects (exactly like YearlyDataView)
+        // This is the ONLY way to get the correct plan_price/actual_price
+        const periods = await dbService.getPeriods();
+        const yearPeriods = periods.filter(p => p.startsWith(selectedYear.toString()));
+        const projectPromises = yearPeriods.map(p => dbService.getProjects(p));
+        const projectsArrays = await Promise.all(projectPromises);
+        const allProjects = projectsArrays.flat();
+
+        // Build price map from period_projects data (deduplicated by project ID)
+        const priceMap: Record<string, { planPrice: number, actPrice: number }> = {};
+        allProjects.forEach(p => {
+          if (p && p.id) {
+            priceMap[p.id] = {
+              planPrice: p.plan_price || p.unit_price || 0,
+              actPrice: p.actual_price || p.unit_price || 0
+            };
+          }
+        });
+        setProjectPriceMap(priceMap);
       } catch (e) {
         console.error(e);
       } finally {
@@ -114,9 +127,10 @@ export const Dashboard: React.FC = () => {
         const target = monthlyData[r.month - 1];
         target.plannedHours += Number(r.planned_hours) || 0;
         target.actualHours += Number(r.actual_hours) || 0;
-        // Use project specific prices matching YearlyDataView formula exactly
-        const planPrice = r.projects?.plan_price || r.projects?.unit_price || 0;
-        const actualPrice = r.projects?.actual_price || r.projects?.unit_price || 0;
+        // Use prices from period_projects (same source as YearlyDataView table)
+        const prices = projectPriceMap[r.project_id];
+        const planPrice = prices?.planPrice || 0;
+        const actualPrice = prices?.actPrice || 0;
         target.plannedRevenue += (Number(r.planned_hours) || 0) * planPrice;
         target.actualRevenue += (Number(r.actual_hours) || 0) * actualPrice;
       }
@@ -132,7 +146,7 @@ export const Dashboard: React.FC = () => {
       return { month: d.name, accPlannedRevenue: accPlan, accActualRevenue: accAct };
     });
     setAccumulatedStats(accData);
-  }, [rawRecords, unitPrice, language, selectedYear]);
+  }, [rawRecords, unitPrice, language, selectedYear, projectPriceMap]);
 
   const handleRateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value) || 0;
@@ -175,15 +189,16 @@ export const Dashboard: React.FC = () => {
   const totalPlanHours = stats.reduce((acc, curr) => acc + curr.plannedHours, 0);
   const totalActualHours = stats.reduce((acc, curr) => acc + curr.actualHours, 0);
 
-  // Replicate YearlyDataView logic exactly: group yearly hours by project, then multiply by price
+  // Replicate YearlyDataView logic exactly: group yearly hours by project, then multiply by price from period_projects
   const projectGrossList: Record<string, { planH: number, actH: number, planP: number, actP: number }> = {};
   rawRecords.forEach(r => {
     const pid = r.project_id;
     if (!projectGrossList[pid]) {
+      const prices = projectPriceMap[pid];
       projectGrossList[pid] = {
         planH: 0, actH: 0,
-        planP: r.projects?.plan_price || r.projects?.unit_price || 0,
-        actP: r.projects?.actual_price || r.projects?.unit_price || 0
+        planP: prices?.planPrice || 0,
+        actP: prices?.actPrice || 0
       };
     }
     projectGrossList[pid].planH += (Number(r.planned_hours) || 0);
