@@ -175,9 +175,30 @@ export const Dashboard: React.FC = () => {
   const totalPlanHours = stats.reduce((acc, curr) => acc + curr.plannedHours, 0);
   const totalActualHours = stats.reduce((acc, curr) => acc + curr.actualHours, 0);
 
-  // Use the exact aggregated sales directly from YearlyDataView's query
-  const grossRevenuePlan = yearlyData.salesPlan;
-  const grossRevenueActual = yearlyData.salesActual || 0;
+  // Replicate YearlyDataView logic exactly: group yearly hours by project, then multiply by price
+  const projectGrossList: Record<string, { planH: number, actH: number, planP: number, actP: number }> = {};
+  rawRecords.forEach(r => {
+    const pid = r.project_id;
+    if (!projectGrossList[pid]) {
+      projectGrossList[pid] = {
+        planH: 0, actH: 0,
+        planP: r.projects?.plan_price || r.projects?.unit_price || 0,
+        actP: r.projects?.actual_price || r.projects?.unit_price || 0
+      };
+    }
+    projectGrossList[pid].planH += (Number(r.planned_hours) || 0);
+    projectGrossList[pid].actH += (Number(r.actual_hours) || 0);
+  });
+
+  let exactGrossRevenuePlan = 0;
+  let exactGrossRevenueActual = 0;
+  Object.values(projectGrossList).forEach(p => {
+    exactGrossRevenuePlan += p.planH * p.planP;
+    exactGrossRevenueActual += p.actH * p.actP;
+  });
+
+  const grossRevenuePlan = exactGrossRevenuePlan;
+  const grossRevenueActual = exactGrossRevenueActual;
 
   const licenseTotal = licenseComputers * licensePerComputer;
   const netRevenuePlan = grossRevenuePlan - licenseTotal;
