@@ -4,7 +4,7 @@ import { formatCurrency } from '../utils/helpers';
 import { exportChartToSVG, generateChartFilename } from '../utils/chartExport';
 import { MonthlyStats, AccumulatedStats } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Area, Line, LabelList } from 'recharts';
-import { Loader2, TrendingUp, DollarSign, Clock, Calculator, Palette } from 'lucide-react';
+import { Loader2, TrendingUp, JapaneseYen, Clock, Calculator, Palette } from 'lucide-react';
 import { ChartExportMenu } from './ChartExportMenu';
 import { SectionExportMenu } from './SectionExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -563,7 +563,7 @@ export const Dashboard: React.FC = () => {
               <div>
                 <p className="text-xs uppercase tracking-wider text-sky-100 font-semibold">{t('dashboard.gross.plan', '総売上（計画）')}</p>
               </div>
-              <DollarSign className="w-5 h-5 text-white/70" />
+              <JapaneseYen className="w-5 h-5 text-white/70" />
             </div>
             <div className="mt-3 text-3xl font-bold">{fmt(grossRevenuePlan)}</div>
             <div className="text-sm text-sky-100 mt-1">{toMan(grossRevenuePlan)}</div>
@@ -579,7 +579,7 @@ export const Dashboard: React.FC = () => {
               <div>
                 <p className="text-xs uppercase tracking-wider text-emerald-100 font-semibold">{t('dashboard.gross.actual', '総売上（実績）')}</p>
               </div>
-              <DollarSign className="w-5 h-5 text-white/70" />
+              <JapaneseYen className="w-5 h-5 text-white/70" />
             </div>
             <div className="mt-3 text-3xl font-bold">{fmt(grossRevenueActual)}</div>
             <div className="text-sm text-emerald-100 mt-1">{toMan(grossRevenueActual)}</div>
@@ -612,7 +612,7 @@ export const Dashboard: React.FC = () => {
             style={{ borderColor: dashboardColors.netPlanBorder }}
           >
             <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-              <DollarSign className="w-24 h-24" />
+              <JapaneseYen className="w-24 h-24" />
             </div>
             <div className="flex items-center justify-between relative z-10">
               <div>
@@ -636,7 +636,7 @@ export const Dashboard: React.FC = () => {
             style={{ borderColor: dashboardColors.netActualBorder }}
           >
             <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-              <DollarSign className="w-24 h-24" />
+              <JapaneseYen className="w-24 h-24" />
             </div>
             <div className="flex items-center justify-between relative z-10">
               <div>
