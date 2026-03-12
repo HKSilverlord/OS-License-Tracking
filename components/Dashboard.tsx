@@ -511,120 +511,175 @@ export const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Row 1: Core KPIs */}
+        {/* Row 1: Core KPIs (Hours) */}
         <div id="section-core-kpis" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <div className="bg-white border-l-4 border-sky-500 rounded-lg p-4 shadow-sm">
+          <div className="bg-white border-l-4 border-sky-500 rounded-lg p-4 shadow-sm flex flex-col justify-center">
             <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold text-sky-600 uppercase tracking-wider">{t('dashboard.kpi.planHoursLabel', 'Planned Hours')}</div>
+              <div className="text-xs font-semibold text-sky-600 uppercase tracking-wider">{t('dashboard.kpi.planHoursLabel', '計画工数')}</div>
               <Clock className="w-5 h-5 text-sky-500" />
             </div>
             <div className="mt-2 text-2xl font-bold text-slate-900">{fmtHours(totalPlanHours)}</div>
             <div className="text-xs text-slate-500 mt-1">{t('dashboard.kpi.yearTotal', 'Year Total')}</div>
           </div>
-          <div className="bg-white border-l-4 border-emerald-500 rounded-lg p-4 shadow-sm">
+          <div className="bg-white border-l-4 border-emerald-500 rounded-lg p-4 shadow-sm flex flex-col justify-center">
             <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">{t('dashboard.kpi.actualHoursLabel', 'Actual Hours')}</div>
+              <div className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">{t('dashboard.kpi.actualHoursLabel', '実績工数')}</div>
               <Clock className="w-5 h-5 text-emerald-500" />
             </div>
             <div className="mt-2 text-2xl font-bold text-slate-900">{fmtHours(totalActualHours)}</div>
-            <div className="text-xs text-slate-500 mt-1">{achievementRate.toFixed(1)}% {t('dashboard.kpi.achievementLabel', 'Achievement')}</div>
+            <div className="text-xs text-slate-500 mt-1">{t('dashboard.kpi.actualHoursDesc', 'Actual Year Total')}</div>
           </div>
-          <div className="bg-white border-l-4 border-teal-500 rounded-lg p-4 shadow-sm">
+          <div className={`bg-white border-l-4 rounded-lg p-4 shadow-sm flex flex-col justify-center ${totalActualHours - totalPlanHours >= 0 ? 'border-emerald-500' : 'border-rose-500 bg-rose-50'}`}>
             <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold text-teal-600 uppercase tracking-wider">{t('dashboard.kpi.achievementLabel', 'Achievement')}</div>
+              <div className={`text-xs font-semibold uppercase tracking-wider ${totalActualHours - totalPlanHours >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                {t('dashboard.kpi.varianceLabel', '差異 (Variance)')}
+              </div>
+              <TrendingUp className={`w-5 h-5 ${totalActualHours - totalPlanHours >= 0 ? 'text-emerald-500' : 'text-rose-500'}`} />
+            </div>
+            <div className={`mt-2 text-2xl font-bold flex items-center gap-1 ${totalActualHours - totalPlanHours >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+              {totalActualHours - totalPlanHours < 0 ? '▲' : '▼'} {fmtHours(Math.abs(totalActualHours - totalPlanHours))}
+            </div>
+            <div className={`text-xs mt-1 ${totalActualHours - totalPlanHours >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+              Actual - Plan
+            </div>
+          </div>
+          <div className="bg-white border-l-4 border-teal-500 rounded-lg p-4 shadow-sm flex flex-col justify-center">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-semibold text-teal-600 uppercase tracking-wider">{t('dashboard.kpi.achievementLabel', '達成率')}</div>
               <TrendingUp className="w-5 h-5 text-teal-500" />
             </div>
             <div className={`mt-2 text-2xl font-bold ${rateColor}`}>{achievementRate.toFixed(1)}%</div>
             <div className="text-xs text-slate-500 mt-1">{t('dashboard.kpi.remainingLabel', 'Remaining Hours')} {fmtHours(remainingHours)}</div>
           </div>
-          <div className="bg-white border-l-4 border-slate-500 rounded-lg p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold text-slate-700 uppercase tracking-wider">{t('dashboard.kpi.unitPriceLabel', 'Unit Rate')}</div>
-              <DollarSign className="w-5 h-5 text-slate-500" />
-            </div>
-            <div className="mt-2 text-2xl font-bold text-slate-900">{fmt(unitPrice)}</div>
-            <div className="text-xs text-slate-500 mt-1">{toMan(unitPrice)}{t('dashboard.perHour', ' / hour')}</div>
-          </div>
         </div>
 
         {/* Row 2: Gross Revenue */}
-        <div id="section-gross-revenue" className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div id="section-gross-revenue" className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div
-            className="col-span-1 rounded-xl p-5 shadow-md text-white"
+            className="col-span-1 rounded-xl p-5 shadow-sm text-white"
             style={{ background: `linear-gradient(to right, ${dashboardColors.grossPlanFrom}, ${dashboardColors.grossPlanTo})` }}
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase tracking-wider text-sky-100 font-semibold">{t('dashboard.gross.plan', 'Gross Revenue (Plan)')}</p>
-                <p className="text-lg font-bold">{t('dashboard.gross.plan', 'Gross Revenue (Plan)')}</p>
+                <p className="text-xs uppercase tracking-wider text-sky-100 font-semibold">{t('dashboard.gross.plan', '総売上（計画）')}</p>
               </div>
-              <TrendingUp className="w-6 h-6 text-white" />
+              <DollarSign className="w-5 h-5 text-white/70" />
             </div>
             <div className="mt-3 text-3xl font-bold">{fmt(grossRevenuePlan)}</div>
-            <div className="text-sm text-sky-100">{toMan(grossRevenuePlan)}</div>
-            <div className="mt-3 text-xs text-sky-100 border-t border-white/30 pt-2">
+            <div className="text-sm text-sky-100 mt-1">{toMan(grossRevenuePlan)}</div>
+            <div className="mt-3 text-xs text-sky-100 border-t border-white/30 pt-2 opacity-80">
               {t('dashboard.kpi.calculatedPerProject', 'Calculated using period-specific project rates')}
             </div>
           </div>
           <div
-            className="col-span-1 rounded-xl p-5 shadow-md text-white"
+            className="col-span-1 rounded-xl p-5 shadow-sm text-white"
             style={{ background: `linear-gradient(to right, ${dashboardColors.grossActualFrom}, ${dashboardColors.grossActualTo})` }}
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase tracking-wider text-emerald-100 font-semibold">{t('dashboard.gross.actual', 'Gross Revenue (Actual)')}</p>
-                <p className="text-lg font-bold">{t('dashboard.gross.actual', 'Gross Revenue (Actual)')}</p>
+                <p className="text-xs uppercase tracking-wider text-emerald-100 font-semibold">{t('dashboard.gross.actual', '総売上（実績）')}</p>
               </div>
-              <DollarSign className="w-6 h-6 text-white" />
+              <DollarSign className="w-5 h-5 text-white/70" />
             </div>
             <div className="mt-3 text-3xl font-bold">{fmt(grossRevenueActual)}</div>
-            <div className="text-sm text-emerald-100">{toMan(grossRevenueActual)}</div>
-            <div className="mt-3 text-xs text-emerald-100 border-t border-white/30 pt-2">
+            <div className="text-sm text-emerald-100 mt-1">{toMan(grossRevenueActual)}</div>
+            <div className="mt-3 text-xs text-emerald-100 border-t border-white/30 pt-2 opacity-80">
               {t('dashboard.kpi.calculatedPerProject', 'Calculated using period-specific project rates')}
+            </div>
+          </div>
+          <div className={`col-span-1 rounded-xl p-5 shadow-sm border-2 flex flex-col justify-center ${grossRevenueActual - grossRevenuePlan >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-xs uppercase tracking-wider font-semibold ${grossRevenueActual - grossRevenuePlan >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  {t('dashboard.kpi.varianceLabel', '差異 (Variance)')}
+                </p>
+              </div>
+            </div>
+            <div className={`mt-3 text-3xl font-bold flex items-center min-w-0 ${grossRevenueActual - grossRevenuePlan >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+              <span className="mr-1 text-2xl">{grossRevenueActual - grossRevenuePlan < 0 ? '▲' : '▼'}</span>
+              <span className="truncate">{fmt(Math.abs(grossRevenueActual - grossRevenuePlan))}</span>
+            </div>
+            <div className={`text-sm mt-1 font-medium ${grossRevenueActual - grossRevenuePlan >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {toMan(Math.abs(grossRevenueActual - grossRevenuePlan))}
             </div>
           </div>
         </div>
 
-        {/* Row 3: Net Revenue */}
-        <div id="section-net-revenue" className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Row 3: Net Revenue (Profit) */}
+        <div id="section-net-revenue" className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div
-            className="bg-white rounded-xl p-5 shadow-sm border col-span-1"
-            style={{ borderColor: dashboardColors.netPlanBorder, borderWidth: '2px' }}
+            className="bg-white rounded-xl p-5 shadow-sm border-2 col-span-1 relative overflow-hidden"
+            style={{ borderColor: dashboardColors.netPlanBorder }}
           >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-wider text-teal-600 font-semibold">{t('dashboard.net.plan', 'Net Revenue (Plan)')}</p>
-                <p className="text-lg font-bold text-slate-900">{t('dashboard.net.plan', 'Net Revenue (Plan)')}</p>
-              </div>
-              <TrendingUp className="w-6 h-6 text-teal-500" />
+            <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+              <DollarSign className="w-24 h-24" />
             </div>
-            <div className="mt-3 text-3xl font-bold text-slate-900">{fmtSigned(netRevenuePlan)}</div>
-            <div className="text-sm text-teal-600">{toMan(netRevenuePlan)}</div>
-            <div className="mt-3 text-xs text-slate-500 border-t border-slate-100 pt-2 space-y-1">
-              <div className="flex justify-between"><span>{t('dashboard.gross.plan', 'Gross Revenue (Plan)')}</span><span>{fmt(grossRevenuePlan)}</span></div>
-              <div className="flex justify-between text-red-600 font-semibold"><span>{t('dashboard.summary.license', 'License Cost')}</span><span>- {fmt(licenseTotal)}</span></div>
-              <div className="flex justify-between font-semibold text-teal-700"><span>{t('dashboard.net.plan', 'Net Revenue (Plan)')}</span><span>{fmtSigned(netRevenuePlan)}</span></div>
-              <div className="flex justify-between text-teal-600 font-semibold"><span>{t('dashboard.net.margin', 'Profit Margin')}</span><span>{profitMarginPlan.toFixed(1)}%</span></div>
+            <div className="flex items-center justify-between relative z-10">
+              <div>
+                <p className="text-xs uppercase tracking-wider text-teal-600 font-semibold">{t('dashboard.net.plan', '利益 目標 (Target Profit)')}</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">Plan Revenue - License</p>
+              </div>
+            </div>
+            <div className="mt-4 text-3xl font-bold text-slate-900 relative z-10">{fmtSigned(netRevenuePlan)}</div>
+            <div className="text-sm font-semibold text-teal-600 mt-1 relative z-10">{toMan(netRevenuePlan)}</div>
+
+            <div className="mt-4 text-[11px] font-mono bg-slate-50 p-2 rounded border border-slate-100 text-slate-600 relative z-10">
+              <div className="flex justify-between">
+                <span>Gross: {toMan(grossRevenuePlan)}</span>
+                <span className="text-rose-500">- Lic: {toMan(licenseTotal)}</span>
+              </div>
             </div>
           </div>
+
           <div
-            className="bg-white rounded-xl p-5 shadow-sm border col-span-1"
-            style={{ borderColor: dashboardColors.netActualBorder, borderWidth: '2px' }}
+            className="bg-white rounded-xl p-5 shadow-sm border-2 col-span-1 relative overflow-hidden"
+            style={{ borderColor: dashboardColors.netActualBorder }}
           >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-wider text-slate-600 font-semibold">{t('dashboard.net.actual', 'Net Revenue (Actual)')}</p>
-                <p className="text-lg font-bold text-slate-900">{t('dashboard.net.actual', 'Net Revenue (Actual)')}</p>
-              </div>
-              <DollarSign className="w-6 h-6" />
+            <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+              <DollarSign className="w-24 h-24" />
             </div>
-            <div className={`mt-3 text-3xl font-bold ${netRevenueActual >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{fmtSigned(netRevenueActual)}</div>
-            <div className="text-sm text-slate-600">{toMan(netRevenueActual)}</div>
-            <div className="mt-3 text-xs text-slate-500 border-t border-slate-100 pt-2 space-y-1">
-              <div className="flex justify-between"><span>{t('dashboard.gross.actual', 'Gross Revenue (Actual)')}</span><span>{fmt(grossRevenueActual)}</span></div>
-              <div className="flex justify-between text-red-600 font-semibold"><span>{t('dashboard.summary.license', 'License Cost')}</span><span>- {fmt(licenseTotal)}</span></div>
-              <div className="flex justify-between font-semibold"><span>{t('dashboard.net.actual', 'Net Revenue (Actual)')}</span><span>{fmtSigned(netRevenueActual)}</span></div>
-              <div className={`flex justify-between font-semibold ${netRevenueActual >= 0 ? 'text-emerald-700' : 'text-red-700'}`}><span>{t('dashboard.net.margin', 'Profit Margin')}</span><span>{profitMarginActual.toFixed(1)}%</span></div>
+            <div className="flex items-center justify-between relative z-10">
+              <div>
+                <p className="text-xs uppercase tracking-wider text-slate-600 font-semibold">{t('dashboard.net.actual', '利益 実績 (Actual Profit)')}</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">Actual Revenue - License</p>
+              </div>
+            </div>
+            <div className={`mt-4 text-3xl font-bold relative z-10 ${netRevenueActual >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+              {fmtSigned(netRevenueActual)}
+            </div>
+            <div className={`text-sm font-semibold mt-1 relative z-10 ${netRevenueActual >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {toMan(netRevenueActual)}
+            </div>
+
+            <div className="mt-4 text-[11px] font-mono bg-slate-50 p-2 rounded border border-slate-100 text-slate-600 relative z-10">
+              <div className="flex justify-between">
+                <span>Gross: {toMan(grossRevenueActual)}</span>
+                <span className="text-rose-500">- Lic: {toMan(licenseTotal)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className={`col-span-1 rounded-xl p-5 shadow-sm border-2 flex flex-col justify-center relative overflow-hidden ${netRevenueActual - netRevenuePlan >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+            <div className="flex items-center justify-between relative z-10">
+              <div>
+                <p className={`text-xs uppercase tracking-wider font-semibold ${netRevenueActual - netRevenuePlan >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  {t('dashboard.kpi.varianceLabel', '差異 (Profit Variance)')}
+                </p>
+              </div>
+            </div>
+            <div className={`mt-4 text-3xl font-bold flex items-center min-w-0 relative z-10 ${netRevenueActual - netRevenuePlan >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+              <span className="mr-1 text-2xl">{netRevenueActual - netRevenuePlan < 0 ? '▲' : '▼'}</span>
+              <span className="truncate">{fmt(Math.abs(netRevenueActual - netRevenuePlan))}</span>
+            </div>
+            <div className={`text-sm mt-1 font-semibold relative z-10 ${netRevenueActual - netRevenuePlan >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {toMan(Math.abs(netRevenueActual - netRevenuePlan))}
+            </div>
+
+            <div className={`mt-4 text-[11px] font-mono p-2 rounded border relative z-10 ${netRevenueActual - netRevenuePlan >= 0 ? 'bg-emerald-100/50 border-emerald-200 text-emerald-800' : 'bg-rose-100/50 border-rose-200 text-rose-800'}`}>
+              <div className="flex justify-between">
+                <span>Actual Profit</span>
+                <span>- Target Profit</span>
+              </div>
             </div>
           </div>
         </div>
