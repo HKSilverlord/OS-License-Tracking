@@ -290,8 +290,10 @@ export const Dashboard: React.FC = () => {
     <div className="h-full overflow-y-auto p-4 md:p-6 bg-slate-50">
       <div className="max-w-7xl mx-auto space-y-6">
 
-        {/* Header & Controls */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+        {/* Group KPI to License with Header for single export */}
+        <div id="section-kpi-summary" className="space-y-6 relative">
+          {/* Header & Controls */}
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-3">
               <h2 className="text-xl font-bold text-slate-800">{`${t('header.dashboardTitle', 'Dashboard')} ${selectedYear}`}</h2>
@@ -311,6 +313,7 @@ export const Dashboard: React.FC = () => {
           <div className="flex flex-col md:flex-row items-end md:items-center gap-4">
             <SectionExportMenu sections={DASHBOARD_EXPORT_SECTIONS} />
             <button
+              data-html2canvas-ignore="true"
               onClick={() => setShowKpiColorPicker(!showKpiColorPicker)}
               className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
               title="ダッシュボードの色をカスタマイズ"
@@ -378,7 +381,7 @@ export const Dashboard: React.FC = () => {
 
         {/* Dashboard KPI Color Picker Panel */}
         {showKpiColorPicker && (
-          <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-6 animate-in slide-in-from-top-2">
+          <div data-html2canvas-ignore="true" className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-6 animate-in slide-in-from-top-2">
             <div className="flex items-center justify-between mb-4">
               <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
                 <Palette className="w-4 h-4 text-purple-600" />
@@ -508,8 +511,8 @@ export const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Group KPI to License for single export */}
-        <div id="section-kpi-summary" className="space-y-6">
+        {/* KPI to License wrapper */}
+        <div className="space-y-6">
           {/* Row 1: Core KPIs (Hours) */}
           <div id="section-core-kpis" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           <div className="bg-white border-l-4 border-sky-500 rounded-lg p-4 shadow-sm flex flex-col justify-center">
@@ -717,6 +720,7 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
         </div>
+        </div> {/* End of section-kpi-summary */}
 
         {/* Row 5: Cost Analysis */}
         <div
@@ -759,6 +763,7 @@ export const Dashboard: React.FC = () => {
               </h3>
               <div className="flex gap-2">
                 <button
+                  data-html2canvas-ignore="true"
                   onClick={() => setShowColorPicker(!showColorPicker)}
                   className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
                   title="Customize chart colors"
@@ -775,7 +780,7 @@ export const Dashboard: React.FC = () => {
             </div>
             {/* Color Picker Section */}
             {showColorPicker && (
-              <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+              <div data-html2canvas-ignore="true" className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
                 <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
                   <Palette className="w-4 h-4" />
                   チャートの色をカスタマイズ

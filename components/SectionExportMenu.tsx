@@ -44,7 +44,7 @@ export const SectionExportMenu: React.FC<SectionExportMenuProps> = ({
     };
 
     return (
-        <div className={`relative inline-block text-left section-export-menu ${className}`}>
+        <div data-html2canvas-ignore="true" className={`relative inline-block text-left section-export-menu ${className}`}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
                 className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
