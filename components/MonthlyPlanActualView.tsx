@@ -483,14 +483,18 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
             const pinnedData = monthlyData.find((d) => d.month === pinnedCard.month);
             if (!pinnedData) return null;
             
-            // Adjust to appear to the middle right of the column
-            const cardX = pinnedCard.x + 30; // Offset slightly to the right of the cursor/column center
-            const cardY = Math.max(20, pinnedCard.y - 50); // Center vertically around the clicked area, bounded to top
+            // Adjust to appear in the vertical middle of the chart, to the right of the column.
+            // If the column is in the later months, show the card to the left instead to avoid off-screen overflow.
+            const cardX = pinnedCard.month > 8 ? pinnedCard.x - 240 : pinnedCard.x + 30;
 
             return (
               <div 
                 className="absolute z-10 pointer-events-none transition-all duration-200 ease-in-out"
-                style={{ left: cardX, top: cardY }}
+                style={{ 
+                  left: cardX, 
+                  top: '50%',
+                  transform: 'translateY(-50%)'
+                }}
               >
                 <MonthDetailCard data={pinnedData} />
               </div>
@@ -521,8 +525,8 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 const monthLabel = monthEntry?.monthLabel;
                 return monthLabel ? (
                   <>
-                    <ReferenceArea xAxisId="main" x1={monthLabel} x2={monthLabel} fill="rgba(251,146,60,0.12)" />
-                    <ReferenceLine xAxisId="main" x={monthLabel} stroke="#f97316" strokeWidth={2} strokeDasharray="6 3" label={{ value: '今月', position: 'top', fontSize: 10, fill: '#f97316', fontWeight: 'bold' }} />
+                    <ReferenceArea yAxisId="left" xAxisId="main" x1={monthLabel} x2={monthLabel} fill="rgba(251,146,60,0.12)" />
+                    <ReferenceLine yAxisId="left" xAxisId="main" x={monthLabel} stroke="#f97316" strokeWidth={2} strokeDasharray="6 3" label={{ value: '今月', position: 'top', fontSize: 10, fill: '#f97316', fontWeight: 'bold' }} />
                   </>
                 ) : null;
               })()}
