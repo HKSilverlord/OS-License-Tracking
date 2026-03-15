@@ -85,9 +85,9 @@ export const Dashboard: React.FC = () => {
   const [headingFontSize, setHeadingFontSize] = useState<number>(() => {
     const saved = localStorage.getItem('dashboard_headingFontSize');
     if (saved) {
-      try { return parseInt(saved, 10) || 12; } catch (e) { /* ignore */ }
+      try { return parseInt(saved, 10) || 18; } catch (e) { /* ignore */ }
     }
-    return 12;
+    return 18;
   });
 
   useEffect(() => {
