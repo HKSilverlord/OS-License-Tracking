@@ -42,7 +42,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
   const { t, language } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [monthlyData, setMonthlyData] = useState<MonthlyPlanActualData[]>([]);
-  const [pinnedMonth, setPinnedMonth] = useState<number | null>(null);
+  const [pinnedCard, setPinnedCard] = useState<{ month: number; x: number; y: number } | null>(null);
 
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [chartColors, setChartColors] = useState<MonthlyChartColors>(() => {
@@ -350,10 +350,15 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
             {/* Month Selector */}
             <select
               className="px-2 py-1.5 text-sm border border-slate-300 rounded-lg text-slate-700 bg-white hover:border-slate-400 outline-none"
-              value={pinnedMonth ?? ""}
-              onChange={(e) => setPinnedMonth(e.target.value ? Number(e.target.value) : null)}
+              value={pinnedCard?.month ?? ""}
+              onChange={(e) => {
+                const month = e.target.value ? Number(e.target.value) : null;
+                // If selected manually via dropdown, just show it in the top left or center 
+                // because we don't have click coordinates. Default to a reasonable position.
+                setPinnedCard(month ? { month, x: 100, y: 50 } : null);
+              }}
             >
-              <option value="">{t('tracker.select', 'Select')} Month...</option>
+              <option value="">{t('tracker.selectMonth', '月を選択...')}</option>
               {monthlyData.map((d) => (
                 <option key={d.month} value={d.month}>
                   {d.monthLabel}
@@ -474,11 +479,19 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
         <div id="monthly-plan-actual-chart" className="flex-1 min-h-0 relative">
           
           {/* Pinned Detail Card Overlay */}
-          {pinnedMonth !== null && (() => {
-            const pinnedData = monthlyData.find((d) => d.month === pinnedMonth);
+          {pinnedCard !== null && (() => {
+            const pinnedData = monthlyData.find((d) => d.month === pinnedCard.month);
             if (!pinnedData) return null;
+            
+            // Adjust to appear to the middle right of the column
+            const cardX = pinnedCard.x + 30; // Offset slightly to the right of the cursor/column center
+            const cardY = Math.max(20, pinnedCard.y - 50); // Center vertically around the clicked area, bounded to top
+
             return (
-              <div className="absolute top-4 left-4 z-10 pointer-events-none">
+              <div 
+                className="absolute z-10 pointer-events-none transition-all duration-200 ease-in-out"
+                style={{ left: cardX, top: cardY }}
+              >
                 <MonthDetailCard data={pinnedData} />
               </div>
             );
@@ -489,10 +502,14 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
               data={monthlyData}
               margin={{ top: 20, right: 60, left: 20, bottom: 20 }}
               onClick={(state) => {
-                if (state && state.activePayload && state.activePayload.length > 0) {
+                if (state && state.activePayload && state.activePayload.length > 0 && state.activeCoordinate) {
                   const clickedMonth = state.activePayload[0].payload.month;
-                  // Toggle off if clicking the same month
-                  setPinnedMonth(prev => prev === clickedMonth ? null : clickedMonth);
+                  const { x, y } = state.activeCoordinate;
+                  
+                  // Toggle off if clicking the same month, otherwise set the month and coords
+                  setPinnedCard(prev => 
+                    prev?.month === clickedMonth ? null : { month: clickedMonth, x, y }
+                  );
                 }
               }}
             >
