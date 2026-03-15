@@ -181,7 +181,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
   const [isSaving, setIsSaving] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(true);
 
   // Local Filter & Sort State
   const [localFilter, setLocalFilter] = useState('');
