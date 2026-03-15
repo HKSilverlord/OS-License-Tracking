@@ -323,10 +323,10 @@ export const Dashboard: React.FC = () => {
               色変更
             </button>
             <div className="w-full lg:w-auto flex flex-col gap-2">
-              <div className="flex flex-wrap items-center gap-3 bg-sky-50 px-4 py-2 rounded-lg border border-sky-100">
+              <div className="flex flex-wrap items-center gap-3 bg-sky-50 px-4 py-3 rounded-lg border border-sky-100">
                 <Calculator className="w-5 h-5 text-blue-600" />
                 <div className="flex flex-col">
-                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">{t('dashboard.fx.label', 'Exchange Rate')}</span>
+                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider pb-1">{t('dashboard.fx.label', 'Exchange Rate')}</span>
                   <div className="flex items-center">
                     <span className="text-sm font-medium text-slate-800 mr-2">1 JPY = </span>
                     <input
@@ -339,7 +339,7 @@ export const Dashboard: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">{t('dashboard.fx.hourly', 'Hourly Rate (JPY)')}</span>
+                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider pb-1">{t('dashboard.fx.hourly', 'Hourly Rate (JPY)')}</span>
                   <input
                     type="number"
                     className="w-20 h-8 text-sm border-sky-200 rounded px-2 focus:ring-1 focus:ring-sky-500 text-right font-semibold text-slate-800 bg-white"
@@ -350,28 +350,28 @@ export const Dashboard: React.FC = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-emerald-50 px-4 py-3 rounded-lg border border-emerald-200">
                 <div className="flex flex-col">
-                  <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">{t('dashboard.license.count', 'License Seats')}</span>
+                  <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider pb-1">{t('dashboard.license.count', 'License Seats')}</span>
                   <input
                     type="number"
                     min={0}
-                    className="mt-1 w-full h-9 text-sm border-emerald-200 rounded px-2 focus:ring-1 focus:ring-emerald-500 text-right font-semibold text-emerald-900 bg-white"
+                    className="w-full h-9 text-sm border-emerald-200 rounded px-2 focus:ring-1 focus:ring-emerald-500 text-right font-semibold text-emerald-900 bg-white"
                     value={licenseComputers}
                     onChange={handleLicenseComputersChange}
                   />
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">{t('dashboard.license.perSeat', 'Fee per Seat (JPY)')}</span>
+                  <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider pb-1">{t('dashboard.license.perSeat', 'Fee per Seat (JPY)')}</span>
                   <input
                     type="number"
                     min={0}
-                    className="mt-1 w-full h-9 text-sm border-emerald-200 rounded px-2 focus:ring-1 focus:ring-emerald-500 text-right font-semibold text-emerald-900 bg-white"
+                    className="w-full h-9 text-sm border-emerald-200 rounded px-2 focus:ring-1 focus:ring-emerald-500 text-right font-semibold text-emerald-900 bg-white"
                     value={licensePerComputer}
                     onChange={handleLicensePerComputerChange}
                   />
                 </div>
                 <div className="flex flex-col justify-end">
-                  <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">{t('dashboard.license.total', 'Annual License Cost')}</span>
-                  <div className="mt-1 h-9 flex items-center justify-end text-sm font-bold text-emerald-900">
+                  <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider pb-1">{t('dashboard.license.total', 'Annual License Cost')}</span>
+                  <div className="h-9 flex items-center justify-end text-sm font-bold text-emerald-900">
                     {fmt(licenseTotal)} / {toMan(licenseTotal)}
                   </div>
                 </div>
