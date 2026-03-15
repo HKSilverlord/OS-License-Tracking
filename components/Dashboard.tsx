@@ -46,12 +46,12 @@ const DEFAULT_KPI_COLORS: DashboardKpiColors = {
 };
 
 const DASHBOARD_EXPORT_SECTIONS = [
-  { id: 'section-core-kpis', labelKey: 'export.coreKpis', defaultLabel: 'Core KPIs' },
-  { id: 'section-gross-revenue', labelKey: 'export.grossRevenue', defaultLabel: 'Gross Revenue' },
-  { id: 'section-net-revenue', labelKey: 'export.netRevenue', defaultLabel: 'Net Revenue' },
-  { id: 'section-license-card', labelKey: 'export.licenseCard', defaultLabel: 'CAD License' },
-  { id: 'section-cost-analysis', labelKey: 'export.costAnalysis', defaultLabel: 'Cost Analysis' },
-  { id: 'section-financial-summary', labelKey: 'export.financialSummary', defaultLabel: 'Financial Summary' },
+  { id: 'section-core-kpis', labelKey: 'export.coreKpis', defaultLabel: '主要KPI' },
+  { id: 'section-gross-revenue', labelKey: 'export.grossRevenue', defaultLabel: '総売上' },
+  { id: 'section-net-revenue', labelKey: 'export.netRevenue', defaultLabel: '純売上' },
+  { id: 'section-license-card', labelKey: 'export.licenseCard', defaultLabel: 'CADライセンス' },
+  { id: 'section-cost-analysis', labelKey: 'export.costAnalysis', defaultLabel: 'コスト分析' },
+  { id: 'section-financial-summary', labelKey: 'export.financialSummary', defaultLabel: '財務サマリー' },
 ];
 
 export const Dashboard: React.FC = () => {
@@ -316,10 +316,10 @@ export const Dashboard: React.FC = () => {
             <button
               onClick={() => setShowKpiColorPicker(!showKpiColorPicker)}
               className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-              title="Customize dashboard colors"
+              title="ダッシュボードの色をカスタマイズ"
             >
               <Palette className="w-4 h-4" />
-              Colors
+              色変更
             </button>
             <div className="w-full lg:w-auto flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-3 bg-sky-50 px-4 py-2 rounded-lg border border-sky-100">
@@ -519,7 +519,7 @@ export const Dashboard: React.FC = () => {
               <Clock className="w-5 h-5 text-sky-500" />
             </div>
             <div className="mt-2 text-2xl font-bold text-slate-900">{fmtHours(totalPlanHours)}</div>
-            <div className="text-xs text-slate-500 mt-1">{t('dashboard.kpi.yearTotal', 'Year Total')}</div>
+            <div className="text-xs text-slate-500 mt-1">{t('dashboard.kpi.yearTotal', '年度合計')}</div>
           </div>
           <div className="bg-white border-l-4 border-emerald-500 rounded-lg p-4 shadow-sm flex flex-col justify-center">
             <div className="flex items-center justify-between">
@@ -527,12 +527,12 @@ export const Dashboard: React.FC = () => {
               <Clock className="w-5 h-5 text-emerald-500" />
             </div>
             <div className="mt-2 text-2xl font-bold text-slate-900">{fmtHours(totalActualHours)}</div>
-            <div className="text-xs text-slate-500 mt-1">{t('dashboard.kpi.actualHoursDesc', 'Actual Year Total')}</div>
+            <div className="text-xs text-slate-500 mt-1">{t('dashboard.kpi.actualHoursDesc', '年間実績合計')}</div>
           </div>
           <div className={`bg-white border-l-4 rounded-lg p-4 shadow-sm flex flex-col justify-center ${totalActualHours - totalPlanHours >= 0 ? 'border-emerald-500' : 'border-rose-500 bg-rose-50'}`}>
             <div className="flex items-center justify-between">
               <div className={`text-xs font-semibold uppercase tracking-wider ${totalActualHours - totalPlanHours >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                {t('dashboard.kpi.varianceLabel', '差異 (Variance)')}
+                {t('dashboard.kpi.varianceLabel', '差異')}
               </div>
               <TrendingUp className={`w-5 h-5 ${totalActualHours - totalPlanHours >= 0 ? 'text-emerald-500' : 'text-rose-500'}`} />
             </div>
@@ -540,7 +540,7 @@ export const Dashboard: React.FC = () => {
               {totalActualHours - totalPlanHours < 0 ? '▲' : '▼'} {fmtHours(Math.abs(totalActualHours - totalPlanHours))}
             </div>
             <div className={`text-xs mt-1 ${totalActualHours - totalPlanHours >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-              Actual - Plan
+              実績 - 計画
             </div>
           </div>
           <div className="bg-white border-l-4 border-teal-500 rounded-lg p-4 shadow-sm flex flex-col justify-center">
@@ -549,7 +549,7 @@ export const Dashboard: React.FC = () => {
               <TrendingUp className="w-5 h-5 text-teal-500" />
             </div>
             <div className={`mt-2 text-2xl font-bold ${rateColor}`}>{achievementRate.toFixed(1)}%</div>
-            <div className="text-xs text-slate-500 mt-1">{t('dashboard.kpi.remainingLabel', 'Remaining Hours')} {fmtHours(remainingHours)}</div>
+            <div className="text-xs text-slate-500 mt-1">{t('dashboard.kpi.remainingLabel', '残工数')} {fmtHours(remainingHours)}</div>
           </div>
         </div>
 
@@ -568,7 +568,7 @@ export const Dashboard: React.FC = () => {
             <div className="mt-3 text-3xl font-bold">{fmt(grossRevenuePlan)}</div>
             <div className="text-sm text-sky-100 mt-1">{toMan(grossRevenuePlan)}</div>
             <div className="mt-3 text-xs text-sky-100 border-t border-white/30 pt-2 opacity-80">
-              {t('dashboard.kpi.calculatedPerProject', 'Calculated using period-specific project rates')}
+              {t('dashboard.kpi.calculatedPerProject', '期間別プロジェクト単価で算出')}
             </div>
           </div>
           <div
@@ -584,14 +584,14 @@ export const Dashboard: React.FC = () => {
             <div className="mt-3 text-3xl font-bold">{fmt(grossRevenueActual)}</div>
             <div className="text-sm text-emerald-100 mt-1">{toMan(grossRevenueActual)}</div>
             <div className="mt-3 text-xs text-emerald-100 border-t border-white/30 pt-2 opacity-80">
-              {t('dashboard.kpi.calculatedPerProject', 'Calculated using period-specific project rates')}
+              {t('dashboard.kpi.calculatedPerProject', '期間別プロジェクト単価で算出')}
             </div>
           </div>
           <div className={`col-span-1 rounded-xl p-5 shadow-sm border-2 flex flex-col justify-center ${grossRevenueActual - grossRevenuePlan >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
             <div className="flex items-center justify-between">
               <div>
                 <p className={`text-xs uppercase tracking-wider font-semibold ${grossRevenueActual - grossRevenuePlan >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                  {t('dashboard.kpi.varianceLabel', '差異 (Variance)')}
+                  {t('dashboard.kpi.varianceLabel', '差異')}
                 </p>
               </div>
             </div>
@@ -616,8 +616,8 @@ export const Dashboard: React.FC = () => {
             </div>
             <div className="flex items-center justify-between relative z-10">
               <div>
-                <p className="text-xs uppercase tracking-wider text-teal-600 font-semibold">{t('dashboard.net.plan', '利益 目標 (Target Profit)')}</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">Plan Revenue - License</p>
+                <p className="text-xs uppercase tracking-wider text-teal-600 font-semibold">{t('dashboard.net.plan', '利益 目標')}</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">計画売上 - ライセンス</p>
               </div>
             </div>
             <div className="mt-4 text-3xl font-bold text-slate-900 relative z-10">{fmtSigned(netRevenuePlan)}</div>
@@ -625,8 +625,8 @@ export const Dashboard: React.FC = () => {
 
             <div className="mt-4 text-[11px] font-mono bg-slate-50 p-2 rounded border border-slate-100 text-slate-600 relative z-10">
               <div className="flex justify-between">
-                <span>Gross: {toMan(grossRevenuePlan)}</span>
-                <span className="text-rose-500">- Lic: {toMan(licenseTotal)}</span>
+                <span>総額: {toMan(grossRevenuePlan)}</span>
+                <span className="text-rose-500">- ライセンス: {toMan(licenseTotal)}</span>
               </div>
             </div>
           </div>
@@ -640,8 +640,8 @@ export const Dashboard: React.FC = () => {
             </div>
             <div className="flex items-center justify-between relative z-10">
               <div>
-                <p className="text-xs uppercase tracking-wider text-slate-600 font-semibold">{t('dashboard.net.actual', '利益 実績 (Actual Profit)')}</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">Actual Revenue - License</p>
+                <p className="text-xs uppercase tracking-wider text-slate-600 font-semibold">{t('dashboard.net.actual', '利益 実績')}</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">実績売上 - ライセンス</p>
               </div>
             </div>
             <div className={`mt-4 text-3xl font-bold relative z-10 ${netRevenueActual >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
@@ -653,8 +653,8 @@ export const Dashboard: React.FC = () => {
 
             <div className="mt-4 text-[11px] font-mono bg-slate-50 p-2 rounded border border-slate-100 text-slate-600 relative z-10">
               <div className="flex justify-between">
-                <span>Gross: {toMan(grossRevenueActual)}</span>
-                <span className="text-rose-500">- Lic: {toMan(licenseTotal)}</span>
+                <span>総額: {toMan(grossRevenueActual)}</span>
+                <span className="text-rose-500">- ライセンス: {toMan(licenseTotal)}</span>
               </div>
             </div>
           </div>
@@ -663,7 +663,7 @@ export const Dashboard: React.FC = () => {
             <div className="flex items-center justify-between relative z-10">
               <div>
                 <p className={`text-xs uppercase tracking-wider font-semibold ${netRevenueActual - netRevenuePlan >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                  {t('dashboard.kpi.varianceLabel', '差異 (Profit Variance)')}
+                  {t('dashboard.kpi.varianceLabel', '差異')}
                 </p>
               </div>
             </div>
@@ -677,8 +677,8 @@ export const Dashboard: React.FC = () => {
 
             <div className={`mt-4 text-[11px] font-mono p-2 rounded border relative z-10 ${netRevenueActual - netRevenuePlan >= 0 ? 'bg-emerald-100/50 border-emerald-200 text-emerald-800' : 'bg-rose-100/50 border-rose-200 text-rose-800'}`}>
               <div className="flex justify-between">
-                <span>Actual Profit</span>
-                <span>- Target Profit</span>
+                <span>実績利益</span>
+                <span>- 目標利益</span>
               </div>
             </div>
           </div>
@@ -756,7 +756,7 @@ export const Dashboard: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-md font-bold text-slate-700 flex items-center">
                 <TrendingUp className="w-4 h-4 mr-2 text-blue-500" />
-                {t('dashboard.charts.monthly', 'Monthly Revenue (Plan vs Actual)')}
+                {t('dashboard.chart.monthly', '月次売上：計画 vs 実績')}
               </h3>
               <div className="flex gap-2">
                 <button
@@ -779,32 +779,32 @@ export const Dashboard: React.FC = () => {
               <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
                 <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
                   <Palette className="w-4 h-4" />
-                  Customize Chart Colors
+                  チャートの色をカスタマイズ
                 </h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="flex flex-col gap-1">
-                    <label className="text-xs font-medium text-slate-600">{planShort} Revenue</label>
+                    <label className="text-xs font-medium text-slate-600">売上（{planShort}）</label>
                     <div className="flex items-center gap-2">
                       <input type="color" value={chartColors.planRevenue} onChange={(e) => setChartColors({ ...chartColors, planRevenue: e.target.value })} className="w-10 h-8 rounded border border-slate-300 cursor-pointer" />
                       <input type="text" value={chartColors.planRevenue} onChange={(e) => setChartColors({ ...chartColors, planRevenue: e.target.value })} className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded" />
                     </div>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-xs font-medium text-slate-600">{actualShort} Revenue</label>
+                    <label className="text-xs font-medium text-slate-600">売上（{actualShort}）</label>
                     <div className="flex items-center gap-2">
                       <input type="color" value={chartColors.actualRevenue} onChange={(e) => setChartColors({ ...chartColors, actualRevenue: e.target.value })} className="w-10 h-8 rounded border border-slate-300 cursor-pointer" />
                       <input type="text" value={chartColors.actualRevenue} onChange={(e) => setChartColors({ ...chartColors, actualRevenue: e.target.value })} className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded" />
                     </div>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-xs font-medium text-slate-600">{t('dashboard.chart.accPlan', 'Acc Plan')}</label>
+                    <label className="text-xs font-medium text-slate-600">{t('dashboard.chart.accPlan', '累計（計画）')}</label>
                     <div className="flex items-center gap-2">
                       <input type="color" value={chartColors.accPlan} onChange={(e) => setChartColors({ ...chartColors, accPlan: e.target.value })} className="w-10 h-8 rounded border border-slate-300 cursor-pointer" />
                       <input type="text" value={chartColors.accPlan} onChange={(e) => setChartColors({ ...chartColors, accPlan: e.target.value })} className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded" />
                     </div>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-xs font-medium text-slate-600">{t('dashboard.chart.accActual', 'Acc Actual')}</label>
+                    <label className="text-xs font-medium text-slate-600">{t('dashboard.chart.accActual', '累計（実績）')}</label>
                     <div className="flex items-center gap-2">
                       <input type="color" value={chartColors.accActual} onChange={(e) => setChartColors({ ...chartColors, accActual: e.target.value })} className="w-10 h-8 rounded border border-slate-300 cursor-pointer" />
                       <input type="text" value={chartColors.accActual} onChange={(e) => setChartColors({ ...chartColors, accActual: e.target.value })} className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded" />
