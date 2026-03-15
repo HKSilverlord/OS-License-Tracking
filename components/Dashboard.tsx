@@ -82,6 +82,18 @@ export const Dashboard: React.FC = () => {
     return DEFAULT_KPI_COLORS;
   });
 
+  const [headingFontSize, setHeadingFontSize] = useState<number>(() => {
+    const saved = localStorage.getItem('dashboard_headingFontSize');
+    if (saved) {
+      try { return parseInt(saved, 10) || 12; } catch (e) { /* ignore */ }
+    }
+    return 12;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('dashboard_headingFontSize', headingFontSize.toString());
+  }, [headingFontSize]);
+
   useEffect(() => {
     localStorage.setItem('dashboard_chartColors', JSON.stringify(chartColors));
   }, [chartColors]);
@@ -384,10 +396,25 @@ export const Dashboard: React.FC = () => {
         {showKpiColorPicker && (
           <div data-html2canvas-ignore="true" className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-6 animate-in slide-in-from-top-2">
             <div className="flex items-center justify-between mb-4">
-              <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                <Palette className="w-4 h-4 text-purple-600" />
-                Customize Dashboard Colors
-              </h4>
+              <div className="flex items-center gap-6 flex-wrap">
+                <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                  <Palette className="w-4 h-4 text-purple-600" />
+                  Customize Dashboard Colors
+                </h4>
+                <div className="flex items-center gap-3 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                  <label className="text-xs font-semibold text-slate-600">Heading Size:</label>
+                  <input 
+                    type="range" 
+                    min="10" 
+                    max="22" 
+                    step="1" 
+                    value={headingFontSize} 
+                    onChange={(e) => setHeadingFontSize(parseInt(e.target.value, 10))}
+                    className="w-24 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                  />
+                  <span className="text-xs font-bold w-10 text-right">{headingFontSize}px</span>
+                </div>
+              </div>
               <button
                 onClick={() => setDashboardColors(DEFAULT_KPI_COLORS)}
                 className="text-xs px-3 py-1 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded transition-colors"
@@ -518,7 +545,7 @@ export const Dashboard: React.FC = () => {
           <div id="section-core-kpis" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           <div className="bg-white border-l-4 border-sky-500 rounded-lg p-4 shadow-sm flex flex-col justify-center">
             <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold text-sky-600 uppercase tracking-wider">{t('dashboard.kpi.planHoursLabel', '計画工数')}</div>
+              <div className="text-xs font-semibold text-sky-600 uppercase tracking-wider" style={{ fontSize: `${headingFontSize}px` }}>{t('dashboard.kpi.planHoursLabel', '計画工数')}</div>
               <Clock className="w-5 h-5 text-sky-500" />
             </div>
             <div className="mt-2 text-2xl font-bold text-slate-900">{fmtHours(totalPlanHours)}</div>
@@ -526,7 +553,7 @@ export const Dashboard: React.FC = () => {
           </div>
           <div className="bg-white border-l-4 border-emerald-500 rounded-lg p-4 shadow-sm flex flex-col justify-center">
             <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">{t('dashboard.kpi.actualHoursLabel', '実績工数')}</div>
+              <div className="text-xs font-semibold text-emerald-600 uppercase tracking-wider" style={{ fontSize: `${headingFontSize}px` }}>{t('dashboard.kpi.actualHoursLabel', '実績工数')}</div>
               <Clock className="w-5 h-5 text-emerald-500" />
             </div>
             <div className="mt-2 text-2xl font-bold text-slate-900">{fmtHours(totalActualHours)}</div>
@@ -534,7 +561,7 @@ export const Dashboard: React.FC = () => {
           </div>
           <div className={`bg-white border-l-4 rounded-lg p-4 shadow-sm flex flex-col justify-center ${totalActualHours - totalPlanHours >= 0 ? 'border-emerald-500' : 'border-rose-500 bg-rose-50'}`}>
             <div className="flex items-center justify-between">
-              <div className={`text-xs font-semibold uppercase tracking-wider ${totalActualHours - totalPlanHours >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+              <div className={`text-xs font-semibold uppercase tracking-wider ${totalActualHours - totalPlanHours >= 0 ? 'text-emerald-700' : 'text-rose-700'}`} style={{ fontSize: `${headingFontSize}px` }}>
                 {t('dashboard.kpi.varianceLabel', '差異')}
               </div>
               <TrendingUp className={`w-5 h-5 ${totalActualHours - totalPlanHours >= 0 ? 'text-emerald-500' : 'text-rose-500'}`} />
@@ -548,7 +575,7 @@ export const Dashboard: React.FC = () => {
           </div>
           <div className="bg-white border-l-4 border-teal-500 rounded-lg p-4 shadow-sm flex flex-col justify-center">
             <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold text-teal-600 uppercase tracking-wider">{t('dashboard.kpi.achievementLabel', '達成率')}</div>
+              <div className="text-xs font-semibold text-teal-600 uppercase tracking-wider" style={{ fontSize: `${headingFontSize}px` }}>{t('dashboard.kpi.achievementLabel', '達成率')}</div>
               <TrendingUp className="w-5 h-5 text-teal-500" />
             </div>
             <div className={`mt-2 text-2xl font-bold ${rateColor}`}>{achievementRate.toFixed(1)}%</div>
@@ -564,7 +591,7 @@ export const Dashboard: React.FC = () => {
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase tracking-wider text-sky-100 font-semibold">{t('dashboard.gross.plan', '総売上（計画）')}</p>
+                <p className="text-xs uppercase tracking-wider text-sky-100 font-semibold" style={{ fontSize: `${headingFontSize}px` }}>{t('dashboard.gross.plan', '総売上（計画）')}</p>
               </div>
               <JapaneseYen className="w-5 h-5 text-white/70" />
             </div>
@@ -580,7 +607,7 @@ export const Dashboard: React.FC = () => {
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase tracking-wider text-emerald-100 font-semibold">{t('dashboard.gross.actual', '総売上（実績）')}</p>
+                <p className="text-xs uppercase tracking-wider text-emerald-100 font-semibold" style={{ fontSize: `${headingFontSize}px` }}>{t('dashboard.gross.actual', '総売上（実績）')}</p>
               </div>
               <JapaneseYen className="w-5 h-5 text-white/70" />
             </div>
@@ -593,7 +620,7 @@ export const Dashboard: React.FC = () => {
           <div className={`col-span-1 rounded-xl p-5 shadow-sm border-2 flex flex-col justify-center ${grossRevenueActual - grossRevenuePlan >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
             <div className="flex items-center justify-between">
               <div>
-                <p className={`text-xs uppercase tracking-wider font-semibold ${grossRevenueActual - grossRevenuePlan >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                <p className={`text-xs uppercase tracking-wider font-semibold ${grossRevenueActual - grossRevenuePlan >= 0 ? 'text-emerald-700' : 'text-rose-700'}`} style={{ fontSize: `${headingFontSize}px` }}>
                   {t('dashboard.kpi.varianceLabel', '差異')}
                 </p>
               </div>
@@ -619,7 +646,7 @@ export const Dashboard: React.FC = () => {
             </div>
             <div className="flex items-center justify-between relative z-10">
               <div>
-                <p className="text-xs uppercase tracking-wider text-teal-600 font-semibold">{t('dashboard.net.plan', '利益 目標')}</p>
+                <p className="text-xs uppercase tracking-wider text-teal-600 font-semibold" style={{ fontSize: `${headingFontSize}px` }}>{t('dashboard.net.plan', '利益 目標')}</p>
                 <p className="text-[10px] text-slate-500 mt-0.5">計画売上 - ライセンス</p>
               </div>
             </div>
@@ -643,7 +670,7 @@ export const Dashboard: React.FC = () => {
             </div>
             <div className="flex items-center justify-between relative z-10">
               <div>
-                <p className="text-xs uppercase tracking-wider text-slate-600 font-semibold">{t('dashboard.net.actual', '利益 実績')}</p>
+                <p className="text-xs uppercase tracking-wider text-slate-600 font-semibold" style={{ fontSize: `${headingFontSize}px` }}>{t('dashboard.net.actual', '利益 実績')}</p>
                 <p className="text-[10px] text-slate-500 mt-0.5">実績売上 - ライセンス</p>
               </div>
             </div>
@@ -665,7 +692,7 @@ export const Dashboard: React.FC = () => {
           <div className={`col-span-1 rounded-xl p-5 shadow-sm border-2 flex flex-col justify-center relative overflow-hidden ${netRevenueActual - netRevenuePlan >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
             <div className="flex items-center justify-between relative z-10">
               <div>
-                <p className={`text-xs uppercase tracking-wider font-semibold ${netRevenueActual - netRevenuePlan >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                <p className={`text-xs uppercase tracking-wider font-semibold ${netRevenueActual - netRevenuePlan >= 0 ? 'text-emerald-700' : 'text-rose-700'}`} style={{ fontSize: `${headingFontSize}px` }}>
                   {t('dashboard.kpi.varianceLabel', '差異')}
                 </p>
               </div>
@@ -695,7 +722,7 @@ export const Dashboard: React.FC = () => {
         >
           <div className="flex items-center justify-between mb-3">
             <div>
-              <p className="text-xs uppercase tracking-wider text-teal-100 font-semibold">{t('dashboard.license.card.title', 'CAD License Management')}</p>
+              <p className="text-xs uppercase tracking-wider text-teal-100 font-semibold" style={{ fontSize: `${headingFontSize}px` }}>{t('dashboard.license.card.title', 'CAD License Management')}</p>
               <p className="text-lg font-bold">{t('dashboard.license.card.subtitle', 'Annual License Fee')}</p>
             </div>
             <div className="text-right">
@@ -732,7 +759,7 @@ export const Dashboard: React.FC = () => {
         >
           <div className="flex items-center justify-between mb-3">
             <div>
-              <p className="text-xs uppercase tracking-wider text-amber-700 font-semibold">{t('dashboard.costAnalysis.title', 'Cost Analysis')}</p>
+              <p className="text-xs uppercase tracking-wider text-amber-700 font-semibold" style={{ fontSize: `${headingFontSize}px` }}>{t('dashboard.costAnalysis.title', 'Cost Analysis')}</p>
               <p className="text-lg font-bold text-slate-900">{t('dashboard.costAnalysis.subtitle', 'Understand license impact')}</p>
             </div>
           </div>
