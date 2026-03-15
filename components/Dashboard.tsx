@@ -645,9 +645,9 @@ export const Dashboard: React.FC = () => {
               <JapaneseYen className="w-24 h-24" />
             </div>
             <div className="flex items-center justify-between relative z-10">
-              <div>
+              <div className="flex flex-col gap-1">
                 <p className="text-xs uppercase tracking-wider text-teal-600 font-semibold" style={{ fontSize: `${headingFontSize}px` }}>{t('dashboard.net.plan', '利益 目標')}</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">計画売上 - ライセンス</p>
+                <p className="text-[10px] text-slate-500">{t('dashboard.net.plan.subtitle', '計画売上 - ライセンス')}</p>
               </div>
             </div>
             <div className="mt-4 text-3xl font-bold text-slate-900 relative z-10">{fmtSigned(netRevenuePlan)}</div>
@@ -669,9 +669,9 @@ export const Dashboard: React.FC = () => {
               <JapaneseYen className="w-24 h-24" />
             </div>
             <div className="flex items-center justify-between relative z-10">
-              <div>
+              <div className="flex flex-col gap-1">
                 <p className="text-xs uppercase tracking-wider text-slate-600 font-semibold" style={{ fontSize: `${headingFontSize}px` }}>{t('dashboard.net.actual', '利益 実績')}</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">実績売上 - ライセンス</p>
+                <p className="text-[10px] text-slate-500">{t('dashboard.net.actual.subtitle', '実績売上 - ライセンス')}</p>
               </div>
             </div>
             <div className={`mt-4 text-3xl font-bold relative z-10 ${netRevenueActual >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
