@@ -46,10 +46,7 @@ const DEFAULT_KPI_COLORS: DashboardKpiColors = {
 };
 
 const DASHBOARD_EXPORT_SECTIONS = [
-  { id: 'section-core-kpis', labelKey: 'export.coreKpis', defaultLabel: '主要KPI' },
-  { id: 'section-gross-revenue', labelKey: 'export.grossRevenue', defaultLabel: '総売上' },
-  { id: 'section-net-revenue', labelKey: 'export.netRevenue', defaultLabel: '純売上' },
-  { id: 'section-license-card', labelKey: 'export.licenseCard', defaultLabel: 'CADライセンス' },
+  { id: 'section-kpi-summary', labelKey: 'export.kpiSummary', defaultLabel: '業績ハイライト (KPI〜ライセンス)' },
   { id: 'section-cost-analysis', labelKey: 'export.costAnalysis', defaultLabel: 'コスト分析' },
   { id: 'section-financial-summary', labelKey: 'export.financialSummary', defaultLabel: '財務サマリー' },
 ];
@@ -511,8 +508,10 @@ export const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Row 1: Core KPIs (Hours) */}
-        <div id="section-core-kpis" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        {/* Group KPI to License for single export */}
+        <div id="section-kpi-summary" className="space-y-6">
+          {/* Row 1: Core KPIs (Hours) */}
+          <div id="section-core-kpis" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           <div className="bg-white border-l-4 border-sky-500 rounded-lg p-4 shadow-sm flex flex-col justify-center">
             <div className="flex items-center justify-between">
               <div className="text-xs font-semibold text-sky-600 uppercase tracking-wider">{t('dashboard.kpi.planHoursLabel', '計画工数')}</div>
