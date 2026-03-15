@@ -720,6 +720,7 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
         </div>
+        </div> {/* End of inner wrapper */}
         </div> {/* End of section-kpi-summary */}
 
         {/* Row 5: Cost Analysis */}
