@@ -298,6 +298,7 @@ export const Dashboard: React.FC = () => {
             <div className="flex items-center gap-3">
               <h2 className="text-xl font-bold text-slate-800">{`${t('header.dashboardTitle', 'Dashboard')} ${selectedYear}`}</h2>
               <select
+                data-html2canvas-ignore="true"
                 value={selectedYear ?? ''}
                 onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
                 className="text-sm border border-slate-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -597,9 +598,9 @@ export const Dashboard: React.FC = () => {
                 </p>
               </div>
             </div>
-            <div className={`mt-3 text-3xl font-bold flex items-center min-w-0 ${grossRevenueActual - grossRevenuePlan >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+            <div className={`mt-3 text-3xl font-bold pb-1 ${grossRevenueActual - grossRevenuePlan >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
               <span className="mr-1 text-2xl">{grossRevenueActual - grossRevenuePlan < 0 ? '▲' : '▼'}</span>
-              <span className="truncate">{fmt(Math.abs(grossRevenueActual - grossRevenuePlan))}</span>
+              {fmt(Math.abs(grossRevenueActual - grossRevenuePlan))}
             </div>
             <div className={`text-sm mt-1 font-medium ${grossRevenueActual - grossRevenuePlan >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {toMan(Math.abs(grossRevenueActual - grossRevenuePlan))}
@@ -669,9 +670,9 @@ export const Dashboard: React.FC = () => {
                 </p>
               </div>
             </div>
-            <div className={`mt-4 text-3xl font-bold flex items-center min-w-0 relative z-10 ${netRevenueActual - netRevenuePlan >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+            <div className={`mt-4 text-3xl font-bold relative z-10 pb-1 ${netRevenueActual - netRevenuePlan >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
               <span className="mr-1 text-2xl">{netRevenueActual - netRevenuePlan < 0 ? '▲' : '▼'}</span>
-              <span className="truncate">{fmt(Math.abs(netRevenueActual - netRevenuePlan))}</span>
+              {fmt(Math.abs(netRevenueActual - netRevenuePlan))}
             </div>
             <div className={`text-sm mt-1 font-semibold relative z-10 ${netRevenueActual - netRevenuePlan >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {toMan(Math.abs(netRevenueActual - netRevenuePlan))}
