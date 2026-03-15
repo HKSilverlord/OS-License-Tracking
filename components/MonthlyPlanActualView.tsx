@@ -42,6 +42,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
   const { t, language } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [monthlyData, setMonthlyData] = useState<MonthlyPlanActualData[]>([]);
+  const [pinnedMonth, setPinnedMonth] = useState<number | null>(null);
 
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [chartColors, setChartColors] = useState<MonthlyChartColors>(() => {
@@ -147,14 +148,10 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
     return Math.ceil(max * 1.1); // +10%
   }, [monthlyData]);
 
-  // Custom Tooltip Component
-  const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
-    if (!active || !payload || payload.length === 0) return null;
-
-    const data = payload[0].payload;
-
+  // Reusable Detail Card Component
+  const MonthDetailCard = ({ data }: { data: MonthlyPlanActualData }) => {
     return (
-      <div className="bg-white p-3 border border-slate-300 rounded-lg shadow-lg">
+      <div className="bg-white p-3 border border-slate-300 rounded-lg shadow-lg min-w-[200px]">
         <p className="font-semibold text-slate-800 mb-2 border-b border-slate-200 pb-1">
           {data.monthLabel}
         </p>
@@ -205,6 +202,13 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
         </div>
       </div>
     );
+  };
+
+  // Custom Tooltip Component (wraps Detail Card)
+  const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
+    if (!active || !payload || payload.length === 0) return null;
+    const data = payload[0].payload as MonthlyPlanActualData;
+    return <MonthDetailCard data={data} />;
   };
 
   // Custom zero label renderer for the Actual Sales bar
@@ -342,7 +346,20 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
             </h3>
             <p className="text-xs text-slate-500 mt-1">{t('monthlyPlanActual.subtitle', '月次計画と実績の比較')}</p>
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap items-center">
+            {/* Month Selector */}
+            <select
+              className="px-2 py-1.5 text-sm border border-slate-300 rounded-lg text-slate-700 bg-white hover:border-slate-400 outline-none"
+              value={pinnedMonth ?? ""}
+              onChange={(e) => setPinnedMonth(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">{t('tracker.select', 'Select')} Month...</option>
+              {monthlyData.map((d) => (
+                <option key={d.month} value={d.month}>
+                  {d.monthLabel}
+                </option>
+              ))}
+            </select>
             <button
               onClick={() => setShowColorPicker(!showColorPicker)}
               className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
@@ -454,11 +471,30 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
         )}
 
         {/* Chart Container */}
-        <div id="monthly-plan-actual-chart" className="flex-1 min-h-0">
+        <div id="monthly-plan-actual-chart" className="flex-1 min-h-0 relative">
+          
+          {/* Pinned Detail Card Overlay */}
+          {pinnedMonth !== null && (() => {
+            const pinnedData = monthlyData.find((d) => d.month === pinnedMonth);
+            if (!pinnedData) return null;
+            return (
+              <div className="absolute top-4 left-4 z-10 pointer-events-none">
+                <MonthDetailCard data={pinnedData} />
+              </div>
+            );
+          })()}
+
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={monthlyData}
               margin={{ top: 20, right: 60, left: 20, bottom: 20 }}
+              onClick={(state) => {
+                if (state && state.activePayload && state.activePayload.length > 0) {
+                  const clickedMonth = state.activePayload[0].payload.month;
+                  // Toggle off if clicking the same month
+                  setPinnedMonth(prev => prev === clickedMonth ? null : clickedMonth);
+                }
+              }}
             >
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e0e0" />
 
