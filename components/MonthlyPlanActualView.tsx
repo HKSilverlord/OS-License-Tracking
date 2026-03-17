@@ -149,9 +149,9 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
   }, [monthlyData]);
 
   // Reusable Detail Card Component
-  const MonthDetailCard = ({ data }: { data: MonthlyPlanActualData }) => {
+  const MonthDetailCard = ({ data, hideShadow = false }: { data: MonthlyPlanActualData; hideShadow?: boolean }) => {
     return (
-      <div className="bg-white p-3 border border-slate-300 rounded-lg shadow-lg min-w-[200px]">
+      <div className={`bg-white p-3 border border-slate-300 rounded-lg min-w-[200px] ${hideShadow ? '' : 'shadow-lg'}`}>
         <p className="font-semibold text-slate-800 mb-2 border-b border-slate-200 pb-1">
           {data.monthLabel}
         </p>
@@ -476,35 +476,45 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
         )}
 
         {/* Chart Container */}
-        <div id="monthly-plan-actual-chart" className="flex-1 min-h-0 relative">
+        <div id="monthly-plan-actual-chart" className="flex-1 min-h-[400px] w-full relative overflow-visible">
           
           {/* Pinned Detail Card Overlay */}
           {pinnedCard !== null && (() => {
             const pinnedData = monthlyData.find((d) => d.month === pinnedCard.month);
             if (!pinnedData) return null;
             
-            // Adjust to appear in the vertical middle of the chart, to the right of the column.
-            // If the column is in the later months, show the card to the left instead to avoid off-screen overflow.
-            const cardX = pinnedCard.month > 8 ? pinnedCard.x - 240 : pinnedCard.x + 30;
+            const isCardOnLeft = pinnedCard.month > 8;
+            const cardX = isCardOnLeft ? pinnedCard.x - 230 : pinnedCard.x + 40;
 
             return (
               <div 
-                className="absolute z-10 pointer-events-none transition-all duration-200 ease-in-out"
+                className="absolute z-10 pointer-events-none transition-all duration-200 ease-in-out drop-shadow-md"
                 style={{ 
                   left: cardX, 
-                  top: '50%',
+                  top: '45%',
                   transform: 'translateY(-50%)'
                 }}
               >
-                <MonthDetailCard data={pinnedData} />
+                {/* Connecting Arrow */}
+                <div 
+                  className={`absolute top-1/2 -translate-y-1/2 w-[14px] h-[14px] bg-white transform rotate-45 pointer-events-none ${
+                    isCardOnLeft 
+                      ? '-right-[7px] border-t border-r border-slate-300' 
+                      : '-left-[7px] border-b border-l border-slate-300'
+                  }`}
+                  style={{ zIndex: 0 }}
+                />
+                <div className="relative z-10">
+                  <MonthDetailCard data={pinnedData} hideShadow={true} />
+                </div>
               </div>
             );
           })()}
 
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minHeight={400}>
             <ComposedChart
               data={monthlyData}
-              margin={{ top: 20, right: 60, left: 20, bottom: 20 }}
+              margin={{ top: 20, right: 60, left: 20, bottom: 30 }}
               onClick={(state) => {
                 if (state && state.activePayload && state.activePayload.length > 0 && state.activeCoordinate) {
                   const clickedMonth = state.activePayload[0].payload.month;
@@ -536,12 +546,15 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 xAxisId="main"
                 dataKey="monthLabel"
                 fontSize={12}
+                interval={0}
+                tick={{ fontSize: 11 }}
               />
               {/* Hidden X-Axis for Bullet Chart Overlay */}
               <XAxis
                 xAxisId="actualLayer"
                 dataKey="monthLabel"
                 hide={true}
+                interval={0}
               />
 
               {/* Y1-Axis (Left): Sales in 万円 */}
