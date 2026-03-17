@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Loader2, TrendingUp, Palette } from 'lucide-react';
 import { ChartExportMenu } from './ChartExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -42,7 +42,8 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
   const { t, language } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [monthlyData, setMonthlyData] = useState<MonthlyPlanActualData[]>([]);
-  const [pinnedCard, setPinnedCard] = useState<{ month: number; x: number; y: number } | null>(null);
+  const [pinnedMonth, setPinnedMonth] = useState<number | null>(null);
+  const columnCoordsRef = useRef<Record<number, number>>({});
 
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [chartColors, setChartColors] = useState<MonthlyChartColors>(() => {
@@ -300,6 +301,11 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
     const planValue = payload.workingHoursPlan || 0;
     const actualValue = payload.workingHoursActual || 0;
 
+    // Track the center X coordinate of the column for correct tooltip pinning
+    if (payload?.month) {
+      columnCoordsRef.current[payload.month] = x + width / 2;
+    }
+
     // Estimate where the Plan bar top is physically (y-coordinate)
     const containerHeight = y + height;
     const zeroY = containerHeight;
@@ -350,12 +356,10 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
             {/* Month Selector */}
             <select
               className="px-2 py-1.5 text-sm border border-slate-300 rounded-lg text-slate-700 bg-white hover:border-slate-400 outline-none"
-              value={pinnedCard?.month ?? ""}
+              value={pinnedMonth ?? ""}
               onChange={(e) => {
                 const month = e.target.value ? Number(e.target.value) : null;
-                // If selected manually via dropdown, just show it in the top left or center 
-                // because we don't have click coordinates. Default to a reasonable position.
-                setPinnedCard(month ? { month, x: 100, y: 50 } : null);
+                setPinnedMonth(month);
               }}
             >
               <option value="">{t('tracker.selectMonth', '月を選択...')}</option>
@@ -479,12 +483,13 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
         <div id="monthly-plan-actual-chart" className="flex-1 min-h-[400px] w-full relative overflow-visible">
           
           {/* Pinned Detail Card Overlay */}
-          {pinnedCard !== null && (() => {
-            const pinnedData = monthlyData.find((d) => d.month === pinnedCard.month);
+          {pinnedMonth !== null && (() => {
+            const pinnedData = monthlyData.find((d) => d.month === pinnedMonth);
             if (!pinnedData) return null;
             
-            const isCardOnLeft = pinnedCard.month > 8;
-            const cardX = isCardOnLeft ? pinnedCard.x - 230 : pinnedCard.x + 40;
+            const isCardOnLeft = pinnedMonth > 8;
+            const targetX = columnCoordsRef.current[pinnedMonth] || 100;
+            const cardX = isCardOnLeft ? targetX - 230 : targetX + 40;
 
             return (
               <div 
@@ -518,12 +523,9 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
               onClick={(state) => {
                 if (state && state.activePayload && state.activePayload.length > 0 && state.activeCoordinate) {
                   const clickedMonth = state.activePayload[0].payload.month;
-                  const { x, y } = state.activeCoordinate;
                   
-                  // Toggle off if clicking the same month, otherwise set the month and coords
-                  setPinnedCard(prev => 
-                    prev?.month === clickedMonth ? null : { month: clickedMonth, x, y }
-                  );
+                  // Toggle off if clicking the same month, otherwise set the month
+                  setPinnedMonth(prev => prev === clickedMonth ? null : clickedMonth);
                 }
               }}
             >
