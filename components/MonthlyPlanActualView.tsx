@@ -519,7 +519,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
           <ResponsiveContainer width="100%" height="100%" minHeight={420}>
             <ComposedChart
               data={monthlyData}
-              margin={{ top: 20, right: 60, left: 20, bottom: 45 }}
+              margin={{ top: 20, right: 60, left: 20, bottom: 30 }}
               onClick={(state) => {
                 if (state && state.activePayload && state.activePayload.length > 0 && state.activeCoordinate) {
                   const clickedMonth = state.activePayload[0].payload.month;
@@ -549,9 +549,9 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 dataKey="monthLabel"
                 fontSize={12}
                 interval={0}
-                tick={{ fontSize: 12, dy: 10 }}
-                tickMargin={10}
-                height={45}
+                tick={{ fontSize: 12, dy: 4 }}
+                tickMargin={4}
+                height={30}
               />
               {/* Hidden X-Axis for Bullet Chart Overlay */}
               <XAxis
@@ -559,7 +559,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 dataKey="monthLabel"
                 hide={true}
                 interval={0}
-                height={45}
+                height={30}
               />
 
               {/* Y1-Axis (Left): Sales in 万円 */}
