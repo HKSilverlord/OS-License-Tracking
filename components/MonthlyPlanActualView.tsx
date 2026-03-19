@@ -341,9 +341,9 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 p-4 md:p-6 overflow-hidden">
+    <div className="flex flex-col h-full bg-slate-50 p-4 md:p-6 overflow-auto">
       {/* Chart Section - Full Page */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex-1 flex flex-col min-h-0">
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex-1 flex flex-col">
         <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
           <div>
             <h3 className="text-md font-bold text-pink-600 flex items-center">

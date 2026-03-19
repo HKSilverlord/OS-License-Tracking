@@ -138,7 +138,18 @@ export const exportChartToPNG = async (elementId: string, filename: string = 'ch
       scale: 3, // High quality
       backgroundColor: '#ffffff', // Ensure white background
       logging: false,
-      useCORS: true // Handle cross-origin images if any
+      useCORS: true, // Handle cross-origin images if any
+      width: chartContainer.scrollWidth,
+      height: chartContainer.scrollHeight,
+      onclone: (_clonedDoc: Document, clonedEl: HTMLElement) => {
+        // Walk up the parent chain and force overflow visible so nothing clips the SVG
+        clonedEl.style.overflow = 'visible';
+        let parent = clonedEl.parentElement;
+        while (parent) {
+          parent.style.overflow = 'visible';
+          parent = parent.parentElement;
+        }
+      }
     });
 
     canvas.toBlob((blob) => {
@@ -212,7 +223,18 @@ export const copyChartToClipboard = async (elementId: string): Promise<void> => 
       scale: 3, // High quality
       backgroundColor: '#ffffff', // Ensure white background
       logging: false,
-      useCORS: true
+      useCORS: true,
+      width: chartContainer.scrollWidth,
+      height: chartContainer.scrollHeight,
+      onclone: (_clonedDoc: Document, clonedEl: HTMLElement) => {
+        // Walk up the parent chain and force overflow visible so nothing clips the SVG
+        clonedEl.style.overflow = 'visible';
+        let parent = clonedEl.parentElement;
+        while (parent) {
+          parent.style.overflow = 'visible';
+          parent = parent.parentElement;
+        }
+      }
     });
 
     const blob = await new Promise<Blob>((resolve, reject) => {
