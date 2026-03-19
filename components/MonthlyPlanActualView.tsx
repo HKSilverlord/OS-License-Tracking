@@ -519,7 +519,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
           <ResponsiveContainer width="100%" height="100%" minHeight={420}>
             <ComposedChart
               data={monthlyData}
-              margin={{ top: 20, right: 60, left: 20, bottom: 60 }}
+              margin={{ top: 20, right: 60, left: 20, bottom: 45 }}
               onClick={(state) => {
                 if (state && state.activePayload && state.activePayload.length > 0 && state.activeCoordinate) {
                   const clickedMonth = state.activePayload[0].payload.month;
@@ -551,7 +551,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 interval={0}
                 tick={{ fontSize: 12, dy: 10 }}
                 tickMargin={10}
-                height={60}
+                height={45}
               />
               {/* Hidden X-Axis for Bullet Chart Overlay */}
               <XAxis
@@ -559,7 +559,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 dataKey="monthLabel"
                 hide={true}
                 interval={0}
-                height={60}
+                height={45}
               />
 
               {/* Y1-Axis (Left): Sales in 万円 */}
@@ -596,22 +596,24 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 height={36}
                 wrapperStyle={{ paddingBottom: '10px' }}
                 content={({ payload }) => (
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap', padding: '4px 0' }}>
-                    {payload?.map((entry, index) => {
+                  <div style={{ textAlign: 'center', padding: '4px 0' }}>
+                    {payload?.filter((entry) => entry.value !== 'salesActual').map((entry, index) => {
                       const isDashed = entry.dataKey === 'capacityLine';
                       const isLine = entry.type === 'line' || entry.dataKey === 'salesPlan' || entry.dataKey === 'capacityLine';
                       return (
-                        <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div key={index} style={{ display: 'inline-flex', alignItems: 'center', margin: '4px 10px', verticalAlign: 'middle' }}>
                           {isLine ? (
                             <div style={{
                               width: 20,
                               height: 0,
+                              marginRight: 6,
                               borderTop: `2px ${isDashed ? 'dashed' : 'solid'} ${entry.color}`,
                             }} />
                           ) : (
                             <div style={{
                               width: 12,
                               height: 12,
+                              marginRight: 6,
                               backgroundColor: entry.color,
                               borderRadius: 2,
                             }} />
