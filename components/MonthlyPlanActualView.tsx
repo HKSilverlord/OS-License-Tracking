@@ -595,6 +595,33 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 verticalAlign="top"
                 height={36}
                 wrapperStyle={{ paddingBottom: '10px' }}
+                content={({ payload }) => (
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap', padding: '4px 0' }}>
+                    {payload?.map((entry, index) => {
+                      const isDashed = entry.dataKey === 'capacityLine';
+                      const isLine = entry.type === 'line' || entry.dataKey === 'salesPlan' || entry.dataKey === 'capacityLine';
+                      return (
+                        <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {isLine ? (
+                            <div style={{
+                              width: 20,
+                              height: 0,
+                              borderTop: `2px ${isDashed ? 'dashed' : 'solid'} ${entry.color}`,
+                            }} />
+                          ) : (
+                            <div style={{
+                              width: 12,
+                              height: 12,
+                              backgroundColor: entry.color,
+                              borderRadius: 2,
+                            }} />
+                          )}
+                          <span style={{ fontSize: 12, color: '#374151' }}>{entry.value}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               />
 
               {/* Series 1: Capacity Line - Dashed Gray Line (Y2) */}
