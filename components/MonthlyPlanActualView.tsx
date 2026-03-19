@@ -480,7 +480,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
         )}
 
         {/* Chart Container */}
-        <div id="monthly-plan-actual-chart" className="flex-1 min-h-[400px] w-full relative overflow-visible">
+        <div id="monthly-plan-actual-chart" className="flex-1 min-h-[420px] w-full relative overflow-visible">
           
           {/* Pinned Detail Card Overlay */}
           {pinnedMonth !== null && (() => {
