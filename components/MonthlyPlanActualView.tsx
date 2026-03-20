@@ -549,9 +549,10 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 dataKey="monthLabel"
                 fontSize={12}
                 interval={0}
-                tick={{ fontSize: 12, dy: 4 }}
-                tickMargin={4}
-                height={30}
+                tick={{ fontSize: 12 }}
+                tickLine={false}
+                height={24}
+                padding={{ left: 0, right: 0 }}
               />
               {/* Hidden X-Axis for Bullet Chart Overlay */}
               <XAxis
