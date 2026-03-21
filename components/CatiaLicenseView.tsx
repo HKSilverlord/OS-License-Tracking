@@ -37,37 +37,39 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
     },
     {
       id: 3, group: '買取', values: Array(52).fill({}).map((v, i) => {
-        if (i < 8) return { cost: '', costColor: 'bg-gray-100' }; // Empty 2023-early 2024
-        if (i >= 8 && i <= 28) return { cost: '21', costColor: 'bg-gray-200', revenue: i===8?'90':(i===16?'44':''), color: i>=16?'bg-yellow-200':'' };
+        if (i < 8) return { cost: '', costColor: 'bg-gray-100' }; 
+        if (i >= 8 && i <= 27) return { cost: '21', costColor: 'bg-gray-200', revenue: i===8?'90':(i===16?'44':''), color: i>=16?'bg-yellow-200':'' };
+        if (i >= 28 && i <= 32) return { cost: '32', costColor: 'bg-yellow-100', revenue: '', color: 'bg-yellow-200' };
         return { cost: '5', costColor: 'bg-green-300', revenue: '', color: 'bg-green-100' };
       })
     },
     {
       id: 4, group: '買取', values: Array(52).fill({}).map((v, i) => {
         if (i < 8) return { cost: '', costColor: 'bg-gray-100' }; 
-        if (i >= 8 && i <= 28) return { cost: '21', costColor: 'bg-gray-200', revenue: i===8?'90':(i===16?'44':''), color: i>=16?'bg-yellow-200':'' };
+        if (i >= 8 && i <= 27) return { cost: '21', costColor: 'bg-gray-200', revenue: i===8?'90':(i===16?'44':''), color: i>=16?'bg-yellow-200':'' };
+        if (i >= 28 && i <= 32) return { cost: '32', costColor: 'bg-yellow-100', revenue: '', color: 'bg-yellow-200' };
         return { cost: '5', costColor: 'bg-green-300', revenue: '', color: 'bg-green-100' };
       })
     },
     {
       id: 5, group: 'リース', values: Array(52).fill({}).map((v, i) => {
         if (i < 16) return { cost: '', costColor: 'bg-gray-100' }; 
-        if (i >= 16) return { cost: '21', costColor: 'bg-gray-200', revenue: i===16?'16':'', color: (i>=28)?'bg-green-100':'bg-yellow-200' };
-        return { cost: '', costColor: '' };
+        if (i >= 16 && i <= 30) return { cost: '21', costColor: 'bg-gray-200', revenue: i===16?'16':'', color: (i>=28)?'bg-green-100':'bg-yellow-200' };
+        return { cost: '', costColor: 'bg-gray-100' };
       })
     },
     {
       id: 6, group: 'リース', values: Array(52).fill({}).map((v, i) => {
         if (i < 16) return { cost: '', costColor: 'bg-gray-100' }; 
-        if (i >= 16) return { cost: '21', costColor: 'bg-gray-200', revenue: i===16?'16':'', color: (i>=28)?'bg-green-100':'bg-yellow-200' };
-        return { cost: '', costColor: '' };
+        if (i >= 16 && i <= 30) return { cost: '21', costColor: 'bg-gray-200', revenue: i===16?'16':'', color: (i>=28)?'bg-green-100':'bg-yellow-200' };
+        return { cost: '', costColor: 'bg-gray-100' };
       })
     },
     {
       id: 7, group: 'リース', values: Array(52).fill({}).map((v, i) => {
         if (i < 16) return { cost: '', costColor: 'bg-gray-100' }; 
-        if (i >= 16) return { cost: '21', costColor: 'bg-gray-200', revenue: i===16?'16':'', color: (i>=28)?'bg-green-100':'bg-yellow-200' };
-        return { cost: '', costColor: '' };
+        if (i >= 16 && i <= 30) return { cost: '21', costColor: 'bg-gray-200', revenue: i===16?'16':'', color: (i>=28)?'bg-green-100':'bg-yellow-200' };
+        return { cost: '', costColor: 'bg-gray-100' };
       })
     },
   ];
