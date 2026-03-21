@@ -9,6 +9,7 @@ import { ChartExportMenu } from './ChartExportMenu';
 import { SectionExportMenu } from './SectionExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DEFAULT_UNIT_PRICE } from '../constants';
+import { getYearlyLicenseCost } from '../data/catiaLicenseData';
 
 interface DashboardChartColors {
   planRevenue: string;
@@ -276,7 +277,7 @@ export const Dashboard: React.FC = () => {
   const grossRevenuePlan = exactGrossRevenuePlan;
   const grossRevenueActual = exactGrossRevenueActual;
 
-  const licenseTotal = licenseComputers * licensePerComputer;
+  const licenseTotal = selectedYear ? getYearlyLicenseCost(selectedYear) : (licenseComputers * licensePerComputer);
   const netRevenuePlan = grossRevenuePlan - licenseTotal;
   const netRevenueActual = grossRevenueActual - licenseTotal;
   const achievementRate = totalPlanHours !== 0 ? (totalActualHours / totalPlanHours) * 100 : 0;
@@ -382,8 +383,10 @@ export const Dashboard: React.FC = () => {
                   />
                 </div>
                 <div className="flex flex-col justify-end">
-                  <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider pb-1">{t('dashboard.license.total', 'Annual License Cost')}</span>
-                  <div className="h-9 flex items-center justify-end text-sm font-bold text-emerald-900">
+                  <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider pb-1">
+                    {t('dashboard.license.total', 'Annual License Cost')} (CATIA)
+                  </span>
+                  <div className="h-9 flex items-center justify-end text-sm font-bold text-emerald-900 bg-white px-2 rounded border border-emerald-200" title="Dynamically calculated from CATIA License table">
                     {fmt(licenseTotal)} / {toMan(licenseTotal)}
                   </div>
                 </div>

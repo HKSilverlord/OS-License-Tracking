@@ -9,12 +9,13 @@ import { YearlyDataView } from './components/YearlyDataView';
 import { PeriodManagement } from './components/PeriodManagement';
 import { LongTermPlanView } from './components/LongTermPlanView';
 import { MonthlyPlanActualView } from './components/MonthlyPlanActualView';
+import { CatiaLicenseView } from './components/CatiaLicenseView';
 import { DatabaseDiagnostic } from './components/DatabaseDiagnostic';
 import { NewProjectModal } from './components/modals/NewProjectModal';
 import { NewPeriodModal } from './components/modals/NewPeriodModal';
 import { dbService } from './services/dbService';
 import { exportToExcel } from './services/exportService';
-import { LayoutDashboard, Table, Plus, LogOut, Download, Menu, X, Search, Languages, BarChart3, Calendar as CalendarIcon, TrendingUp, Wrench, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Table, Plus, LogOut, Download, Menu, X, Search, Languages, BarChart3, Calendar as CalendarIcon, TrendingUp, Wrench, ChevronLeft, ChevronRight, Monitor } from 'lucide-react';
 import { useLanguage } from './contexts/LanguageContext';
 import { supabase } from './lib/supabase';
 import type { Session } from '@supabase/supabase-js';
@@ -195,6 +196,7 @@ function App() {
           <nav className="flex-1 px-2 space-y-2 mt-2">
             <NavLink to="/" icon={LayoutDashboard} label={t('nav.dashboard')} collapsed={sidebarCollapsed} />
             <NavLink to="/tracking" icon={Table} label={t('nav.tracking')} collapsed={sidebarCollapsed} />
+            <NavLink to="/catia-license" icon={Monitor} label={t('nav.catiaLicense')} collapsed={sidebarCollapsed} />
             <NavLink to="/yearly-data" icon={Table} label={t('nav.yearlyData')} collapsed={sidebarCollapsed} />
             <NavLink to="/total" icon={BarChart3} label={t('nav.totalView')} collapsed={sidebarCollapsed} />
             <NavLink to="/long-term-plan" icon={TrendingUp} label={t('nav.longTermPlan')} collapsed={sidebarCollapsed} />
@@ -253,6 +255,7 @@ function App() {
             <nav className="space-y-4">
               <Link to="/" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.dashboard')}</Link>
               <Link to="/tracking" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.tracking')}</Link>
+              <Link to="/catia-license" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.catiaLicense')}</Link>
               <Link to="/yearly-data" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.yearlyData')}</Link>
               <Link to="/total" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.totalView')}</Link>
               <Link to="/long-term-plan" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.longTermPlan')}</Link>
@@ -339,6 +342,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/tracking" element={<TrackingView currentYear={currentYear} searchQuery={searchQuery} refreshTrigger={projectCreatedTrigger} />} />
+              <Route path="/catia-license" element={<CatiaLicenseView currentYear={currentYear} />} />
               <Route path="/total" element={<TotalView currentYear={currentYear} />} />
               <Route path="/yearly-data" element={<YearlyDataView currentYear={currentYear} />} />
               <Route path="/long-term-plan" element={<LongTermPlanView />} />

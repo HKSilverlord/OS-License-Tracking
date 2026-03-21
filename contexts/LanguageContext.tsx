@@ -240,6 +240,7 @@ const translations: Record<SupportedLanguage, Record<string, string>> = {
     'monthlyPlanActual.exportPNG': 'PNG画像としてエクスポート',
     'monthlyPlanActual.exportSVG': 'SVGとしてエクスポート（ベクター、最高品質）',
     'monthlyPlanActual.exportData': 'チャートデータをCSVとしてエクスポート',
+    'nav.catiaLicense': 'CATIAライセンス管理',
   },
   en: {
     'app.title': 'OS Manager',
@@ -467,6 +468,7 @@ const translations: Record<SupportedLanguage, Record<string, string>> = {
     'monthlyPlanActual.exportPNG': 'Export as PNG image',
     'monthlyPlanActual.exportSVG': 'Export as SVG (vector, best quality)',
     'monthlyPlanActual.exportData': 'Export chart data as CSV',
+    'nav.catiaLicense': 'CATIA License',
   },
   vn: {
     'app.title': 'Hệ thống quản lý OS',
@@ -694,6 +696,7 @@ const translations: Record<SupportedLanguage, Record<string, string>> = {
     'monthlyPlanActual.exportPNG': 'Xuất dưới dạng ảnh PNG',
     'monthlyPlanActual.exportSVG': 'Xuất dưới dạng SVG (vector, chất lượng tốt nhất)',
     'monthlyPlanActual.exportData': 'Xuất dữ liệu biểu đồ dưới dạng CSV',
+    'nav.catiaLicense': 'CATIAライセンス管理',
   }
 };
 
