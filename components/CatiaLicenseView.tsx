@@ -41,7 +41,7 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
   };
 
   const renderCostCell = (id: number, idx: number, val: number | null, isCurrent: boolean) => {
-    const displayVal = val !== null ? Number(val.toFixed(2)) : '';
+    const displayVal = val !== null ? Math.round(val) : '';
     const bgClass = getCostBg(id, idx);
     const highlightClass = isCurrent ? 'ring-1 ring-inset ring-blue-400 bg-blue-50/30' : '';
     
@@ -49,7 +49,7 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
       <td key={idx} className={`border p-0 min-w-10 ${bgClass} ${highlightClass} relative group`}>
         <input
           type="number"
-          step="0.01"
+          step="1"
           value={displayVal}
           onChange={(e) => handleCostChange(id, idx, e.target.value)}
           className="w-full h-full text-center bg-transparent border-none p-1 text-[11px] focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none"
@@ -66,7 +66,7 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
       ? isCurrentYear ? 'bg-blue-50' : 'bg-amber-50'
       : 'bg-white';
 
-    const displayVal = rev !== null && rev !== undefined ? Number(rev.toFixed(2)) : '';
+    const displayVal = rev !== null && rev !== undefined ? Math.round(rev) : '';
 
     return (
       <td
@@ -77,7 +77,7 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
         <div className="flex items-center justify-center w-full h-full px-1">
           <input
             type="number"
-            step="0.01"
+            step="1"
             value={displayVal}
             onChange={(e) => handleRevenueChange(id, y.year, e.target.value)}
             className={`w-16 text-center bg-transparent border-b border-transparent focus:border-blue-400 p-0.5 text-xs outline-none ${rev ? (isCurrentYear ? 'text-blue-800' : 'text-amber-800') : 'text-slate-300'}`}
