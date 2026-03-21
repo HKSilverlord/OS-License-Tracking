@@ -9,7 +9,7 @@ import { ChartExportMenu } from './ChartExportMenu';
 import { SectionExportMenu } from './SectionExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DEFAULT_UNIT_PRICE } from '../constants';
-import { getYearlyLicenseCost } from '../data/catiaLicenseData';
+import { useCatiaStore } from '../stores/useCatiaStore';
 
 interface DashboardChartColors {
   planRevenue: string;
@@ -73,6 +73,8 @@ export const Dashboard: React.FC = () => {
     }
     return { planRevenue: '#94a3b8', actualRevenue: '#2563eb', accPlan: '#94a3b8', accActual: '#10b981' };
   });
+
+  const getYearlyCost = useCatiaStore(state => state.getYearlyCost);
 
   const [showKpiColorPicker, setShowKpiColorPicker] = useState(false);
   const [dashboardColors, setDashboardColors] = useState<DashboardKpiColors>(() => {
@@ -277,7 +279,7 @@ export const Dashboard: React.FC = () => {
   const grossRevenuePlan = exactGrossRevenuePlan;
   const grossRevenueActual = exactGrossRevenueActual;
 
-  const licenseTotal = selectedYear ? getYearlyLicenseCost(selectedYear) : (licenseComputers * licensePerComputer);
+  const licenseTotal = selectedYear ? getYearlyCost(selectedYear) : (licenseComputers * licensePerComputer);
   const netRevenuePlan = grossRevenuePlan - licenseTotal;
   const netRevenueActual = grossRevenueActual - licenseTotal;
   const achievementRate = totalPlanHours !== 0 ? (totalActualHours / totalPlanHours) * 100 : 0;

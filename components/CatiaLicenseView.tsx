@@ -1,13 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { getYearlyLicenseCost } from '../data/catiaLicenseData';
-import { Monitor, Info } from 'lucide-react';
+import { useCatiaStore } from '../stores/useCatiaStore';
+import { Monitor, Info, RotateCcw } from 'lucide-react';
 
 interface CatiaLicenseViewProps {
   currentYear: number;
 }
 
-// Generate the 52 columns schema: 2023 (9-12), 2024-2027 (1-12)
+// 52 columns schema: 2023 (9-12), 2024-2027 (1-12)
 const years = [
   { year: 2023, months: [9, 10, 11, 12] },
   { year: 2024, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
@@ -18,73 +18,79 @@ const years = [
 
 export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear }) => {
   const { t } = useLanguage();
+  const { licenseCosts, licenseRevenues, updateCost, updateRevenue, getYearlyCost, resetToDefaults } = useCatiaStore();
 
-  const totalCostForYear = getYearlyLicenseCost(currentYear);
+  const totalCostForYear = getYearlyCost(currentYear);
 
-  // Revenue data per license per year (yearly totals from Excel formulas)
-  // Values in 万円. null = no revenue data for that year.
-  const revenueByLicense: Record<number, Record<number, number | null>> = {
-    1: { 2023: 99.5, 2024: 490, 2025: 43.75, 2026: null, 2027: null },   // E6=199/2, I6=1076/2-48, U6=175/4
-    2: { 2023: 99.5, 2024: 490, 2025: 43.75, 2026: null, 2027: null },   // Same as Lic1
-    3: { 2023: null, 2024: 90, 2025: 43.75, 2026: null, 2027: null },     // N10=84/2+48, U10=175/4
-    4: { 2023: null, 2024: 90, 2025: 43.75, 2026: null, 2027: null },     // Same as Lic3
-    5: { 2023: null, 2024: null, 2025: 16.33, 2026: null, 2027: null },   // X14=49/3
-    6: { 2023: null, 2024: null, 2025: 16.33, 2026: null, 2027: null },   // X16=X14
-    7: { 2023: null, 2024: null, 2025: 16.33, 2026: null, 2027: null },   // X18=X16
+  // Helper for background colors similar to Excel
+  const getCostBg = (id: number, i: number) => {
+    if (id === 1 || id === 2) return i < 28 ? 'bg-gray-100' : 'bg-green-100';
+    if (id === 3 || id === 4) return i >= 8 && i <= 32 ? 'bg-gray-100' : (i < 8 ? 'bg-slate-50' : 'bg-green-100');
+    if (id >= 5) return i >= 16 && i <= 30 ? 'bg-gray-100' : 'bg-slate-50';
+    return 'bg-white';
   };
 
-  // Helper config for cost rows only (simplified visualization based on Excel)
-  const licenseData = [
-    {
-      id: 1, group: '買取', values: Array(52).fill({}).map((v, i) => {
-        if (i < 28) return { cost: '21', costColor: 'bg-gray-200' };
-        return { cost: '5', costColor: 'bg-green-300' };
-      })
-    },
-    {
-      id: 2, group: '買取', values: Array(52).fill({}).map((v, i) => {
-        if (i < 28) return { cost: '21', costColor: 'bg-gray-200' };
-        return { cost: '5', costColor: 'bg-green-300' };
-      })
-    },
-    {
-      id: 3, group: '買取', values: Array(52).fill({}).map((v, i) => {
-        if (i < 8) return { cost: '', costColor: 'bg-gray-100' }; 
-        if (i >= 8 && i <= 27) return { cost: '21', costColor: 'bg-gray-200' };
-        if (i >= 28 && i <= 32) return { cost: '32', costColor: 'bg-yellow-100' };
-        return { cost: '5', costColor: 'bg-green-300' };
-      })
-    },
-    {
-      id: 4, group: '買取', values: Array(52).fill({}).map((v, i) => {
-        if (i < 8) return { cost: '', costColor: 'bg-gray-100' }; 
-        if (i >= 8 && i <= 27) return { cost: '21', costColor: 'bg-gray-200' };
-        if (i >= 28 && i <= 32) return { cost: '32', costColor: 'bg-yellow-100' };
-        return { cost: '5', costColor: 'bg-green-300' };
-      })
-    },
-    {
-      id: 5, group: 'リース', values: Array(52).fill({}).map((v, i) => {
-        if (i < 16) return { cost: '', costColor: 'bg-gray-100' }; 
-        if (i >= 16 && i <= 30) return { cost: '21', costColor: 'bg-gray-200' };
-        return { cost: '', costColor: 'bg-gray-100' };
-      })
-    },
-    {
-      id: 6, group: 'リース', values: Array(52).fill({}).map((v, i) => {
-        if (i < 16) return { cost: '', costColor: 'bg-gray-100' }; 
-        if (i >= 16 && i <= 30) return { cost: '21', costColor: 'bg-gray-200' };
-        return { cost: '', costColor: 'bg-gray-100' };
-      })
-    },
-    {
-      id: 7, group: 'リース', values: Array(52).fill({}).map((v, i) => {
-        if (i < 16) return { cost: '', costColor: 'bg-gray-100' }; 
-        if (i >= 16 && i <= 30) return { cost: '21', costColor: 'bg-gray-200' };
-        return { cost: '', costColor: 'bg-gray-100' };
-      })
-    },
-  ];
+  const handleCostChange = (id: number, idx: number, val: string) => {
+    const num = val === '' ? null : parseFloat(val);
+    updateCost(id, idx, isNaN(num as number) ? null : num);
+  };
+
+  const handleRevenueChange = (id: number, year: number, val: string) => {
+    const num = val === '' ? null : parseFloat(val);
+    updateRevenue(id, year, isNaN(num as number) ? null : num);
+  };
+
+  const renderCostCell = (id: number, idx: number, val: number | null, isCurrent: boolean) => {
+    const displayVal = val !== null ? Number(val.toFixed(2)) : '';
+    const bgClass = getCostBg(id, idx);
+    const highlightClass = isCurrent ? 'ring-1 ring-inset ring-blue-400 bg-blue-50/30' : '';
+    
+    return (
+      <td key={idx} className={`border p-0 min-w-10 ${bgClass} ${highlightClass} relative group`}>
+        <input
+          type="number"
+          step="0.01"
+          value={displayVal}
+          onChange={(e) => handleCostChange(id, idx, e.target.value)}
+          className="w-full h-full text-center bg-transparent border-none p-1 text-[11px] focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none"
+          title={val !== null ? val.toString() : ''}
+        />
+      </td>
+    );
+  };
+
+  const renderRevenueCell = (id: number, y: { year: number, months: number[] }) => {
+    const rev = licenseRevenues[id]?.[y.year];
+    const isCurrentYear = y.year === currentYear;
+    const bgClass = rev !== null && rev !== undefined
+      ? isCurrentYear ? 'bg-blue-50' : 'bg-amber-50'
+      : 'bg-white';
+
+    const displayVal = rev !== null && rev !== undefined ? Number(rev.toFixed(2)) : '';
+
+    return (
+      <td
+        key={y.year}
+        colSpan={y.months.length}
+        className={`border p-0 text-center font-semibold ${bgClass} relative`}
+      >
+        <div className="flex items-center justify-center w-full h-full px-1">
+          <input
+            type="number"
+            step="0.01"
+            value={displayVal}
+            onChange={(e) => handleRevenueChange(id, y.year, e.target.value)}
+            className={`w-16 text-center bg-transparent border-b border-transparent focus:border-blue-400 p-0.5 text-xs outline-none ${rev ? (isCurrentYear ? 'text-blue-800' : 'text-amber-800') : 'text-slate-300'}`}
+            placeholder="—"
+          />
+          {rev !== null && rev !== undefined && <span className="text-[10px] ml-0.5 text-slate-500">万</span>}
+        </div>
+      </td>
+    );
+  };
+
+  // Convert array of licenses to 1..7
+  const licenses = [1, 2, 3, 4, 5, 6, 7];
 
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-50 overflow-hidden">
@@ -98,32 +104,41 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
               </div>
               <div>
                 <h2 className="text-xl font-bold text-slate-800">CATIA 生産性の管理表</h2>
-                <p className="text-sm text-slate-500">License ROI and Cost Tracking for {currentYear}</p>
+                <p className="text-sm text-slate-500">Interactive License ROI and Cost Tracking</p>
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-sm text-slate-500 mb-1">Total {currentYear} License Cost</div>
-              <div className="text-2xl font-bold text-slate-800">
-                ¥{totalCostForYear.toLocaleString()}
+            <div className="text-right flex items-center gap-4">
+              <button 
+                onClick={resetToDefaults}
+                className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Reset Defaults
+              </button>
+              <div>
+                <div className="text-sm text-slate-500 mb-1">Total {currentYear} License Cost</div>
+                <div className="text-2xl font-bold text-slate-800">
+                  ¥{totalCostForYear.toLocaleString()}
+                </div>
               </div>
             </div>
           </div>
           <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 flex items-start gap-3">
             <Info className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-blue-800">
-              <p>Đây là giao diện sao chép dạng tĩnh từ hệ thống Excel CATIA LISENCE gốc.</p>
-              <p>Tổng chi phí license được tính toán và đổ về Dashboard từ dữ liệu năm <strong>{currentYear}</strong> thay vì số cố định ~17 triệu yên như trước.</p>
+              <p>Bảng này đã được nâng cấp thành dạng tương tác. Bạn có thể <strong>click vào bất kỳ ô số nào để sửa giá trị</strong> hệt như trên Excel.</p>
+              <p>Mọi thay đổi sẽ lập tức TỰ ĐỘNG tính lại Tổng Chi Phí năm <strong>{currentYear}</strong> và kết nối trực tiếp với các biểu đồ ở Dashboard.</p>
             </div>
           </div>
         </div>
 
-        {/* The Excel-like Table */}
+        {/* The Excel-like Editable Table */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
-          <table className="min-w-max w-full border-collapse text-xs">
+          <table className="min-w-max w-full border-collapse text-xs select-none">
             <thead>
               {/* Year Headers */}
               <tr>
-                <th colSpan={2} className="border p-2 bg-slate-100 font-bold sticky left-0 z-20">CATIA 生産性の管理表</th>
+                <th colSpan={2} className="border p-2 bg-slate-100 font-bold sticky left-0 z-20 shadow-[1px_0_0_#e2e8f0]">CATIA 生産性の管理表</th>
                 {years.map(y => (
                   <th key={y.year} colSpan={y.months.length} className={`border p-2 text-center font-bold ${y.year === currentYear ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-700'}`}>
                     {y.year}年
@@ -132,10 +147,10 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
               </tr>
               {/* Month Headers */}
               <tr>
-                <th colSpan={2} className="border p-2 bg-slate-50 sticky left-0 z-20">月 (Month)</th>
+                <th colSpan={2} className="border p-2 bg-slate-50 sticky left-0 z-20 shadow-[1px_0_0_#e2e8f0]">月 (Month)</th>
                 {years.map(y => (
                   y.months.map(m => (
-                    <th key={`${y.year}-${m}`} className={`border p-1 text-center bg-slate-50 w-8 ${y.year === currentYear ? 'border-b-2 border-b-blue-400' : ''}`}>
+                    <th key={`${y.year}-${m}`} className={`border p-1 text-center bg-slate-50 w-10 ${y.year === currentYear ? 'border-b-2 border-b-blue-400 bg-blue-50/50' : ''}`}>
                       {m}月
                     </th>
                   ))
@@ -144,18 +159,17 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
             </thead>
             <tbody>
               {/* Rows for each License */}
-              {licenseData.map(lic => (
-                <React.Fragment key={lic.id}>
+              {licenses.map(id => (
+                <React.Fragment key={id}>
                   {/* Row 1: 使用料 (Cost) */}
                   <tr>
-                    {lic.id === 1 && <td rowSpan={8} className="border p-2 font-bold text-center bg-white sticky left-0 z-10 w-16">買取</td>}
-                    {lic.id === 5 && <td rowSpan={6} className="border p-2 font-bold text-center bg-white sticky left-0 z-10 w-16">リース</td>}
-                    <td className="border p-1 bg-slate-50 font-semibold sticky left-16 z-10 w-16 text-center">
-                      <div className="text-[10px] text-slate-500">License {lic.id}</div>
+                    {(id === 1) && <td rowSpan={8} className="border p-2 font-bold text-center bg-white sticky left-0 z-10 w-12 shadow-[1px_0_0_#e2e8f0]">買取</td>}
+                    {(id === 5) && <td rowSpan={6} className="border p-2 font-bold text-center bg-white sticky left-0 z-10 w-12 shadow-[1px_0_0_#e2e8f0]">リース</td>}
+                    <td className="border p-1 bg-slate-50 font-semibold sticky left-12 z-10 w-16 text-center shadow-[1px_0_0_#e2e8f0]">
+                      <div className="text-[9px] text-slate-500">License {id}</div>
                       使用料
                     </td>
-                    {lic.values.map((v, idx) => {
-                      // Determine if this cell belongs to currentYear 
+                    {licenseCosts[id]?.map((val, idx) => {
                       let isCurrentYearCell = false;
                       let colTracker = 0;
                       for(const y of years) {
@@ -166,46 +180,26 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
                         colTracker += y.months.length;
                       }
 
-                      return (
-                        <td key={idx} className={`border p-1 text-center ${v.costColor || 'bg-white'} ${isCurrentYearCell ? (v.costColor ? 'opacity-90' : 'bg-blue-50/30') : ''}`}>
-                          {v.cost}
-                        </td>
-                      );
+                      return renderCostCell(id, idx, val, isCurrentYearCell);
                     })}
                   </tr>
+                  
                   {/* Row 2: 売上 (Revenue) - merged per year */}
                   <tr>
-                    <td className="border p-1 bg-slate-50 text-center sticky left-16 z-10 w-16 text-slate-500">
+                    <td className="border p-1 bg-slate-50 text-center sticky left-12 z-10 w-16 text-slate-500 shadow-[1px_0_0_#e2e8f0]">
                       売上
                     </td>
-                    {years.map(y => {
-                      const rev = revenueByLicense[lic.id]?.[y.year];
-                      const isCurrentYear = y.year === currentYear;
-                      return (
-                        <td
-                          key={y.year}
-                          colSpan={y.months.length}
-                          className={`border p-1 text-center font-semibold ${
-                            rev !== null && rev !== undefined
-                              ? isCurrentYear ? 'bg-blue-50 text-blue-800' : 'bg-amber-50 text-amber-800'
-                              : 'bg-white text-slate-300'
-                          }`}
-                        >
-                          {rev !== null && rev !== undefined ? `${rev}万` : '—'}
-                        </td>
-                      );
-                    })}
+                    {years.map(y => renderRevenueCell(id, y))}
                   </tr>
                 </React.Fragment>
               ))}
             </tbody>
           </table>
           <div className="p-4 bg-slate-50 border-t border-slate-200">
-            <div className="flex gap-4 text-xs items-center">
-              <div className="flex items-center gap-1"><div className="w-4 h-4 bg-gray-200 border border-gray-300"></div> <span>通常コスト (Normal Cost)</span></div>
-              <div className="flex items-center gap-1"><div className="w-4 h-4 bg-green-300 border border-green-400"></div> <span>回収後コスト (Recovered/Discounted Cost)</span></div>
-              <div className="flex items-center gap-1"><div className="w-4 h-4 bg-yellow-200 border border-yellow-300"></div> <span>回収期間 (Recovery Period)</span></div>
-              <div className="flex items-center gap-1"><div className="w-4 h-4 bg-green-100 border border-green-200"></div> <span>回収後 (Recovered)</span></div>
+            <div className="flex gap-4 text-xs items-center text-slate-600">
+              <span className="font-bold flex items-center gap-1"><RotateCcw className="w-3 h-3"/> Mẹo:</span>
+              <span>Di chuột vào ô số sẽ thấy tooltip hiện đầy đủ số thập phân không bị làm tròn.</span>
+              <span>Thay vì phải sửa code, bạn có thể tự update công thức ngay tại đây qua các tháng.</span>
             </div>
           </div>
         </div>
