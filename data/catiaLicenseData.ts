@@ -1,20 +1,27 @@
 export const getYearlyLicenseCost = (year: number): number => {
   // Returns the total license cost in JPY (not man-yen) for a given year.
-  // Based on the CATIA License Excel logic:
+  // Verified against Excel formulas in CATIA LISENCE.xlsx (Row 21: X21, AJ21)
+  // Unit in Excel = 万円, converted to JPY here (×10,000)
   switch (year) {
     case 2023:
-      return 1_680_000; // 2 licenses * 4 months * ~210k
+      // Lic1: 20.83×4=83.3, Lic2: 83.3 → 166.67万
+      return 1_666_667;
     case 2024:
-      return 8_400_000; // Lic 1-2 full year, Lic 3-4 from May (8 months) at ~210k
+      // Lic1: 20.83×8+31.5×4=292.7, Lic2: 292.7, Lic3: 20.83×7=145.8, Lic4: 145.8 → 877万
+      return 8_770_000;
     case 2025:
-      return 17_620_000; // 7 licenses full year (matches previous settings)
+      // Excel X21 = SUM(U5:AF5,...X17:AF17) = 1762.25万
+      return 17_622_500;
     case 2026:
-      return 6_990_000; // Lic 1-2 at 50k(12m). Lic 3-4 at 320k(5m)+50k(7m)=1950k. Lic 5-7 at 210k(3m). Total 6,990,000
+      // Excel AJ21 = SUM(AG5:AR5,...AG17:AR17) = 706.42万
+      // Lic1-2: 5.33×12=64ea, Lic3-4: 31.5×5+5.33×7=194.8ea, Lic5-7: 20.97×3=62.9ea
+      return 7_064_167;
     case 2027:
-      return 2_400_000; // Lic 1-4 at 50k(12m). Lic 5-7 ending pay=0. Total 2,400,000
+      // Lic1-4: 5.33×12=64ea → 256万, Lic5-7: 0
+      return 2_560_000;
     default:
       if (year < 2023) return 0;
-      return 2_400_000; // Assume ongoing rate after 2027
+      return 2_560_000; // Ongoing rate after 2027
   }
 };
 
