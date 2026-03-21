@@ -21,54 +21,66 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
 
   const totalCostForYear = getYearlyLicenseCost(currentYear);
 
-  // Helper config for rows (simplified visualization based on Excel image)
+  // Revenue data per license per year (yearly totals from Excel formulas)
+  // Values in 万円. null = no revenue data for that year.
+  const revenueByLicense: Record<number, Record<number, number | null>> = {
+    1: { 2023: 99.5, 2024: 490, 2025: 43.75, 2026: null, 2027: null },   // E6=199/2, I6=1076/2-48, U6=175/4
+    2: { 2023: 99.5, 2024: 490, 2025: 43.75, 2026: null, 2027: null },   // Same as Lic1
+    3: { 2023: null, 2024: 90, 2025: 43.75, 2026: null, 2027: null },     // N10=84/2+48, U10=175/4
+    4: { 2023: null, 2024: 90, 2025: 43.75, 2026: null, 2027: null },     // Same as Lic3
+    5: { 2023: null, 2024: null, 2025: 16.33, 2026: null, 2027: null },   // X14=49/3
+    6: { 2023: null, 2024: null, 2025: 16.33, 2026: null, 2027: null },   // X16=X14
+    7: { 2023: null, 2024: null, 2025: 16.33, 2026: null, 2027: null },   // X18=X16
+  };
+
+  // Helper config for cost rows only (simplified visualization based on Excel)
   const licenseData = [
     {
-      id: 1, group: '買取', values: Array(52).fill({ cost: '21', revenue: '100', color: 'bg-green-100' }).map((v, i) => {
-        if (i < 28) return { cost: '21', costColor: 'bg-gray-200', revenue: (i===0||i===1)?'100':(i===4?'490':(i===16?'44':'')), color: '' };
-        return { cost: '5', costColor: 'bg-green-300', revenue: '', color: 'bg-green-100' };
+      id: 1, group: '買取', values: Array(52).fill({}).map((v, i) => {
+        if (i < 28) return { cost: '21', costColor: 'bg-gray-200' };
+        return { cost: '5', costColor: 'bg-green-300' };
       })
     },
     {
       id: 2, group: '買取', values: Array(52).fill({}).map((v, i) => {
-        if (i < 28) return { cost: '21', costColor: 'bg-gray-200', revenue: (i===0||i===1)?'100':(i===4?'490':(i===16?'44':'')), color: '' };
-        return { cost: '5', costColor: 'bg-green-300', revenue: '', color: 'bg-green-100' };
+        if (i < 28) return { cost: '21', costColor: 'bg-gray-200' };
+        return { cost: '5', costColor: 'bg-green-300' };
       })
     },
     {
       id: 3, group: '買取', values: Array(52).fill({}).map((v, i) => {
         if (i < 8) return { cost: '', costColor: 'bg-gray-100' }; 
-        if (i >= 8 && i <= 27) return { cost: '21', costColor: 'bg-gray-200', revenue: i===8?'90':(i===16?'44':''), color: i>=16?'bg-yellow-200':'' };
-        if (i >= 28 && i <= 32) return { cost: '32', costColor: 'bg-yellow-100', revenue: '', color: 'bg-yellow-200' };
-        return { cost: '5', costColor: 'bg-green-300', revenue: '', color: 'bg-green-100' };
+        if (i >= 8 && i <= 27) return { cost: '21', costColor: 'bg-gray-200' };
+        if (i >= 28 && i <= 32) return { cost: '32', costColor: 'bg-yellow-100' };
+        return { cost: '5', costColor: 'bg-green-300' };
       })
     },
     {
       id: 4, group: '買取', values: Array(52).fill({}).map((v, i) => {
         if (i < 8) return { cost: '', costColor: 'bg-gray-100' }; 
-        if (i >= 8 && i <= 27) return { cost: '21', costColor: 'bg-gray-200', revenue: i===8?'90':(i===16?'44':''), color: i>=16?'bg-yellow-200':'' };
-        if (i >= 28 && i <= 32) return { cost: '32', costColor: 'bg-yellow-100', revenue: '', color: 'bg-yellow-200' };
-        return { cost: '5', costColor: 'bg-green-300', revenue: '', color: 'bg-green-100' };
+        if (i >= 8 && i <= 27) return { cost: '21', costColor: 'bg-gray-200' };
+        if (i >= 28 && i <= 32) return { cost: '32', costColor: 'bg-yellow-100' };
+        return { cost: '5', costColor: 'bg-green-300' };
       })
     },
     {
       id: 5, group: 'リース', values: Array(52).fill({}).map((v, i) => {
         if (i < 16) return { cost: '', costColor: 'bg-gray-100' }; 
-        if (i >= 16 && i <= 30) return { cost: '21', costColor: 'bg-gray-200', revenue: i===16?'16':'', color: (i>=28)?'bg-green-100':'bg-yellow-200' };
+        if (i >= 16 && i <= 30) return { cost: '21', costColor: 'bg-gray-200' };
         return { cost: '', costColor: 'bg-gray-100' };
       })
     },
     {
       id: 6, group: 'リース', values: Array(52).fill({}).map((v, i) => {
         if (i < 16) return { cost: '', costColor: 'bg-gray-100' }; 
-        if (i >= 16 && i <= 30) return { cost: '21', costColor: 'bg-gray-200', revenue: i===16?'16':'', color: (i>=28)?'bg-green-100':'bg-yellow-200' };
+        if (i >= 16 && i <= 30) return { cost: '21', costColor: 'bg-gray-200' };
         return { cost: '', costColor: 'bg-gray-100' };
       })
     },
     {
       id: 7, group: 'リース', values: Array(52).fill({}).map((v, i) => {
         if (i < 16) return { cost: '', costColor: 'bg-gray-100' }; 
-        if (i >= 16 && i <= 30) return { cost: '21', costColor: 'bg-gray-200', revenue: i===16?'16':'', color: (i>=28)?'bg-green-100':'bg-yellow-200' };
+        if (i >= 16 && i <= 30) return { cost: '21', costColor: 'bg-gray-200' };
         return { cost: '', costColor: 'bg-gray-100' };
       })
     },
@@ -161,27 +173,28 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
                       );
                     })}
                   </tr>
-                  {/* Row 2: 売上 (Revenue) */}
+                  {/* Row 2: 売上 (Revenue) - merged per year */}
                   <tr>
                     <td className="border p-1 bg-slate-50 text-center sticky left-16 z-10 w-16 text-slate-500">
                       売上
                     </td>
-                    {lic.values.map((v, idx) => {
-                      let isCurrentYearCell = false;
-                      let colTracker = 0;
-                      for(const y of years) {
-                        if (idx >= colTracker && idx < colTracker + y.months.length) {
-                          isCurrentYearCell = (y.year === currentYear);
-                          break;
-                        }
-                        colTracker += y.months.length;
-                      }
-
+                    {years.map(y => {
+                      const rev = revenueByLicense[lic.id]?.[y.year];
+                      const isCurrentYear = y.year === currentYear;
                       return (
-                      <td key={idx} className={`border p-1 text-center ${v.color || 'bg-white'} ${isCurrentYearCell ? (v.color ? 'opacity-90' : 'bg-blue-50/30') : ''}`}>
-                        {v.revenue}
-                      </td>
-                    )})}
+                        <td
+                          key={y.year}
+                          colSpan={y.months.length}
+                          className={`border p-1 text-center font-semibold ${
+                            rev !== null && rev !== undefined
+                              ? isCurrentYear ? 'bg-blue-50 text-blue-800' : 'bg-amber-50 text-amber-800'
+                              : 'bg-white text-slate-300'
+                          }`}
+                        >
+                          {rev !== null && rev !== undefined ? `${rev}万` : '—'}
+                        </td>
+                      );
+                    })}
                   </tr>
                 </React.Fragment>
               ))}
