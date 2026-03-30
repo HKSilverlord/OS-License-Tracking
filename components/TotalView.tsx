@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { MonthlyRecord } from '../types';
 import { dbService } from '../services/dbService';
 import { exportChartToSVG, exportChartToPNG, exportChartDataToCSV, generateChartFilename, copyChartToClipboard } from '../utils/chartExport';
@@ -31,6 +31,9 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   const [allRecords, setAllRecords] = useState<MonthlyRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [pinnedMonth, setPinnedMonth] = useState<number | null>(null);
+  const columnCoordsRef = useRef<Record<number, number>>({});
+  
   // Load initial colors from localStorage or default
   const [chartColors, setChartColors] = useState<ChartColors>(() => {
     const saved = localStorage.getItem('totalView_chartColors');
@@ -183,27 +186,22 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     return { yAxisMax: maxLimit, yAxisTicks: ticks };
   }, [chartData]);
 
-  // Custom Tooltip Component
-  const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
-    if (!active || !payload || payload.length === 0) return null;
-
-    const data = payload[0].payload;
+  // Reusable Detail Card Component
+  const MonthDetailCard = ({ data, hideShadow = false }: { data: any; hideShadow?: boolean }) => {
     const plan = data.plan || 0;
     const actual = data.actual || 0;
     const accPlan = data.accPlan || 0;
     const accActual = data.accActual || 0;
 
-    // Calculate GAP
     const timeGap = accActual - accPlan;
     const percentGap = accPlan !== 0 ? ((timeGap / accPlan) * 100) : 0;
 
     return (
-      <div className="bg-white p-3 border border-slate-300 rounded-lg shadow-lg">
+      <div className={`bg-white p-3 border border-slate-300 rounded-lg min-w-[200px] ${hideShadow ? '' : 'shadow-lg'}`}>
         <p className="font-semibold text-slate-800 mb-2 border-b border-slate-200 pb-1">
           {data.name}
         </p>
         <div className="space-y-1.5 text-sm">
-          {/* Order: 計画, 実績, 累計計画, 累計実績 */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.plan.color }}></div>
@@ -236,7 +234,6 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
             <span className="font-medium text-slate-900">{accActual.toLocaleString()}</span>
           </div>
 
-          {/* GAP Section */}
           <div className="border-t border-slate-200 pt-2 mt-2">
             <div className="flex items-center justify-between gap-4">
               <span className="text-slate-700 font-medium">時間 GAP:</span>
@@ -256,6 +253,25 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     );
   };
 
+  // Custom Tooltip Wrapper
+  const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
+    if (!active || !payload || payload.length === 0) return null;
+    const data = payload[0].payload;
+    return <MonthDetailCard data={data} />;
+  };
+
+  // Custom bar to capture coordinates
+  const TrackingBar = (props: any) => {
+    const { fill, x, y, width, height, payload, fillOpacity } = props;
+    if (payload?.month) {
+      columnCoordsRef.current[payload.month] = x + width / 2;
+    }
+    const r = 4;
+    const path = `M${x},${y+height} L${x},${y+r} A${r},${r} 0 0,1 ${x+r},${y} L${x+width-r},${y} A${r},${r} 0 0,1 ${x+width},${y+r} L${x+width},${y+height} Z`;
+    const d = height < r ? `M${x},${y} L${x+width},${y} L${x+width},${y+height} L${x},${y+height} Z` : path;
+    return <path d={d} stroke="none" fill={fill} fillOpacity={fillOpacity} />;
+  };
+
   if (loading) {
     return <div className="flex justify-center items-center h-64"><Loader2 className="animate-spin h-8 w-8 text-blue-600" /></div>;
   }
@@ -270,7 +286,22 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
             <TrendingUp className="w-4 h-4 mr-2 text-blue-600" />
             {t('totalView.chartTitle')} - {currentYear}
           </h3>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap items-center">
+            <select
+              className="px-2 py-1.5 text-sm border border-slate-300 rounded-lg text-slate-700 bg-white hover:border-slate-400 outline-none"
+              value={pinnedMonth ?? ""}
+              onChange={(e) => {
+                const month = e.target.value ? Number(e.target.value) : null;
+                setPinnedMonth(month);
+              }}
+            >
+              <option value="">{t('tracker.selectMonth', '月を選択...')}</option>
+              {chartData.map((d) => (
+                <option key={d.month} value={d.month}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
             <button
               onClick={() => setShowColorPicker(!showColorPicker)}
               className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
@@ -394,9 +425,52 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
             </div>
           </div>
         )}
-        <div id="total-view-chart" className="flex-1 min-h-0">
+        <div id="total-view-chart" className="flex-1 min-h-0 relative">
+          
+          {/* Pinned Detail Card Overlay */}
+          {pinnedMonth !== null && (() => {
+            const pinnedData = chartData.find((d) => d.month === pinnedMonth);
+            if (!pinnedData) return null;
+            
+            const isCardOnLeft = pinnedMonth > 8;
+            const targetX = columnCoordsRef.current[pinnedMonth] || 100;
+            const cardX = isCardOnLeft ? targetX - 230 : targetX + 40;
+
+            return (
+              <div 
+                className="absolute z-10 pointer-events-none transition-all duration-200 ease-in-out drop-shadow-md"
+                style={{ 
+                  left: cardX, 
+                  top: '40%',
+                  transform: 'translateY(-50%)'
+                }}
+              >
+                <div 
+                  className={`absolute top-1/2 -translate-y-1/2 w-[14px] h-[14px] bg-white transform rotate-45 pointer-events-none ${
+                    isCardOnLeft 
+                      ? '-right-[7px] border-t border-r border-slate-300' 
+                      : '-left-[7px] border-b border-l border-slate-300'
+                  }`}
+                  style={{ zIndex: 0 }}
+                />
+                <div className="relative z-10">
+                  <MonthDetailCard data={pinnedData} hideShadow={true} />
+                </div>
+              </div>
+            );
+          })()}
+
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+            <ComposedChart 
+              data={chartData} 
+              margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+              onClick={(state) => {
+                if (state && state.activePayload && state.activePayload.length > 0) {
+                  const clickedMonth = state.activePayload[0].payload.month;
+                  setPinnedMonth(prev => prev === clickedMonth ? null : clickedMonth);
+                }
+              }}
+            >
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="name" fontSize={12} />
               <YAxis yAxisId="left" orientation="left" fontSize={11} domain={[0, yAxisMax]} ticks={yAxisTicks} label={{ value: t('totalView.axis.accumulated'), angle: -90, position: 'insideLeft' }} />
@@ -415,7 +489,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                   </>
                 ) : null;
               })()}
-              <Bar yAxisId="left" dataKey="accPlan" name={t('dashboard.chart.accPlan')} fill={chartColors.accPlan.color} fillOpacity={chartColors.accPlan.opacity} radius={[4, 4, 0, 0]}>
+              <Bar yAxisId="left" dataKey="accPlan" name={t('dashboard.chart.accPlan')} fill={chartColors.accPlan.color} fillOpacity={chartColors.accPlan.opacity} shape={<TrackingBar />}>
                 <LabelList dataKey="accPlan" position="top" content={<OutlinedLabel dataKey="accPlan" />} />
               </Bar>
               <Bar yAxisId="left" dataKey="accActual" name={t('dashboard.chart.accActual')} fill={chartColors.accActual.color} fillOpacity={chartColors.accActual.opacity} radius={[4, 4, 0, 0]}>
