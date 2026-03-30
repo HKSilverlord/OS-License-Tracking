@@ -168,15 +168,20 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     return data;
   }, [allRecords, currentYear, language]);
 
-  // Fixed Y-axis: 0-21000 with 1000 unit intervals
-  const yAxisMax = 21000;
-  const yAxisTicks = useMemo(() => {
+  // Dynamic Y-axis max based on max accumulated values
+  const { yAxisMax, yAxisTicks } = useMemo(() => {
+    const maxPlan = Math.max(0, ...chartData.map(d => d.accPlan || 0));
+    const maxActual = Math.max(0, ...chartData.map(d => d.accActual || 0));
+    const max = Math.max(maxPlan, maxActual);
+    const maxLimit = max > 0 ? Math.ceil(max / 1000) * 1000 + 1000 : 20000;
+    
     const ticks = [];
-    for (let i = 0; i <= yAxisMax; i += 1000) {
+    const step = Math.ceil(maxLimit / 10 / 1000) * 1000 || 1000;
+    for (let i = 0; i <= maxLimit; i += step) {
       ticks.push(i);
     }
-    return ticks;
-  }, []);
+    return { yAxisMax: maxLimit, yAxisTicks: ticks };
+  }, [chartData]);
 
   // Custom Tooltip Component
   const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
@@ -394,8 +399,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
             <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="name" fontSize={12} />
-              <YAxis yAxisId="left" orientation="left" fontSize={11} domain={[0, yAxisMax]} ticks={yAxisTicks} label={{ value: t('totalView.axis.monthlyHours'), angle: -90, position: 'insideLeft' }} />
-              <YAxis yAxisId="right" orientation="right" fontSize={11} domain={[0, yAxisMax]} ticks={yAxisTicks} label={{ value: t('totalView.axis.accumulated'), angle: 90, position: 'insideRight' }} />
+              <YAxis yAxisId="left" orientation="left" fontSize={11} domain={[0, yAxisMax]} ticks={yAxisTicks} label={{ value: t('totalView.axis.accumulated'), angle: -90, position: 'insideLeft' }} />
               <Tooltip content={<CustomTooltip />} />
               <Legend />
               {/* Current Month Highlight */}
@@ -411,16 +415,12 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                   </>
                 ) : null;
               })()}
-              <Bar yAxisId="left" dataKey="plan" name={t('tracker.planShort')} fill={chartColors.plan.color} fillOpacity={chartColors.plan.opacity} radius={[4, 4, 0, 0]}>
-                <LabelList dataKey="plan" position="top" content={<OutlinedLabel dataKey="plan" />} />
+              <Bar yAxisId="left" dataKey="accPlan" name={t('dashboard.chart.accPlan')} fill={chartColors.accPlan.color} fillOpacity={chartColors.accPlan.opacity} radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="accPlan" position="top" content={<OutlinedLabel dataKey="accPlan" />} />
               </Bar>
-              <Bar yAxisId="left" dataKey="actual" name={t('tracker.actualShort')} fill={chartColors.actual.color} fillOpacity={chartColors.actual.opacity} radius={[4, 4, 0, 0]}>
-                <LabelList dataKey="actual" position="top" content={<OutlinedLabel dataKey="actual" />} />
-              </Bar>
-              <Line yAxisId="right" type="monotone" dataKey="accPlan" name={t('dashboard.chart.accPlan')} stroke={chartColors.accPlan.color} strokeOpacity={chartColors.accPlan.opacity} strokeDasharray="5 5" dot={false} strokeWidth={2} />
-              <Line yAxisId="right" type="monotone" dataKey="accActual" name={t('dashboard.chart.accActual')} stroke={chartColors.accActual.color} strokeOpacity={chartColors.accActual.opacity} strokeWidth={2}>
+              <Bar yAxisId="left" dataKey="accActual" name={t('dashboard.chart.accActual')} fill={chartColors.accActual.color} fillOpacity={chartColors.accActual.opacity} radius={[4, 4, 0, 0]}>
                 <LabelList dataKey="accActual" position="top" content={<OutlinedLabel dataKey="accActual" />} />
-              </Line>
+              </Bar>
             </ComposedChart>
           </ResponsiveContainer>
         </div>
