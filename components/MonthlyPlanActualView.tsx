@@ -152,8 +152,8 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
   // Reusable Detail Card Component
   const MonthDetailCard = ({ data, hideShadow = false }: { data: MonthlyPlanActualData; hideShadow?: boolean }) => {
     return (
-      <div className={`bg-white p-3 border border-slate-300 rounded-lg min-w-[200px] ${hideShadow ? '' : 'shadow-lg'}`}>
-        <p className="font-semibold text-slate-800 mb-2 border-b border-slate-200 pb-1">
+      <div className={`bg-white dark:bg-slate-900 p-3 border border-slate-300 dark:border-slate-700 rounded-lg min-w-[200px] ${hideShadow ? '' : 'shadow-lg'}`}>
+        <p className="font-semibold text-slate-800 dark:text-slate-100 mb-2 border-b border-slate-200 dark:border-slate-800 pb-1">
           {data.monthLabel}
         </p>
         <div className="space-y-1.5 text-sm">
@@ -161,44 +161,44 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.capacityLine.color, opacity: chartColors.capacityLine.opacity, borderStyle: 'dashed' }}></div>
-              <span className="text-slate-700">{t('monthlyPlanActual.capacityLine', '能力線')}:</span>
+              <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.capacityLine', '能力線')}:</span>
             </div>
-            <span className="font-medium text-slate-900">{data.capacityLine.toLocaleString()} {t('monthlyPlanActual.unit.hours', '時間')}</span>
+            <span className="font-medium text-slate-900 dark:text-slate-100">{data.capacityLine.toLocaleString()} {t('monthlyPlanActual.unit.hours', '時間')}</span>
           </div>
 
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.workingHoursPlan.color, opacity: chartColors.workingHoursPlan.opacity }}></div>
-              <span className="text-slate-700">{t('monthlyPlanActual.workingPlan', '稼働計画')}:</span>
+              <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.workingPlan', '稼働計画')}:</span>
             </div>
-            <span className="font-medium text-slate-900">{data.workingHoursPlan.toLocaleString()} {t('monthlyPlanActual.unit.hours', '時間')}</span>
+            <span className="font-medium text-slate-900 dark:text-slate-100">{data.workingHoursPlan.toLocaleString()} {t('monthlyPlanActual.unit.hours', '時間')}</span>
           </div>
 
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.workingHoursActual.color, opacity: chartColors.workingHoursActual.opacity }}></div>
-              <span className="text-slate-700">{t('monthlyPlanActual.workingActual', '稼働実績')}:</span>
+              <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.workingActual', '稼働実績')}:</span>
             </div>
-            <span className="font-medium text-slate-900">{data.workingHoursActual.toLocaleString()} {t('monthlyPlanActual.unit.hours', '時間')}</span>
+            <span className="font-medium text-slate-900 dark:text-slate-100">{data.workingHoursActual.toLocaleString()} {t('monthlyPlanActual.unit.hours', '時間')}</span>
           </div>
 
           {/* Sales Section */}
-          <div className="border-t border-slate-200 pt-2 mt-2"></div>
+          <div className="border-t border-slate-200 dark:border-slate-800 pt-2 mt-2"></div>
 
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesPlan.color, opacity: chartColors.salesPlan.opacity }}></div>
-              <span className="text-slate-700">{t('monthlyPlanActual.salesPlan', '売上計画')}:</span>
+              <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.salesPlan', '売上計画')}:</span>
             </div>
-            <span className="font-medium text-slate-900">{data.salesPlan.toLocaleString()} {t('monthlyPlanActual.unit.sales', '万円')}</span>
+            <span className="font-medium text-slate-900 dark:text-slate-100">{data.salesPlan.toLocaleString()} {t('monthlyPlanActual.unit.sales', '万円')}</span>
           </div>
 
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesActual.color, opacity: chartColors.salesActual.opacity }}></div>
-              <span className="text-slate-700">{t('monthlyPlanActual.salesActual', '売上実績')}:</span>
+              <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.salesActual', '売上実績')}:</span>
             </div>
-            <span className="font-medium text-slate-900">{data.salesActual.toLocaleString()} {t('monthlyPlanActual.unit.sales', '万円')}</span>
+            <span className="font-medium text-slate-900 dark:text-slate-100">{data.salesActual.toLocaleString()} {t('monthlyPlanActual.unit.sales', '万円')}</span>
           </div>
         </div>
       </div>
@@ -341,21 +341,21 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 p-4 md:p-6 overflow-auto">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-4 md:p-6 overflow-auto">
       {/* Chart Section - Full Page */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex-1 flex flex-col">
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex-1 flex flex-col">
         <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
           <div>
-            <h3 className="text-md font-bold text-pink-600 flex items-center">
+            <h3 className="text-md font-bold text-pink-600 dark:text-pink-400 flex items-center">
               <TrendingUp className="w-4 h-4 mr-2" />
               {currentYear}{t('monthlyPlanActual.title', '年 OS事業受託状況予実')}
             </h3>
-            <p className="text-xs text-slate-500 mt-1">{t('monthlyPlanActual.subtitle', '月次計画と実績の比較')}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('monthlyPlanActual.subtitle', '月次計画と実績の比較')}</p>
           </div>
           <div className="flex gap-2 flex-wrap items-center">
             {/* Month Selector */}
             <select
-              className="px-2 py-1.5 text-sm border border-slate-300 rounded-lg text-slate-700 bg-white hover:border-slate-400 outline-none"
+              className="px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-600 outline-none"
               value={pinnedMonth ?? ""}
               onChange={(e) => {
                 const month = e.target.value ? Number(e.target.value) : null;
@@ -387,8 +387,8 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
 
         {/* Color Picker Section */}
         {showColorPicker && (
-          <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
-            <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+          <div className="mb-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+            <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">
               <Palette className="w-4 h-4" />
               Customize Chart Colors
             </h4>
@@ -403,52 +403,52 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
               ] as const).map(({ key, label }) => {
                 const style = chartColors[key];
                 return (
-                  <div key={key} className="flex flex-col gap-2 p-2 bg-white rounded border border-slate-100 shadow-sm">
-                    <label className="text-xs font-bold text-slate-700 truncate">{label}</label>
+                  <div key={key} className="flex flex-col gap-2 p-2 bg-white dark:bg-slate-800 rounded border border-slate-100 dark:border-slate-700 shadow-sm">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{label}</label>
 
                     {/* Color Row */}
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-slate-500 w-8">Color</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">Color</span>
                       <div className="flex items-center gap-1 flex-1">
                         <input type="color" value={style.color} onChange={(e) => updateColor(key, 'color', e.target.value)} className="w-6 h-6 rounded cursor-pointer p-0 border-0" />
-                        <input type="text" value={style.color} onChange={(e) => updateColor(key, 'color', e.target.value)} className="flex-1 w-full px-1 py-0.5 text-xs border border-slate-300 rounded" />
+                        <input type="text" value={style.color} onChange={(e) => updateColor(key, 'color', e.target.value)} className="flex-1 w-full px-1 py-0.5 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded" />
                       </div>
                     </div>
 
                     {/* Opacity Row */}
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-slate-500 w-8">Alpha</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">Alpha</span>
                       <div className="flex items-center gap-1 flex-1">
-                        <input type="range" min="0" max="1" step="0.1" value={style.opacity} onChange={(e) => updateColor(key, 'opacity', parseFloat(e.target.value))} className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer" />
-                        <span className="text-[10px] w-5 text-right font-medium">{Math.round(style.opacity * 100)}%</span>
+                        <input type="range" min="0" max="1" step="0.1" value={style.opacity} onChange={(e) => updateColor(key, 'opacity', parseFloat(e.target.value))} className="w-full h-1 bg-slate-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer" />
+                        <span className="text-[10px] w-5 text-right font-medium dark:text-slate-300">{Math.round(style.opacity * 100)}%</span>
                       </div>
                     </div>
 
                     {/* Label Color Row */}
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-slate-500 w-8">Text</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">Text</span>
                       <div className="flex items-center gap-1 flex-1">
                         <input type="color" value={style.labelColor} onChange={(e) => updateColor(key, 'labelColor', e.target.value)} className="w-6 h-6 rounded cursor-pointer p-0 border-0" />
-                        <input type="text" value={style.labelColor} onChange={(e) => updateColor(key, 'labelColor', e.target.value)} className="flex-1 w-full px-1 py-0.5 text-xs border border-slate-300 rounded" />
+                        <input type="text" value={style.labelColor} onChange={(e) => updateColor(key, 'labelColor', e.target.value)} className="flex-1 w-full px-1 py-0.5 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded" />
                       </div>
                     </div>
 
                     {/* Font Size Row */}
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-slate-500 w-8">Size</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">Size</span>
                       <div className="flex items-center gap-1 flex-1">
-                        <input type="range" min="8" max="20" step="1" value={style.fontSize ?? 10} onChange={(e) => updateColor(key, 'fontSize', parseInt(e.target.value))} className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer" />
-                        <span className="text-[10px] w-5 text-right font-medium">{style.fontSize ?? 10}</span>
+                        <input type="range" min="8" max="20" step="1" value={style.fontSize ?? 10} onChange={(e) => updateColor(key, 'fontSize', parseInt(e.target.value))} className="w-full h-1 bg-slate-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer" />
+                        <span className="text-[10px] w-5 text-right font-medium dark:text-slate-300">{style.fontSize ?? 10}</span>
                       </div>
                     </div>
 
                     {/* Bar Width Row (only for bar series) */}
                     {style.barSize !== undefined && (
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] text-slate-500 w-8">Width</span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">Width</span>
                         <div className="flex items-center gap-1 flex-1">
-                          <input type="range" min="10" max="100" step="5" value={style.barSize} onChange={(e) => updateColor(key, 'barSize', parseInt(e.target.value))} className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer" />
-                          <span className="text-[10px] w-7 text-right font-medium">{style.barSize}px</span>
+                          <input type="range" min="10" max="100" step="5" value={style.barSize} onChange={(e) => updateColor(key, 'barSize', parseInt(e.target.value))} className="w-full h-1 bg-slate-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer" />
+                          <span className="text-[10px] w-7 text-right font-medium dark:text-slate-300">{style.barSize}px</span>
                         </div>
                       </div>
                     )}
@@ -457,11 +457,11 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                     <div className="flex items-center gap-3">
                       <label className="flex items-center gap-1 cursor-pointer">
                         <input type="checkbox" checked={style.bold ?? true} onChange={(e) => updateColor(key, 'bold', e.target.checked)} className="w-3 h-3" />
-                        <span className="text-[10px] text-slate-600 font-bold">Bold</span>
+                        <span className="text-[10px] text-slate-600 dark:text-slate-400 font-bold">Bold</span>
                       </label>
                       <label className="flex items-center gap-1 cursor-pointer">
                         <input type="checkbox" checked={style.stroke ?? false} onChange={(e) => updateColor(key, 'stroke', e.target.checked)} className="w-3 h-3" />
-                        <span className="text-[10px] text-slate-600">Outline</span>
+                        <span className="text-[10px] text-slate-600 dark:text-slate-400">Outline</span>
                       </label>
                     </div>
                   </div>
@@ -470,10 +470,10 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
             </div>
 
             {/* Global: Highlight Current Month */}
-            <div className="mt-3 pt-3 border-t border-slate-200 flex items-center gap-2">
+            <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={showCurrentMonth} onChange={(e) => setShowCurrentMonth(e.target.checked)} className="w-4 h-4 accent-orange-500" />
-                <span className="text-xs font-semibold text-slate-700">🗓️ Highlight current month</span>
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">🗓️ Highlight current month</span>
               </label>
             </div>
           </div>
@@ -502,10 +502,10 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
               >
                 {/* Connecting Arrow */}
                 <div 
-                  className={`absolute top-1/2 -translate-y-1/2 w-[14px] h-[14px] bg-white transform rotate-45 pointer-events-none ${
+                  className={`absolute top-1/2 -translate-y-1/2 w-[14px] h-[14px] bg-white dark:bg-slate-900 transform rotate-45 pointer-events-none ${
                     isCardOnLeft 
-                      ? '-right-[7px] border-t border-r border-slate-300' 
-                      : '-left-[7px] border-b border-l border-slate-300'
+                      ? '-right-[7px] border-t border-r border-slate-300 dark:border-slate-700' 
+                      : '-left-[7px] border-b border-l border-slate-300 dark:border-slate-700'
                   }`}
                   style={{ zIndex: 0 }}
                 />

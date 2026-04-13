@@ -13,6 +13,7 @@ import {
 import { dbService } from '../services/dbService';
 import { Project, PeriodType } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
+import { motion } from 'framer-motion';
 
 interface PeriodWithCount {
   label: string;
@@ -200,15 +201,34 @@ export const PeriodManagement: React.FC = () => {
     );
   }
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1
+      }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, x: -20 },
+    show: { opacity: 1, x: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
+  };
+
   return (
-    <div className="p-6 space-y-6">
+    <motion.div 
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: 1 }} 
+      className="p-6 space-y-6"
+    >
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
             {t('periodManagement', '期間管理 / Period Management')}
           </h1>
-          <p className="text-sm text-slate-600 mt-1">
+          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
             {t('managePeriods', 'Create and manage periods with project assignments')}
           </p>
         </div>
@@ -222,34 +242,43 @@ export const PeriodManagement: React.FC = () => {
       </div>
 
       {/* Existing Periods List */}
-      <div className="bg-white rounded-lg border border-slate-200">
-        <div className="p-4 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900">
+      <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-800">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
             {t('existingPeriods', 'Existing Periods')}
           </h2>
         </div>
 
-        <div className="divide-y divide-slate-200">
+        <motion.div 
+          variants={containerVariants}
+          initial="hidden"
+          animate="show"
+          className="divide-y divide-slate-200 dark:divide-slate-800"
+        >
           {periods.length === 0 ? (
-            <div className="p-8 text-center text-slate-500">
+            <div className="p-8 text-center text-slate-500 dark:text-slate-400">
               <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
               <p>{t('noPeriodsYet', 'No periods created yet')}</p>
             </div>
           ) : (
             periods.map(period => (
-              <div key={period.label} className="p-4 hover:bg-slate-50 transition-colors">
+              <motion.div 
+                key={period.label} 
+                variants={itemVariants}
+                className="p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+              >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3">
-                      <Calendar className="w-5 h-5 text-blue-600" />
-                      <h3 className="text-lg font-semibold text-slate-900">
+                      <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-500" />
+                      <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                         {period.year} {period.half}
-                        <span className="text-sm font-normal text-slate-600 ml-2">
+                        <span className="text-sm font-normal text-slate-600 dark:text-slate-400 ml-2">
                           ({period.half === 'H1' ? '1月-6月' : '7月-12月'})
                         </span>
                       </h3>
                     </div>
-                    <div className="ml-8 mt-2 space-y-1 text-sm text-slate-600">
+                    <div className="ml-8 mt-2 space-y-1 text-sm text-slate-600 dark:text-slate-400">
                       <p>
                         {t('projectCount', 'Projects')}: <span className="font-semibold">{period.project_count}</span>
                       </p>
@@ -262,24 +291,24 @@ export const PeriodManagement: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleEditClick(period)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
                       title={t('edit', 'Edit')}
                     >
                       <Edit2 className="w-5 h-5" />
                     </button>
                     <button
                       onClick={() => handleDeletePeriod(period)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
                       title={t('delete', 'Delete')}
                     >
                       <Trash2 className="w-5 h-5" />
                     </button>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             ))
           )}
-        </div>
+        </motion.div>
       </div>
 
       {/* Create Period Modal */}
@@ -324,7 +353,7 @@ export const PeriodManagement: React.FC = () => {
           t={t}
         />
       )}
-    </div>
+    </motion.div>
   );
 };
 
@@ -369,14 +398,14 @@ const PeriodFormModal: React.FC<PeriodFormModalProps> = ({
   t
 }) => {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-slate-900/50 dark:bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col border border-slate-200 dark:border-slate-800">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-slate-200">
-          <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
+        <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-800">
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-slate-100 rounded-lg transition-colors"
+            className="p-1 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
           >
             <X className="w-6 h-6" />
           </button>
@@ -388,7 +417,7 @@ const PeriodFormModal: React.FC<PeriodFormModalProps> = ({
           {!isEditMode && (
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                   {t('year', 'Year')}
                 </label>
                 <input
@@ -397,17 +426,17 @@ const PeriodFormModal: React.FC<PeriodFormModalProps> = ({
                   max="2099"
                   value={year}
                   onChange={(e) => onYearChange?.(parseInt(e.target.value))}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                   {t('half', 'Half')}
                 </label>
                 <select
                   value={half}
                   onChange={(e) => onHalfChange?.(e.target.value as 'H1' | 'H2')}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 >
                   <option value="H1">H1 (1月-6月 / Jan-Jun)</option>
                   <option value="H2">H2 (7月-12月 / Jul-Dec)</option>
@@ -418,7 +447,7 @@ const PeriodFormModal: React.FC<PeriodFormModalProps> = ({
 
           {/* Search */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
               {t('searchProjects', 'Search Projects')}
             </label>
             <div className="relative">
@@ -428,27 +457,27 @@ const PeriodFormModal: React.FC<PeriodFormModalProps> = ({
                 value={searchQuery}
                 onChange={(e) => onSearchChange(e.target.value)}
                 placeholder={t('searchPlaceholder', 'Search by name, code, or type...')}
-                className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
               />
             </div>
           </div>
 
           {/* Select All / Deselect All */}
-          <div className="flex items-center justify-between py-2 border-y border-slate-200">
-            <span className="text-sm font-medium text-slate-700">
+          <div className="flex items-center justify-between py-2 border-y border-slate-200 dark:border-slate-800">
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
               {selectedProjectIds.length} {t('projectsSelected', 'projects selected')}
             </span>
             <div className="flex gap-2">
               <button
                 onClick={onSelectAll}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors"
               >
                 {t('selectAll', 'Select All')}
               </button>
-              <span className="text-slate-300">|</span>
+              <span className="text-slate-300 dark:text-slate-600">|</span>
               <button
                 onClick={onDeselectAll}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors"
               >
                 {t('deselectAll', 'Deselect All')}
               </button>
@@ -456,30 +485,30 @@ const PeriodFormModal: React.FC<PeriodFormModalProps> = ({
           </div>
 
           {/* Project List */}
-          <div className="border border-slate-200 rounded-lg max-h-96 overflow-y-auto">
+          <div className="border border-slate-200 dark:border-slate-800 rounded-lg max-h-96 overflow-y-auto">
             {allProjects.length === 0 ? (
-              <div className="p-8 text-center text-slate-500">
+              <div className="p-8 text-center text-slate-500 dark:text-slate-400">
                 <p>{t('noProjectsFound', 'No projects found')}</p>
               </div>
             ) : (
-              <div className="divide-y divide-slate-200">
+              <div className="divide-y divide-slate-200 dark:divide-slate-800">
                 {allProjects.map(project => (
                   <label
                     key={project.id}
-                    className="flex items-center gap-3 p-3 hover:bg-slate-50 cursor-pointer transition-colors"
+                    className="flex items-center gap-3 p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
                   >
                     <input
                       type="checkbox"
                       checked={selectedProjectIds.includes(project.id)}
                       onChange={() => onToggleProject(project.id)}
-                      className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                      className="w-4 h-4 text-blue-600 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 rounded focus:ring-blue-500 focus:ring-offset-0 dark:focus:ring-offset-slate-900"
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-slate-900">{project.name}</span>
-                        <span className="text-xs text-slate-500">({project.code})</span>
+                        <span className="font-medium text-slate-900 dark:text-slate-100">{project.name}</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">({project.code})</span>
                       </div>
-                      <div className="text-sm text-slate-600">
+                      <div className="text-sm text-slate-600 dark:text-slate-400">
                         {project.type} • {project.software}
                       </div>
                     </div>
@@ -491,11 +520,11 @@ const PeriodFormModal: React.FC<PeriodFormModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-200">
+        <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-200 dark:border-slate-800">
           <button
             onClick={onClose}
             disabled={submitting}
-            className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-50"
           >
             {t('cancel', 'Cancel')}
           </button>

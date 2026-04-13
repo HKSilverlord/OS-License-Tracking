@@ -89,8 +89,8 @@ export const LongTermPlanView: React.FC = () => {
     const data = payload[0].payload;
 
     return (
-      <div className="bg-white p-3 border border-slate-300 rounded-lg shadow-lg">
-        <p className="font-semibold text-slate-800 mb-2 border-b border-slate-200 pb-1">
+      <div className="bg-white dark:bg-slate-900 p-3 border border-slate-300 dark:border-slate-700 rounded-lg shadow-lg">
+        <p className="font-semibold text-slate-800 dark:text-slate-100 mb-2 border-b border-slate-200 dark:border-slate-800 pb-1">
           {t('longTermPlan.year', '年度')}: {data.year}
         </p>
         <div className="space-y-1.5 text-sm">
@@ -99,9 +99,9 @@ export const LongTermPlanView: React.FC = () => {
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesPlan }}></div>
-                <span className="text-slate-700">{t('longTermPlan.salesPlan', '売上計画')}:</span>
+                <span className="text-slate-700 dark:text-slate-400">{t('longTermPlan.salesPlan', '売上計画')}:</span>
               </div>
-              <span className="font-medium text-slate-900">{data.salesPlan.toLocaleString()} {t('longTermPlan.unit.sales', '万円')}</span>
+              <span className="font-medium text-slate-900 dark:text-slate-100">{data.salesPlan.toLocaleString()} {t('longTermPlan.unit.sales', '万円')}</span>
             </div>
           )}
 
@@ -109,24 +109,24 @@ export const LongTermPlanView: React.FC = () => {
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesActual }}></div>
-                <span className="text-slate-700">{t('longTermPlan.salesActual', '売上実績')}:</span>
+                <span className="text-slate-700 dark:text-slate-400">{t('longTermPlan.salesActual', '売上実績')}:</span>
               </div>
-              <span className="font-medium text-slate-900">{data.salesActual.toLocaleString()} {t('longTermPlan.unit.sales', '万円')}</span>
+              <span className="font-medium text-slate-900 dark:text-slate-100">{data.salesActual.toLocaleString()} {t('longTermPlan.unit.sales', '万円')}</span>
             </div>
           )}
 
           {/* Hourly Rate Data */}
           {(data.hourlyRatePlan !== undefined || data.hourlyRateActual !== undefined) && (
-            <div className="border-t border-slate-200 pt-2 mt-2"></div>
+            <div className="border-t border-slate-200 dark:border-slate-800 pt-2 mt-2"></div>
           )}
 
           {data.hourlyRatePlan !== undefined && (
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.hourlyRatePlan }}></div>
-                <span className="text-slate-700">{t('longTermPlan.hourlyRatePlan', '平均時給計画')}:</span>
+                <span className="text-slate-700 dark:text-slate-400">{t('longTermPlan.hourlyRatePlan', '平均時給計画')}:</span>
               </div>
-              <span className="font-medium text-slate-900">{data.hourlyRatePlan.toLocaleString()} {t('longTermPlan.unit.hourlyRate', '千円/時')}</span>
+              <span className="font-medium text-slate-900 dark:text-slate-100">{data.hourlyRatePlan.toLocaleString()} {t('longTermPlan.unit.hourlyRate', '千円/時')}</span>
             </div>
           )}
 
@@ -134,9 +134,9 @@ export const LongTermPlanView: React.FC = () => {
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.hourlyRateActual }}></div>
-                <span className="text-slate-700">{t('longTermPlan.hourlyRateActual', '平均時給実績')}:</span>
+                <span className="text-slate-700 dark:text-slate-400">{t('longTermPlan.hourlyRateActual', '平均時給実績')}:</span>
               </div>
-              <span className="font-medium text-slate-900">{data.hourlyRateActual.toLocaleString()} {t('longTermPlan.unit.hourlyRate', '千円/時')}</span>
+              <span className="font-medium text-slate-900 dark:text-slate-100">{data.hourlyRateActual.toLocaleString()} {t('longTermPlan.unit.hourlyRate', '千円/時')}</span>
             </div>
           )}
         </div>
@@ -149,11 +149,11 @@ export const LongTermPlanView: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 p-4 md:p-6 overflow-hidden">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-4 md:p-6 overflow-hidden">
       {/* Chart Section - Full Page */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex-1 flex flex-col min-h-0">
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex-1 flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-          <h3 className="text-md font-bold text-slate-700 flex items-center">
+          <h3 className="text-md font-bold text-slate-700 dark:text-slate-100 flex items-center">
             <TrendingUp className="w-4 h-4 mr-2 text-blue-600" />
             {t('longTermPlan.title', 'OS事業長期計画')}
           </h3>
@@ -179,80 +179,80 @@ export const LongTermPlanView: React.FC = () => {
         {/* Color Picker Section */}
         {
           showColorPicker && (
-            <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
-              <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+            <div className="mb-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+              <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">
                 <Palette className="w-4 h-4" />
                 Customize Chart Colors
               </h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-600">{t('longTermPlan.salesPlan', '売上計画')}</label>
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400">{t('longTermPlan.salesPlan', '売上計画')}</label>
                   <div className="flex items-center gap-2">
                     <input
                       type="color"
                       value={chartColors.salesPlan}
                       onChange={(e) => setChartColors({ ...chartColors, salesPlan: e.target.value })}
-                      className="w-10 h-8 rounded border border-slate-300 cursor-pointer"
+                      className="w-10 h-8 rounded border border-slate-300 dark:border-slate-600 cursor-pointer p-0"
                     />
                     <input
                       type="text"
                       value={chartColors.salesPlan}
                       onChange={(e) => setChartColors({ ...chartColors, salesPlan: e.target.value })}
-                      className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded"
+                      className="flex-1 px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded"
                     />
                   </div>
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-600">{t('longTermPlan.salesActual', '売上実績')}</label>
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400">{t('longTermPlan.salesActual', '売上実績')}</label>
                   <div className="flex items-center gap-2">
                     <input
                       type="color"
                       value={chartColors.salesActual}
                       onChange={(e) => setChartColors({ ...chartColors, salesActual: e.target.value })}
-                      className="w-10 h-8 rounded border border-slate-300 cursor-pointer"
+                      className="w-10 h-8 rounded border border-slate-300 dark:border-slate-600 cursor-pointer p-0"
                     />
                     <input
                       type="text"
                       value={chartColors.salesActual}
                       onChange={(e) => setChartColors({ ...chartColors, salesActual: e.target.value })}
-                      className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded"
+                      className="flex-1 px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded"
                     />
                   </div>
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-600">{t('longTermPlan.hourlyRatePlan', '平均時給計画')}</label>
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400">{t('longTermPlan.hourlyRatePlan', '平均時給計画')}</label>
                   <div className="flex items-center gap-2">
                     <input
                       type="color"
                       value={chartColors.hourlyRatePlan}
                       onChange={(e) => setChartColors({ ...chartColors, hourlyRatePlan: e.target.value })}
-                      className="w-10 h-8 rounded border border-slate-300 cursor-pointer"
+                      className="w-10 h-8 rounded border border-slate-300 dark:border-slate-600 cursor-pointer p-0"
                     />
                     <input
                       type="text"
                       value={chartColors.hourlyRatePlan}
                       onChange={(e) => setChartColors({ ...chartColors, hourlyRatePlan: e.target.value })}
-                      className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded"
+                      className="flex-1 px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded"
                     />
                   </div>
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-600">{t('longTermPlan.hourlyRateActual', '平均時給実績')}</label>
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400">{t('longTermPlan.hourlyRateActual', '平均時給実績')}</label>
                   <div className="flex items-center gap-2">
                     <input
                       type="color"
                       value={chartColors.hourlyRateActual}
                       onChange={(e) => setChartColors({ ...chartColors, hourlyRateActual: e.target.value })}
-                      className="w-10 h-8 rounded border border-slate-300 cursor-pointer"
+                      className="w-10 h-8 rounded border border-slate-300 dark:border-slate-600 cursor-pointer p-0"
                     />
                     <input
                       type="text"
                       value={chartColors.hourlyRateActual}
                       onChange={(e) => setChartColors({ ...chartColors, hourlyRateActual: e.target.value })}
-                      className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded"
+                      className="flex-1 px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text- slate-200 rounded"
                     />
                   </div>
                 </div>

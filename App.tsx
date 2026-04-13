@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Auth } from './components/Auth';
 import { Dashboard } from './components/Dashboard';
 import { TrackingView } from './components/TrackingView';
@@ -15,7 +16,7 @@ import { NewProjectModal } from './components/modals/NewProjectModal';
 import { NewPeriodModal } from './components/modals/NewPeriodModal';
 import { dbService } from './services/dbService';
 import { exportToExcel } from './services/exportService';
-import { LayoutDashboard, Table, Plus, LogOut, Download, Menu, X, Search, Languages, BarChart3, Calendar as CalendarIcon, TrendingUp, Wrench, ChevronLeft, ChevronRight, Monitor } from 'lucide-react';
+import { LayoutDashboard, Table, Plus, LogOut, Download, Menu, X, Search, Languages, BarChart3, Calendar as CalendarIcon, TrendingUp, Wrench, ChevronLeft, ChevronRight, Monitor, Moon, Sun } from 'lucide-react';
 import { useLanguage } from './contexts/LanguageContext';
 import { supabase } from './lib/supabase';
 import type { Session } from '@supabase/supabase-js';
@@ -41,6 +42,23 @@ function App() {
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [availablePeriods, setAvailablePeriods] = useState<string[]>([]); // Keep full list for modals/logic
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Theme State
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [darkMode]);
 
   // Modals
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
@@ -165,8 +183,6 @@ function App() {
 
   if (!session) return <Auth />;
 
-  if (!session) return <Auth />;
-
   // Computed prop for modals/views that might still need a specific period string fallback
   // For TrackingView, we will update it to accept year and handle H1/H2 internally.
 
@@ -176,65 +192,86 @@ function App() {
       <div className="flex h-screen bg-slate-50 overflow-hidden">
         {/* Sidebar Desktop */}
         <aside
-          className={`hidden md:flex flex-col bg-slate-900 text-white shadow-xl z-20 shrink-0 transition-all duration-300 ${sidebarCollapsed ? 'w-16' : 'w-64'
+          className={`hidden md:flex flex-col bg-slate-900 border-r border-slate-800 text-white z-20 shrink-0 transition-all duration-300 ${sidebarCollapsed ? 'w-20' : 'w-64'
             }`}
         >
-          <div className={`p-4 flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
+          <div className={`p-5 flex items-center border-b border-slate-800 min-h-[72px] ${sidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
             {!sidebarCollapsed && (
-              <div>
-                <h1 className="text-xl font-bold tracking-tight text-blue-400">{t('app.title')}</h1>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+                  <LayoutDashboard className="w-4 h-4 text-white" />
+                </div>
+                <h1 className="text-lg font-bold tracking-tight text-white">{t('app.title')}</h1>
               </div>
             )}
             <button
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+              className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
             >
               {sidebarCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
             </button>
           </div>
 
-          <nav className="flex-1 px-2 space-y-2 mt-2">
-            <NavLink to="/" icon={LayoutDashboard} label={t('nav.dashboard')} collapsed={sidebarCollapsed} />
-            <NavLink to="/tracking" icon={Table} label={t('nav.tracking')} collapsed={sidebarCollapsed} />
-            <NavLink to="/catia-license" icon={Monitor} label={t('nav.catiaLicense')} collapsed={sidebarCollapsed} />
-            <NavLink to="/yearly-data" icon={Table} label={t('nav.yearlyData')} collapsed={sidebarCollapsed} />
-            <NavLink to="/total" icon={BarChart3} label={t('nav.totalView')} collapsed={sidebarCollapsed} />
-            <NavLink to="/long-term-plan" icon={TrendingUp} label={t('nav.longTermPlan')} collapsed={sidebarCollapsed} />
-            <NavLink to="/monthly-plan-actual" icon={BarChart3} label={t('nav.monthlyPlanActual')} collapsed={sidebarCollapsed} />
-            <NavLink to="/period-management" icon={CalendarIcon} label={t('nav.periodManagement')} collapsed={sidebarCollapsed} />
-            <div className="pt-2 border-t border-slate-700 mx-2"></div>
-            <NavLink to="/diagnostic" icon={Wrench} label="Database Fix" collapsed={sidebarCollapsed} />
-          </nav>
-          <div className="p-4 border-t border-slate-700">
+          <div className="flex-1 overflow-y-auto custom-scrollbar py-4 px-3 space-y-6">
+            <div>
+              {!sidebarCollapsed && <p className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Analytics</p>}
+              <nav className="space-y-1">
+                <NavLink to="/" icon={LayoutDashboard} label={t('nav.dashboard')} collapsed={sidebarCollapsed} />
+                <NavLink to="/yearly-data" icon={Table} label={t('nav.yearlyData')} collapsed={sidebarCollapsed} />
+                <NavLink to="/total" icon={BarChart3} label={t('nav.totalView')} collapsed={sidebarCollapsed} />
+                <NavLink to="/monthly-plan-actual" icon={BarChart3} label={t('nav.monthlyPlanActual')} collapsed={sidebarCollapsed} />
+              </nav>
+            </div>
+
+            <div>
+              {!sidebarCollapsed && <p className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Management</p>}
+              <nav className="space-y-1">
+                <NavLink to="/tracking" icon={Table} label={t('nav.tracking')} collapsed={sidebarCollapsed} />
+                <NavLink to="/catia-license" icon={Monitor} label={t('nav.catiaLicense')} collapsed={sidebarCollapsed} />
+                <NavLink to="/long-term-plan" icon={TrendingUp} label={t('nav.longTermPlan')} collapsed={sidebarCollapsed} />
+                <NavLink to="/period-management" icon={CalendarIcon} label={t('nav.periodManagement')} collapsed={sidebarCollapsed} />
+              </nav>
+            </div>
+
+            <div>
+              {!sidebarCollapsed && <p className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Tools</p>}
+              <nav className="space-y-1">
+                <NavLink to="/diagnostic" icon={Wrench} label="Database Fix" collapsed={sidebarCollapsed} />
+              </nav>
+            </div>
+          </div>
+
+          <div className="p-4 border-t border-slate-800 bg-slate-900/50">
             {!sidebarCollapsed ? (
               <>
                 <div className="flex items-center mb-4 px-2">
-                  <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-sm font-bold shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-sky-400 flex items-center justify-center text-sm font-bold text-white shadow-sm shrink-0 border-2 border-slate-800">
                     {session.user.email?.charAt(0).toUpperCase()}
                   </div>
                   <div className="ml-3 overflow-hidden">
-                    <p className="text-sm font-medium truncate">{session.user.email}</p>
+                    <p className="text-sm font-medium text-white truncate">{session.user.email}</p>
+                    <p className="text-xs text-slate-400 truncate">Administrator</p>
                   </div>
                 </div>
                 <button
                   onClick={handleSignOut}
-                  className="flex items-center w-full px-2 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                  className="flex items-center justify-center w-full px-4 py-2 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-slate-700"
                 >
-                  <LogOut className="w-4 h-4 mr-3" />
+                  <LogOut className="w-4 h-4 mr-2" />
                   {t('nav.signOut')}
                 </button>
               </>
             ) : (
-              <div className="flex flex-col items-center gap-4">
-                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-sm font-bold" title={session.user.email}>
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-sky-400 flex items-center justify-center text-sm font-bold text-white shadow-sm border-2 border-slate-800 cursor-pointer" title={session.user.email}>
                   {session.user.email?.charAt(0).toUpperCase()}
                 </div>
                 <button
                   onClick={handleSignOut}
-                  className="flex items-center justify-center w-full py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                  className="flex items-center justify-center w-10 h-10 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
                   title={t('nav.signOut')}
                 >
-                  <LogOut className="w-4 h-4" />
+                  <LogOut className="w-5 h-5" />
                 </button>
               </div>
             )}
@@ -242,43 +279,57 @@ function App() {
         </aside>
 
         {/* Mobile Header */}
-        <div className="md:hidden fixed top-0 w-full bg-slate-900 text-white z-30 flex items-center justify-between p-4 shadow-md h-14">
-          <h1 className="font-bold">{t('app.title')}</h1>
-          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+        <div className="md:hidden fixed top-0 w-full bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 z-30 flex items-center justify-between p-4 h-16">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+               <LayoutDashboard className="w-4 h-4 text-white" />
+            </div>
+            <h1 className="font-bold text-slate-900 dark:text-white">{t('app.title')}</h1>
+          </div>
+          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 text-slate-600 dark:text-slate-300">
             {mobileMenuOpen ? <X /> : <Menu />}
           </button>
         </div>
 
         {/* Mobile Menu Overlay */}
         {mobileMenuOpen && (
-          <div className="fixed inset-0 bg-slate-800 bg-opacity-95 z-20 pt-20 px-6 md:hidden">
-            <nav className="space-y-4">
-              <Link to="/" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.dashboard')}</Link>
-              <Link to="/tracking" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.tracking')}</Link>
-              <Link to="/catia-license" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.catiaLicense')}</Link>
-              <Link to="/yearly-data" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.yearlyData')}</Link>
-              <Link to="/total" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.totalView')}</Link>
-              <Link to="/long-term-plan" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.longTermPlan')}</Link>
-              <Link to="/monthly-plan-actual" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.monthlyPlanActual')}</Link>
-              <Link to="/period-management" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">{t('nav.periodManagement')}</Link>
-              <Link to="/diagnostic" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-white border-b border-slate-700">Database Fix</Link>
-              <button onClick={handleSignOut} className="block w-full text-left py-3 text-red-400">{t('nav.signOut')}</button>
+          <div className="fixed inset-0 bg-white dark:bg-slate-900 z-20 pt-16 flex flex-col md:hidden animate-fade-in">
+            <nav className="flex-1 overflow-y-auto px-4 py-6 space-y-2">
+              <MobileNavLink to="/" icon={LayoutDashboard} label={t('nav.dashboard')} onClick={() => setMobileMenuOpen(false)} />
+              <MobileNavLink to="/tracking" icon={Table} label={t('nav.tracking')} onClick={() => setMobileMenuOpen(false)} />
+              <MobileNavLink to="/catia-license" icon={Monitor} label={t('nav.catiaLicense')} onClick={() => setMobileMenuOpen(false)} />
+              <MobileNavLink to="/yearly-data" icon={Table} label={t('nav.yearlyData')} onClick={() => setMobileMenuOpen(false)} />
+              <MobileNavLink to="/total" icon={BarChart3} label={t('nav.totalView')} onClick={() => setMobileMenuOpen(false)} />
+              <MobileNavLink to="/long-term-plan" icon={TrendingUp} label={t('nav.longTermPlan')} onClick={() => setMobileMenuOpen(false)} />
+              <MobileNavLink to="/monthly-plan-actual" icon={BarChart3} label={t('nav.monthlyPlanActual')} onClick={() => setMobileMenuOpen(false)} />
+              <MobileNavLink to="/period-management" icon={CalendarIcon} label={t('nav.periodManagement')} onClick={() => setMobileMenuOpen(false)} />
+              <div className="my-4 border-t border-slate-200 dark:border-slate-800"></div>
+              <MobileNavLink to="/diagnostic" icon={Wrench} label="Database Fix" onClick={() => setMobileMenuOpen(false)} />
             </nav>
+            <div className="p-6 border-t border-slate-200 dark:border-slate-800">
+              <button onClick={handleSignOut} className="flex items-center justify-center w-full py-3 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl font-medium">
+                <LogOut className="w-5 h-5 mr-2" />
+                {t('nav.signOut')}
+              </button>
+            </div>
           </div>
         )}
 
         {/* Main Content */}
         {/* Added min-w-0 to prevent flex children from forcing overflow */}
-        <main className="flex-1 flex flex-col h-full overflow-hidden relative md:static mt-14 md:mt-0 bg-slate-50 min-w-0">
+        <main className="flex-1 flex flex-col h-full overflow-hidden relative md:static mt-16 md:mt-0 bg-slate-50 dark:bg-slate-950 min-w-0 transition-colors duration-200">
           {/* Top Bar */}
-          <header className="bg-white border-b border-slate-200 w-full flex flex-wrap items-center justify-between gap-3 px-4 md:px-6 py-3 shadow-sm z-10 shrink-0">
-            <div className="flex items-center gap-2 w-full md:w-auto">
+          <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 w-full flex flex-wrap items-center justify-between gap-3 px-4 md:px-6 py-3 min-h-[72px] shrink-0 transition-colors duration-200 z-10">
+            <div className="flex items-center gap-4 w-full md:w-auto">
+              <h2 className="text-sm font-semibold text-slate-500 dark:text-slate-400 hidden lg:block tracking-wide uppercase">
+                <RouteName />
+              </h2>
               {/* Period Selector (Year Only) */}
-              <div className="flex items-center space-x-2 bg-slate-100 rounded-lg p-1">
+              <div className="flex items-center space-x-2 bg-slate-100 dark:bg-slate-800 rounded-lg p-1 border border-slate-200 dark:border-slate-700">
                 <select
                   value={currentYear}
                   onChange={(e) => setCurrentYear(parseInt(e.target.value))}
-                  className="bg-transparent border-none text-slate-900 text-sm focus:ring-0 font-medium cursor-pointer"
+                  className="bg-transparent border-none text-slate-900 dark:text-white text-sm focus:ring-0 font-bold cursor-pointer"
                 >
                   {availableYears.map(year => (
                     <option key={year} value={year}>{year}</option>
@@ -288,68 +339,78 @@ function App() {
             </div>
 
             <div className="flex items-center gap-2 md:gap-3 flex-wrap justify-end w-full md:w-auto">
-              <div className="w-full md:hidden">
+              {/* Search - Mobile */}
+              <div className="w-full md:hidden mb-2">
                 <div className="relative">
-                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" />
+                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                   <input
                     type="text"
                     placeholder={t('search.placeholder')}
-                    className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
                 </div>
               </div>
+
+              {/* Theme Toggle */}
+              <button
+                onClick={() => setDarkMode(!darkMode)}
+                className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
+                title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+              >
+                {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              </button>
+
               <button
                 onClick={toggleLanguage}
                 type="button"
-                className="flex items-center px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-100 transition-colors shadow-sm"
+                className="flex items-center px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                 title={languageLabels[nextLanguage]}
               >
-                <Languages className="w-4 h-4 mr-2 text-slate-500" />
-                <span className="hidden sm:inline">{languageLabel}</span>
-                <span className="sm:hidden font-semibold">{languageShort}</span>
+                <Languages className="w-4 h-4 md:mr-2 text-slate-500" />
+                <span className="hidden md:inline">{languageLabel}</span>
               </button>
-              <div className="hidden md:flex relative">
-                <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" />
+
+              {/* Search - Desktop */}
+              <div className="hidden md:flex relative group">
+                <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
                 <input
                   type="text"
                   placeholder={t('search.placeholder')}
-                  className="pl-9 pr-4 py-1.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-48 lg:w-64"
+                  className="pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-900 w-48 xl:w-64 transition-all"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
+
+              <div className="hidden sm:block w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
               <button
                 onClick={handleExport}
-                className="flex items-center px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+                className="flex items-center px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-sm font-medium rounded-lg transition-colors shadow-sm"
               >
-                <Download className="w-4 h-4 mr-2" />
-                {t('buttons.export')}
+                <Download className="w-4 h-4 md:mr-2" />
+                <span className="hidden md:inline">{t('buttons.export')}</span>
               </button>
+              
               <button
                 onClick={handleOpenProjectModal}
-                className="flex items-center px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+                className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-all shadow-sm active:scale-95"
               >
-                <Plus className="w-4 h-4 mr-2" />
-                {t('buttons.project')}
+                <Plus className="w-4 h-4 md:mr-2" />
+                <span className="hidden md:inline">{t('buttons.project')}</span>
               </button>
             </div>
           </header>
 
           {/* Page Content Container - No Scroll here, children handle it */}
           <div className="flex-1 flex flex-col overflow-hidden relative">
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/tracking" element={<TrackingView currentYear={currentYear} searchQuery={searchQuery} refreshTrigger={projectCreatedTrigger} />} />
-              <Route path="/catia-license" element={<CatiaLicenseView currentYear={currentYear} />} />
-              <Route path="/total" element={<TotalView currentYear={currentYear} />} />
-              <Route path="/yearly-data" element={<YearlyDataView currentYear={currentYear} />} />
-              <Route path="/long-term-plan" element={<LongTermPlanView />} />
-              <Route path="/monthly-plan-actual" element={<MonthlyPlanActualView currentYear={currentYear} />} />
-              <Route path="/period-management" element={<PeriodManagement />} />
-              <Route path="/diagnostic" element={<DatabaseDiagnostic />} />
-            </Routes>
+            <MainRoutes 
+              currentYear={currentYear} 
+              searchQuery={searchQuery} 
+              projectCreatedTrigger={projectCreatedTrigger}
+            />
           </div>
         </main>
       </div>
@@ -374,6 +435,85 @@ function App() {
   );
 }
 
+// Helper to get route name
+const RouteName = () => {
+  const location = useLocation();
+  const { t } = useLanguage();
+  
+  const map: Record<string, string> = {
+    '/': t('nav.dashboard'),
+    '/tracking': t('nav.tracking'),
+    '/catia-license': t('nav.catiaLicense'),
+    '/yearly-data': t('nav.yearlyData'),
+    '/total': t('nav.totalView'),
+    '/long-term-plan': t('nav.longTermPlan'),
+    '/monthly-plan-actual': t('nav.monthlyPlanActual'),
+    '/period-management': t('nav.periodManagement'),
+    '/diagnostic': 'Database Diagnostic'
+  };
+  
+  return <>{map[location.pathname] || ''}</>;
+};
+
+// Main Routes with Page Transitions
+const MainRoutes = ({ currentYear, searchQuery, projectCreatedTrigger }: { currentYear: number, searchQuery: string, projectCreatedTrigger: number }) => {
+  const location = useLocation();
+
+  const pageVariants = {
+    initial: {
+      opacity: 0,
+      y: 10,
+      scale: 0.99
+    },
+    enter: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: {
+        duration: 0.4,
+        ease: [0.25, 1, 0.5, 1]
+      }
+    },
+    exit: {
+      opacity: 0,
+      y: -10,
+      scale: 0.99,
+      transition: {
+        duration: 0.3,
+        ease: [0.25, 1, 0.5, 1]
+      }
+    }
+  };
+
+  const PageWrapper = ({ children }: { children: React.ReactNode }) => (
+    <motion.div
+      initial="initial"
+      animate="enter"
+      exit="exit"
+      variants={pageVariants}
+      className="flex-1 flex flex-col h-full w-full absolute inset-0"
+    >
+      {children}
+    </motion.div>
+  );
+
+  return (
+    <AnimatePresence mode="wait">
+      <Routes location={location} key={location.pathname}>
+        <Route path="/" element={<PageWrapper><Dashboard /></PageWrapper>} />
+        <Route path="/tracking" element={<PageWrapper><TrackingView currentYear={currentYear} searchQuery={searchQuery} refreshTrigger={projectCreatedTrigger} /></PageWrapper>} />
+        <Route path="/catia-license" element={<PageWrapper><CatiaLicenseView currentYear={currentYear} /></PageWrapper>} />
+        <Route path="/total" element={<PageWrapper><TotalView currentYear={currentYear} /></PageWrapper>} />
+        <Route path="/yearly-data" element={<PageWrapper><YearlyDataView currentYear={currentYear} /></PageWrapper>} />
+        <Route path="/long-term-plan" element={<PageWrapper><LongTermPlanView /></PageWrapper>} />
+        <Route path="/monthly-plan-actual" element={<PageWrapper><MonthlyPlanActualView currentYear={currentYear} /></PageWrapper>} />
+        <Route path="/period-management" element={<PageWrapper><PeriodManagement /></PageWrapper>} />
+        <Route path="/diagnostic" element={<PageWrapper><DatabaseDiagnostic /></PageWrapper>} />
+      </Routes>
+    </AnimatePresence>
+  );
+};
+
 // Nav Link Component
 const NavLink = ({ to, icon: Icon, label, collapsed }: any) => {
   const location = useLocation();
@@ -381,14 +521,40 @@ const NavLink = ({ to, icon: Icon, label, collapsed }: any) => {
   return (
     <Link
       to={to}
-      className={`flex items-center ${collapsed ? 'justify-center px-2' : 'px-4'} py-3 rounded-lg text-sm font-medium transition-all duration-200 ${isActive
-        ? 'bg-blue-600 text-white shadow-md'
-        : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+      className={`flex items-center ${collapsed ? 'justify-center px-0' : 'px-3'} py-2.5 rounded-lg text-sm font-medium transition-all duration-200 relative group ${isActive
+        ? 'bg-blue-600/10 text-blue-400'
+        : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
         }`}
       title={collapsed ? label : ''}
     >
-      <Icon className={`w-5 h-5 ${collapsed ? '' : 'mr-3'} ${isActive ? 'text-white' : 'text-slate-500'}`} />
-      {!collapsed && label}
+      <Icon className={`w-5 h-5 shrink-0 ${collapsed ? '' : 'mr-3'} ${isActive ? 'text-blue-500' : 'text-slate-500 group-hover:text-slate-300'}`} />
+      {!collapsed && <span className="truncate">{label}</span>}
+      {collapsed && (
+        <div className="absolute left-14 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50">
+          {label}
+        </div>
+      )}
+      {isActive && !collapsed && (
+        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-500 rounded-r-full" />
+      )}
+    </Link>
+  );
+};
+
+const MobileNavLink = ({ to, icon: Icon, label, onClick }: any) => {
+  const location = useLocation();
+  const isActive = location.pathname === to;
+  return (
+    <Link
+      to={to}
+      onClick={onClick}
+      className={`flex items-center px-4 py-3 rounded-xl text-base font-medium transition-all duration-200 ${isActive
+        ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
+        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+        }`}
+    >
+      <Icon className={`w-6 h-6 mr-4 ${isActive ? 'text-blue-600 dark:text-blue-500' : 'text-slate-400 dark:text-slate-500'}`} />
+      {label}
     </Link>
   );
 };

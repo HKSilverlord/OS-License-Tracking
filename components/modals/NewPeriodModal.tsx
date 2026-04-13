@@ -92,16 +92,16 @@ export const NewPeriodModal: React.FC<NewPeriodModalProps> = ({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg animate-in fade-in zoom-in duration-200 max-h-[90vh] flex flex-col">
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-lg animate-in fade-in zoom-in duration-200 max-h-[90vh] flex flex-col">
                 {/* Header */}
-                <div className="p-5 border-b border-gray-200 flex justify-between items-center shrink-0">
+                <div className="p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center shrink-0">
                     <div>
-                        <h3 className="text-lg font-bold text-gray-900">{t('modals.period.title', '新しい期間')}</h3>
-                        <p className="text-xs text-gray-500 mt-0.5">Create a new period and select projects to include</p>
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">{t('modals.period.title', '新しい期間')}</h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Create a new period and select projects to include</p>
                     </div>
                     <button
                         onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                        className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:text-slate-400 transition-colors"
                     >
                         <X className="w-5 h-5" />
                     </button>
@@ -112,13 +112,13 @@ export const NewPeriodModal: React.FC<NewPeriodModalProps> = ({
                     <div className="p-6 space-y-6">
                         {/* Year Input - Full Width */}
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                                 {t('modals.period.year', 'Year')}
                             </label>
                             <input
                                 type="number"
                                 required
-                                className="block w-full border-2 border-gray-300 rounded-lg p-3 text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                className="block w-full border-2 border-slate-300 dark:border-slate-600 rounded-lg p-3 text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 value={newPeriodInput.year}
                                 onChange={e => setNewPeriodInput({ ...newPeriodInput, year: parseInt(e.target.value) })}
                                 placeholder="2025"
@@ -127,12 +127,12 @@ export const NewPeriodModal: React.FC<NewPeriodModalProps> = ({
 
                         {/* Period Dropdown - Full Width */}
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                                 {t('modals.period.half', 'Period')}
                             </label>
                             <select
                                 required
-                                className="block w-full border-2 border-gray-300 rounded-lg p-3 text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all cursor-pointer bg-white"
+                                className="block w-full border-2 border-slate-300 dark:border-slate-600 rounded-lg p-3 text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all cursor-pointer bg-white dark:bg-slate-900"
                                 value={newPeriodInput.type}
                                 onChange={e => setNewPeriodInput({ ...newPeriodInput, type: e.target.value })}
                             >
@@ -142,38 +142,38 @@ export const NewPeriodModal: React.FC<NewPeriodModalProps> = ({
                         </div>
 
                         {/* Divider */}
-                        <div className="border-t border-gray-200 pt-6">
+                        <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
                             {/* Projects Selection Header */}
                             <div className="flex justify-between items-center mb-3">
                                 <div>
-                                    <h4 className="text-sm font-semibold text-gray-700">
+                                    <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                                         既存プロジェクトを選択
                                     </h4>
-                                    <p className="text-xs text-gray-500 mt-0.5">
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                                         Select existing projects to include in this period
                                     </p>
                                 </div>
                             </div>
 
                             {/* Projects List */}
-                            <div className="border-2 border-gray-300 rounded-lg overflow-hidden bg-gray-50">
+                            <div className="border-2 border-slate-300 dark:border-slate-600 rounded-lg overflow-hidden bg-slate-50 dark:bg-slate-900">
                                 <div className="max-h-64 overflow-y-auto">
                                     {loading ? (
-                                        <div className="text-center py-12 px-4 text-gray-500">Loading projects...</div>
+                                        <div className="text-center py-12 px-4 text-slate-500 dark:text-slate-400">Loading projects...</div>
                                     ) : currentPeriodProjects.length === 0 ? (
                                         <div className="text-center py-12 px-4">
-                                            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-200 mb-4">
-                                                <Plus className="w-8 h-8 text-gray-400" />
+                                            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-200 dark:bg-slate-700 mb-4">
+                                                <Plus className="w-8 h-8 text-slate-400 dark:text-slate-500" />
                                             </div>
-                                            <p className="text-sm text-gray-600 font-medium mb-1">
+                                            <p className="text-sm text-slate-600 dark:text-slate-400 font-medium mb-1">
                                                 プロジェクトがまだありません
                                             </p>
-                                            <p className="text-xs text-gray-500">
+                                            <p className="text-xs text-slate-500 dark:text-slate-400">
                                                 先にプロジェクトを作成してください。
                                             </p>
                                         </div>
                                     ) : (
-                                        <div className="divide-y divide-gray-200">
+                                        <div className="divide-y divide-slate-200">
                                             {currentPeriodProjects.map(p => (
                                                 <label
                                                     key={p.id}
@@ -181,7 +181,7 @@ export const NewPeriodModal: React.FC<NewPeriodModalProps> = ({
                                                 >
                                                     <input
                                                         type="checkbox"
-                                                        className="rounded border-2 border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500 w-5 h-5 cursor-pointer"
+                                                        className="rounded border-2 border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-2 focus:ring-blue-500 w-5 h-5 cursor-pointer"
                                                         checked={selectedCarryOverIds.includes(p.id)}
                                                         onChange={() => {
                                                             setSelectedCarryOverIds(prev =>
@@ -190,16 +190,16 @@ export const NewPeriodModal: React.FC<NewPeriodModalProps> = ({
                                                         }}
                                                     />
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="text-sm font-medium text-gray-900 truncate group-hover:text-blue-700">
+                                                        <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate group-hover:text-blue-700">
                                                             {p.name}
                                                         </p>
                                                         {p.type && (
-                                                            <p className="text-xs text-gray-500 truncate">
+                                                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
                                                                 {p.type}
                                                             </p>
                                                         )}
                                                     </div>
-                                                    <span className="text-xs font-mono text-gray-500 bg-gray-200 px-2 py-1 rounded">
+                                                    <span className="text-xs font-mono text-slate-500 dark:text-slate-400 bg-slate-200 dark:bg-slate-700 px-2 py-1 rounded">
                                                         {p.code}
                                                     </span>
                                                 </label>
@@ -210,7 +210,7 @@ export const NewPeriodModal: React.FC<NewPeriodModalProps> = ({
 
                                 {/* Selection Controls - Inside the border */}
                                 {currentPeriodProjects.length > 0 && (
-                                    <div className="flex justify-between items-center px-3 py-2 bg-gray-100 border-t border-gray-300">
+                                    <div className="flex justify-between items-center px-3 py-2 bg-slate-100 dark:bg-slate-800 border-t border-slate-300 dark:border-slate-600">
                                         <button
                                             type="button"
                                             className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline transition-colors"
@@ -224,7 +224,7 @@ export const NewPeriodModal: React.FC<NewPeriodModalProps> = ({
                                         >
                                             {selectedCarryOverIds.length === currentPeriodProjects.length ? 'Deselect All' : 'Select All'}
                                         </button>
-                                        <span className="text-sm font-semibold text-gray-700">
+                                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                                             {selectedCarryOverIds.length} selected
                                         </span>
                                     </div>

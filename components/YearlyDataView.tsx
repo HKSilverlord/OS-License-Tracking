@@ -224,12 +224,12 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 p-4 md:p-6 overflow-hidden space-y-6">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-4 md:p-6 overflow-hidden space-y-6">
 
       {/* Table Section */}
-      <div className="flex-1 min-h-0 flex flex-col bg-white rounded-lg shadow-sm border border-slate-200">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-gray-50">
-          <h3 className="text-md font-bold text-slate-700">
+      <div className="flex-1 min-h-0 flex flex-col bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-200 dark:border-slate-800">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
+          <h3 className="text-md font-bold text-slate-700 dark:text-slate-100">
             {t('totalView.tableHeader.title', 'Yearly Data Table')} - {currentYear}
           </h3>
           <div className="flex gap-2">
@@ -237,16 +237,16 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
               onClick={handleCopyImage}
               disabled={isCopying}
               className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors shadow-sm ${copySuccess
-                ? 'bg-green-100 text-green-700 border border-green-200'
-                : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+                ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800'
+                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'
                 }`}
             >
               {isCopying ? (
-                <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
+                <Loader2 className="w-4 h-4 animate-spin text-slate-500 dark:text-slate-400" />
               ) : copySuccess ? (
                 <Check className="w-4 h-4" />
               ) : (
-                <Copy className="w-4 h-4 text-slate-500" />
+                <Copy className="w-4 h-4 text-slate-500 dark:text-slate-400" />
               )}
               {isCopying ? 'Copying...' : copySuccess ? 'Copied!' : 'Copy Image'}
             </button>
@@ -262,94 +262,94 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
         </div>
         <div className="flex-1 min-h-0 overflow-auto relative isolate custom-scrollbar">
           <table id="yearly-data-table" className="w-full min-w-max border-separate border-spacing-0">
-            <thead className="bg-gray-50 sticky top-0 z-40">
+            <thead className="bg-slate-50 dark:bg-slate-800 sticky top-0 z-40">
               <tr>
-                <th scope="col" style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                <th scope="col" style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-3 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
                   {t('tracker.no')}
                 </th>
-                <th scope="col" style={{ left: `${LEFT_NO_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                <th scope="col" style={{ left: `${LEFT_NO_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
                   {t('tracker.projectName')}
                 </th>
-                <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b bg-gray-50 border-r`}>
+                <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800`}>
                   {t('totalView.tableHeader.type')}
                 </th>
 
                 {months.map(m => (
-                  <th key={m} scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20 border-b border-r border-gray-200 ${stickyHeaderZ}`}>
+                  <th key={m} scope="col" className={`px-2 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider w-20 border-b border-r border-slate-200 dark:border-slate-700 ${stickyHeaderZ}`}>
                     {language === 'ja' ? `${m}月` : m}
                   </th>
                 ))}
-                <th scope="col" className={`px-2 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider border-b border-l bg-gray-100`}>
+                <th scope="col" className={`px-2 py-3 text-center text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider border-b border-l border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/80`}>
                   {t('totalView.tableHeader.total')}
                 </th>
-                <th scope="col" className={`px-2 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider border-b border-l bg-amber-50`}>
+                <th scope="col" className={`px-2 py-3 text-center text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider border-b border-l border-slate-200 dark:border-slate-700 bg-amber-50 dark:bg-amber-900/20`}>
                   {t('totalView.tableHeader.revenue')}
                 </th>
               </tr>
 
               {/* Summary Row: Plan Total */}
-              <tr className="bg-slate-100 border-b border-slate-300">
-                <td style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-3 py-2 text-xs font-bold text-slate-600 text-center border-b border-slate-300 ${stickyLeftHeaderClass} ${stickyCornerZ} bg-slate-100`} rowSpan={4}>
+              <tr className="bg-slate-100 dark:bg-slate-800 border-b border-slate-300 dark:border-slate-700">
+                <td style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-3 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 text-center border-b border-slate-300 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ} bg-slate-100 dark:bg-slate-800`} rowSpan={4}>
                   Σ
                 </td>
-                <td style={{ left: `${LEFT_NO_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-2 text-xs font-bold text-slate-700 border-b border-slate-300 ${stickyLeftHeaderClass} ${stickyCornerZ} bg-slate-100`} rowSpan={4}>
+                <td style={{ left: `${LEFT_NO_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 border-b border-slate-300 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ} bg-slate-100 dark:bg-slate-800`} rowSpan={4}>
                   {t('totalView.tableHeader.total', 'TOTAL')}
                 </td>
-                <td className="px-2 py-2 text-xs font-semibold text-slate-500 text-center border-r border-b border-slate-300 bg-slate-100">
+                <td className="px-2 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400 text-center border-r border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
                   {t('tracker.planShort')}
                 </td>
                 {monthlyTotals.map((d, idx) => (
-                  <td key={`sp-${idx}`} className="px-1 py-2 text-xs font-bold text-right text-slate-600 border-r border-b border-slate-300 bg-slate-100">
+                  <td key={`sp-${idx}`} className="px-1 py-2 text-xs font-bold text-right text-slate-600 dark:text-slate-300 border-r border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
                     {d.plan > 0 ? d.plan.toLocaleString() : '-'}
                   </td>
                 ))}
-                <td className="px-2 py-2 border-l border-b border-slate-300 bg-slate-100"></td>
-                <td className="px-2 py-2 border-l border-b border-slate-300 bg-slate-100"></td>
+                <td className="px-2 py-2 border-l border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800"></td>
+                <td className="px-2 py-2 border-l border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800"></td>
               </tr>
 
               {/* Summary Row: Actual Total */}
-              <tr className="bg-blue-50/60 border-b-2 border-slate-300">
-                <td className="px-2 py-2 text-xs font-bold text-blue-600 text-center border-r border-b-2 border-slate-300 bg-blue-50/60">
+              <tr className="bg-blue-50/60 dark:bg-blue-900/30 border-b-2 border-slate-300 dark:border-slate-700">
+                <td className="px-2 py-2 text-xs font-bold text-blue-600 dark:text-blue-400 text-center border-r border-b-2 border-slate-300 dark:border-slate-700 bg-blue-50/60 dark:bg-blue-900/30">
                   {t('tracker.actualShort')}
                 </td>
                 {monthlyTotals.map((d, idx) => (
-                  <td key={`sa-${idx}`} className="px-1 py-2 text-xs font-bold text-right text-blue-700 border-r border-b-2 border-slate-300 bg-blue-50/60">
+                  <td key={`sa-${idx}`} className="px-1 py-2 text-xs font-bold text-right text-blue-700 dark:text-blue-300 border-r border-b-2 border-slate-300 dark:border-slate-700 bg-blue-50/60 dark:bg-blue-900/30">
                     {d.actual > 0 ? d.actual.toLocaleString() : '-'}
                   </td>
                 ))}
-                <td className="px-2 py-2 border-l border-b-2 border-slate-300 bg-blue-50/60"></td>
-                <td className="px-2 py-2 border-l border-b-2 border-slate-300 bg-blue-50/60"></td>
+                <td className="px-2 py-2 border-l border-b-2 border-slate-300 dark:border-slate-700 bg-blue-50/60 dark:bg-blue-900/30"></td>
+                <td className="px-2 py-2 border-l border-b-2 border-slate-300 dark:border-slate-700 bg-blue-50/60 dark:bg-blue-900/30"></td>
               </tr>
 
               {/* Summary Row: Accumulated Plan Total */}
-              <tr className="bg-slate-100 border-b border-slate-300">
-                <td className="px-2 py-2 text-xs font-semibold text-slate-500 text-center border-r border-b border-slate-300 bg-slate-100">
+              <tr className="bg-slate-100 dark:bg-slate-800 border-b border-slate-300 dark:border-slate-700">
+                <td className="px-2 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400 text-center border-r border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
                   {t('tracker.planShort')} (累計)
                 </td>
                 {accumulatedTotals.map((d, idx) => (
-                  <td key={`sap-${idx}`} className="px-1 py-2 text-xs font-bold text-right text-slate-600 border-r border-b border-slate-300 bg-slate-100">
+                  <td key={`sap-${idx}`} className="px-1 py-2 text-xs font-bold text-right text-slate-600 dark:text-slate-300 border-r border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
                     {d.accPlan > 0 ? d.accPlan.toLocaleString() : '-'}
                   </td>
                 ))}
-                <td className="px-2 py-2 border-l border-b border-slate-300 bg-slate-100"></td>
-                <td className="px-2 py-2 border-l border-b border-slate-300 bg-slate-100"></td>
+                <td className="px-2 py-2 border-l border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800"></td>
+                <td className="px-2 py-2 border-l border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800"></td>
               </tr>
 
               {/* Summary Row: Accumulated Actual Total */}
-              <tr className="bg-blue-50/60 border-b-2 border-slate-400">
-                <td className="px-2 py-2 text-xs font-bold text-blue-600 text-center border-r border-b-2 border-slate-400 bg-blue-50/60">
+              <tr className="bg-blue-50/60 dark:bg-blue-900/30 border-b-2 border-slate-400 dark:border-slate-600">
+                <td className="px-2 py-2 text-xs font-bold text-blue-600 dark:text-blue-400 text-center border-r border-b-2 border-slate-400 dark:border-slate-600 bg-blue-50/60 dark:bg-blue-900/30">
                   {t('tracker.actualShort')} (累計)
                 </td>
                 {accumulatedTotals.map((d, idx) => (
-                  <td key={`saa-${idx}`} className="px-1 py-2 text-xs font-bold text-right text-blue-700 border-r border-b-2 border-slate-400 bg-blue-50/60">
+                  <td key={`saa-${idx}`} className="px-1 py-2 text-xs font-bold text-right text-blue-700 dark:text-blue-300 border-r border-b-2 border-slate-400 dark:border-slate-600 bg-blue-50/60 dark:bg-blue-900/30">
                     {d.accActual > 0 ? d.accActual.toLocaleString() : '-'}
                   </td>
                 ))}
-                <td className="px-2 py-2 border-l border-b-2 border-slate-400 bg-blue-50/60"></td>
-                <td className="px-2 py-2 border-l border-b-2 border-slate-400 bg-blue-50/60"></td>
+                <td className="px-2 py-2 border-l border-b-2 border-slate-400 dark:border-slate-600 bg-blue-50/60 dark:bg-blue-900/30"></td>
+                <td className="px-2 py-2 border-l border-b-2 border-slate-400 dark:border-slate-600 bg-blue-50/60 dark:bg-blue-900/30"></td>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-700">
               {projects.map((project, index) => {
                 const projRecords = records[project.id] || [];
                 const monthlyData = months.map(m => {
@@ -366,43 +366,43 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
                 return (
                   <React.Fragment key={project.id}>
                     {/* Plan Row */}
-                    <tr className="bg-white hover:bg-gray-50">
-                      <td rowSpan={2} style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-3 py-3 text-sm font-medium text-gray-900 border-b ${stickyLeftClass} align-top text-center`}>
+                    <tr className="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td rowSpan={2} style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-3 py-3 text-sm font-medium text-slate-900 dark:text-slate-100 border-b border-slate-200 dark:border-slate-700 ${stickyLeftClass} align-top text-center`}>
                         {index + 1}
                       </td>
-                      <td rowSpan={2} style={{ left: `${LEFT_NO_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-sm text-gray-500 border-b ${stickyLeftClass} align-top`}>
+                      <td rowSpan={2} style={{ left: `${LEFT_NO_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-sm text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 ${stickyLeftClass} align-top`}>
                         <div className="truncate w-44" title={project.name}>{project.name}</div>
                       </td>
-                      <td className="px-2 py-2 text-xs font-semibold text-gray-500 text-center border-r border-b bg-slate-50">
+                      <td className="px-2 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400 text-center border-r border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
                         {t('tracker.planShort')}
                       </td>
                       {monthlyData.map((d, idx) => (
-                        <td key={`p-${idx}`} className="px-1 py-2 text-xs text-right text-gray-500 border-r border-b">
+                        <td key={`p-${idx}`} className="px-1 py-2 text-xs text-right text-slate-500 dark:text-slate-400 border-r border-b border-slate-200 dark:border-slate-700">
                           {d.plan > 0 ? d.plan.toLocaleString() : '-'}
                         </td>
                       ))}
-                      <td className="px-2 py-2 text-xs font-bold text-gray-700 text-right border-l border-b bg-slate-50">
+                      <td className="px-2 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 text-right border-l border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
                         {totalPlan > 0 ? totalPlan.toLocaleString() : '-'}
                       </td>
-                      <td className="px-2 py-2 text-xs font-bold text-amber-700 text-right border-l border-b bg-amber-50/30">
+                      <td className="px-2 py-2 text-xs font-bold text-amber-700 dark:text-amber-400 text-right border-l border-b border-slate-200 dark:border-slate-700 bg-amber-50/30 dark:bg-amber-900/20">
                         {totalRevenuePlan > 0 ? formatCurrency(totalRevenuePlan) : '-'}
                       </td>
                     </tr>
 
                     {/* Actual Row */}
-                    <tr className="bg-white hover:bg-gray-50">
-                      <td className="px-2 py-2 text-xs font-bold text-blue-600 text-center border-r border-b bg-blue-50/30">
+                    <tr className="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="px-2 py-2 text-xs font-bold text-blue-600 dark:text-blue-400 text-center border-r border-b border-slate-200 dark:border-slate-700 bg-blue-50/30 dark:bg-blue-900/20">
                         {t('tracker.actualShort')}
                       </td>
                       {monthlyData.map((d, idx) => (
-                        <td key={`a-${idx}`} className={`px-1 py-2 text-xs text-right border-r border-b font-medium ${d.actual > 0 ? 'text-blue-700 bg-blue-50/10' : 'text-gray-400'}`}>
+                        <td key={`a-${idx}`} className={`px-1 py-2 text-xs text-right border-r border-b border-slate-200 dark:border-slate-700 font-medium ${d.actual > 0 ? 'text-blue-700 dark:text-blue-400 bg-blue-50/10 dark:bg-blue-900/10' : 'text-slate-400 dark:text-slate-500'}`}>
                           {d.actual > 0 ? d.actual.toLocaleString() : '-'}
                         </td>
                       ))}
-                      <td className="px-2 py-2 text-xs font-bold text-blue-700 text-right border-l border-b bg-blue-50/30">
+                      <td className="px-2 py-2 text-xs font-bold text-blue-700 dark:text-blue-400 text-right border-l border-b border-slate-200 dark:border-slate-700 bg-blue-50/30 dark:bg-blue-900/20">
                         {totalActual > 0 ? totalActual.toLocaleString() : '-'}
                       </td>
-                      <td className="px-2 py-2 text-xs font-bold text-emerald-700 text-right border-l border-b bg-emerald-50/30">
+                      <td className="px-2 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-400 text-right border-l border-b border-slate-200 dark:border-slate-700 bg-emerald-50/30 dark:bg-emerald-900/20">
                         {totalRevenueActual > 0 ? formatCurrency(totalRevenueActual) : '-'}
                       </td>
                     </tr>

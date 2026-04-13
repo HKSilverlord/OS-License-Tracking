@@ -27,12 +27,12 @@ export const TABLE_COLUMN_WIDTHS = {
 
 export const STICKY_CLASSES = {
   // Left sticky cells
-  leftCell: "sticky left-0 bg-white z-20 border-r shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]",
-  leftHeader: "sticky left-0 bg-gray-50 z-30 border-r shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]",
+  leftCell: "sticky left-0 bg-white dark:bg-slate-900 z-20 border-r border-slate-200 dark:border-slate-800 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] dark:shadow-[2px_0_5px_-2px_rgba(0,0,0,0.3)]",
+  leftHeader: "sticky left-0 bg-gray-50 dark:bg-slate-800 z-30 border-r border-slate-200 dark:border-slate-800 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] dark:shadow-[2px_0_5px_-2px_rgba(0,0,0,0.3)]",
 
   // Right sticky cells
-  rightCell: "sticky right-0 bg-white z-20 border-l shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)]",
-  rightHeader: "sticky right-0 bg-gray-50 z-30 border-l shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)]",
+  rightCell: "sticky right-0 bg-white dark:bg-slate-900 z-20 border-l border-slate-200 dark:border-slate-800 shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)] dark:shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.3)]",
+  rightHeader: "sticky right-0 bg-gray-50 dark:bg-slate-800 z-30 border-l border-slate-200 dark:border-slate-800 shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)] dark:shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.3)]",
 
   // Z-index layers
   header: "z-40",

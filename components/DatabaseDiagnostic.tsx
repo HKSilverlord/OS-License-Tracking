@@ -80,7 +80,7 @@ export const DatabaseDiagnostic: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
-      <div className="bg-white rounded-lg shadow-lg p-6">
+      <div className="bg-white dark:bg-slate-900 rounded-lg shadow-lg p-6">
         <div className="flex items-center gap-3 mb-6">
           <Wrench className="w-6 h-6 text-blue-600" />
           <h2 className="text-2xl font-bold text-slate-800">Database Diagnostic Tool</h2>
@@ -194,7 +194,7 @@ export const DatabaseDiagnostic: React.FC = () => {
 
             <div className="space-y-4">
               {/* Projects */}
-              <div className="bg-white rounded-lg p-3 border border-purple-100">
+              <div className="bg-white dark:bg-slate-900 rounded-lg p-3 border border-purple-100">
                 <h4 className="font-medium text-sm text-purple-800 mb-2">
                   Projects: {detailedResult.projects.total}
                 </h4>
@@ -214,7 +214,7 @@ export const DatabaseDiagnostic: React.FC = () => {
               </div>
 
               {/* Periods */}
-              <div className="bg-white rounded-lg p-3 border border-purple-100">
+              <div className="bg-white dark:bg-slate-900 rounded-lg p-3 border border-purple-100">
                 <h4 className="font-medium text-sm text-purple-800 mb-2">
                   Periods: {detailedResult.periods.total}
                 </h4>
@@ -232,7 +232,7 @@ export const DatabaseDiagnostic: React.FC = () => {
               </div>
 
               {/* Period-Projects Links */}
-              <div className="bg-white rounded-lg p-3 border border-purple-100">
+              <div className="bg-white dark:bg-slate-900 rounded-lg p-3 border border-purple-100">
                 <h4 className="font-medium text-sm text-purple-800 mb-2">
                   Period-Projects Links: {detailedResult.periodProjects.total}
                 </h4>
@@ -263,7 +263,7 @@ export const DatabaseDiagnostic: React.FC = () => {
               </div>
 
               {/* Monthly Records */}
-              <div className="bg-white rounded-lg p-3 border border-purple-100">
+              <div className="bg-white dark:bg-slate-900 rounded-lg p-3 border border-purple-100">
                 <h4 className="font-medium text-sm text-purple-800 mb-2">
                   Monthly Records: {detailedResult.monthlyRecords.total}
                 </h4>
@@ -330,7 +330,7 @@ export const DatabaseDiagnostic: React.FC = () => {
                 {queryTest && (
                   <div className="mt-3 space-y-3">
                     {queryTest.tracking && (
-                      <div className="bg-white rounded p-2 border border-slate-200">
+                      <div className="bg-white dark:bg-slate-900 rounded p-2 border border-slate-200">
                         <h5 className="text-xs font-semibold text-slate-700 mb-1">TrackingView Query ({testPeriod}):</h5>
                         {queryTest.tracking.success ? (
                           <p className="text-xs text-green-600">✓ Success: Found {queryTest.tracking.data?.length || 0} projects</p>
@@ -340,7 +340,7 @@ export const DatabaseDiagnostic: React.FC = () => {
                       </div>
                     )}
                     {queryTest.yearly && (
-                      <div className="bg-white rounded p-2 border border-slate-200">
+                      <div className="bg-white dark:bg-slate-900 rounded p-2 border border-slate-200">
                         <h5 className="text-xs font-semibold text-slate-700 mb-1">YearlyDataView Query ({testYear}):</h5>
                         {queryTest.yearly.success ? (
                           <div className="text-xs space-y-1">
@@ -366,7 +366,7 @@ export const DatabaseDiagnostic: React.FC = () => {
 };
 
 const StatusItem: React.FC<{ label: string; status: boolean }> = ({ label, status }) => (
-  <div className="flex items-center justify-between p-2 bg-white rounded border border-slate-200">
+  <div className="flex items-center justify-between p-2 bg-white dark:bg-slate-900 rounded border border-slate-200">
     <span className="text-sm text-slate-700">{label}</span>
     <div className="flex items-center gap-2">
       {status ? (
@@ -390,7 +390,7 @@ const ResultRow: React.FC<{ label: string; value: number; alert?: boolean; succe
   alert,
   success
 }) => (
-  <div className="flex items-center justify-between p-2 bg-white rounded border border-slate-200">
+  <div className="flex items-center justify-between p-2 bg-white dark:bg-slate-900 rounded border border-slate-200">
     <span className="text-sm text-slate-700">{label}</span>
     <span className={`text-sm font-semibold ${
       alert ? 'text-amber-600' : success ? 'text-green-600' : 'text-slate-900'

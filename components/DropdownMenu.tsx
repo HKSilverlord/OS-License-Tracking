@@ -74,7 +74,7 @@ export const DropdownMenu: React.FC<DropdownMenuProps> = ({ isOpen, onClose, tri
     return createPortal(
         <div
             ref={menuRef}
-            className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-lg w-32 py-1"
+            className="fixed z-[9999] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg w-32 py-1"
             style={{
                 top: position.top !== undefined ? `${position.top}px` : 'auto',
                 bottom: position.bottom !== undefined ? `${position.bottom}px` : 'auto',

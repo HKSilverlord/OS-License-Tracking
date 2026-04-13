@@ -10,6 +10,10 @@ import { SectionExportMenu } from './SectionExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DEFAULT_UNIT_PRICE } from '../constants';
 import { useCatiaStore } from '../stores/useCatiaStore';
+import { Card } from '../src/ui/components/Card';
+import { KpiCard } from '../src/ui/components/KpiCard';
+import { PageHeader } from '../src/ui/components/PageHeader';
+import { motion } from 'framer-motion';
 
 interface DashboardChartColors {
   planRevenue: string;
@@ -56,6 +60,22 @@ export const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<MonthlyStats[]>([]);
   const [accumulatedStats, setAccumulatedStats] = useState<AccumulatedStats[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Animation variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1
+      }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
+  };
 
   const [exchangeRate, setExchangeRate] = useState(172);
   const [unitPrice, setUnitPrice] = useState(DEFAULT_UNIT_PRICE);
@@ -243,7 +263,7 @@ export const Dashboard: React.FC = () => {
   if (availableYears.length === 0 && !loading) {
     return (
       <div className="h-full flex items-center justify-center bg-slate-50">
-        <div className="bg-white shadow rounded-lg p-6 text-center">
+        <div className="bg-white dark:bg-slate-900 shadow rounded-lg p-6 text-center">
           <p className="text-slate-600 text-sm">{t('dashboard.empty')}</p>
         </div>
       </div>
@@ -302,13 +322,18 @@ export const Dashboard: React.FC = () => {
   const netActualTone = netRevenueActual >= 0 ? 'text-emerald-700 border-emerald-500' : 'text-red-700 border-red-500';
 
   return (
-    <div className="h-full overflow-y-auto p-4 md:p-6 bg-slate-50">
+    <motion.div 
+      variants={containerVariants}
+      initial="hidden"
+      animate="show"
+      className="h-full overflow-y-auto p-4 md:p-6 bg-slate-50 dark:bg-slate-950 transition-colors duration-200"
+    >
       <div className="max-w-7xl mx-auto space-y-6">
 
         {/* Group KPI to License with Header for single export */}
         <div id="section-kpi-summary" className="space-y-6 relative">
           {/* Header & Controls */}
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+          <motion.div variants={itemVariants} className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors duration-200">
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-3">
               <h2 className="text-xl font-bold text-slate-800">{`${t('header.dashboardTitle', 'Dashboard')} ${selectedYear}`}</h2>
@@ -346,7 +371,7 @@ export const Dashboard: React.FC = () => {
                     <span className="text-sm font-medium text-slate-800 mr-2">1 JPY = </span>
                     <input
                       type="number"
-                      className="w-20 h-8 text-sm border-sky-200 rounded px-2 focus:ring-1 focus:ring-sky-500 text-right font-semibold text-slate-800 bg-white"
+                      className="w-20 h-8 text-sm border-sky-200 rounded px-2 focus:ring-1 focus:ring-sky-500 text-right font-semibold text-slate-800 bg-white dark:bg-slate-900"
                       value={exchangeRate}
                       onChange={handleRateChange}
                     />
@@ -357,7 +382,7 @@ export const Dashboard: React.FC = () => {
                   <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider pb-1">{t('dashboard.fx.hourly', 'Hourly Rate (JPY)')}</span>
                   <input
                     type="number"
-                    className="w-20 h-8 text-sm border-sky-200 rounded px-2 focus:ring-1 focus:ring-sky-500 text-right font-semibold text-slate-800 bg-white"
+                    className="w-20 h-8 text-sm border-sky-200 rounded px-2 focus:ring-1 focus:ring-sky-500 text-right font-semibold text-slate-800 bg-white dark:bg-slate-900"
                     value={unitPrice}
                     onChange={handleUnitPriceChange}
                   />
@@ -369,7 +394,7 @@ export const Dashboard: React.FC = () => {
                   <input
                     type="number"
                     min={0}
-                    className="w-full h-9 text-sm border-emerald-200 rounded px-2 focus:ring-1 focus:ring-emerald-500 text-right font-semibold text-emerald-900 bg-white"
+                    className="w-full h-9 text-sm border-emerald-200 rounded px-2 focus:ring-1 focus:ring-emerald-500 text-right font-semibold text-emerald-900 bg-white dark:bg-slate-900"
                     value={licenseComputers}
                     onChange={handleLicenseComputersChange}
                   />
@@ -379,7 +404,7 @@ export const Dashboard: React.FC = () => {
                   <input
                     type="number"
                     min={0}
-                    className="w-full h-9 text-sm border-emerald-200 rounded px-2 focus:ring-1 focus:ring-emerald-500 text-right font-semibold text-emerald-900 bg-white"
+                    className="w-full h-9 text-sm border-emerald-200 rounded px-2 focus:ring-1 focus:ring-emerald-500 text-right font-semibold text-emerald-900 bg-white dark:bg-slate-900"
                     value={licensePerComputer}
                     onChange={handleLicensePerComputerChange}
                   />
@@ -388,18 +413,18 @@ export const Dashboard: React.FC = () => {
                   <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider pb-1">
                     {t('dashboard.license.total', 'Annual License Cost')} (CATIA)
                   </span>
-                  <div className="h-9 flex items-center justify-end text-sm font-bold text-emerald-900 bg-white px-2 rounded border border-emerald-200" title="Dynamically calculated from CATIA License table">
+                  <div className="h-9 flex items-center justify-end text-sm font-bold text-emerald-900 bg-white dark:bg-slate-900 px-2 rounded border border-emerald-200" title="Dynamically calculated from CATIA License table">
                     {fmt(licenseTotal)} / {toMan(licenseTotal)}
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Dashboard KPI Color Picker Panel */}
         {showKpiColorPicker && (
-          <div data-html2canvas-ignore="true" className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-6 animate-in slide-in-from-top-2">
+          <div data-html2canvas-ignore="true" className="bg-white dark:bg-slate-900 p-5 rounded-xl shadow-sm border border-slate-200 mb-6 animate-in slide-in-from-top-2">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-6 flex-wrap">
                 <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
@@ -547,251 +572,235 @@ export const Dashboard: React.FC = () => {
         {/* KPI to License wrapper */}
         <div className="space-y-6">
           {/* Row 1: Core KPIs (Hours) */}
-          <div id="section-core-kpis" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <div className="bg-white border-l-4 border-sky-500 rounded-lg p-4 shadow-sm flex flex-col justify-center">
-            <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold text-sky-600 uppercase tracking-wider" style={{ fontSize: `${headingFontSize}px` }}>{t('dashboard.kpi.planHoursLabel', '計画工数')}</div>
-              <Clock className="w-5 h-5 text-sky-500" />
-            </div>
-            <div className="mt-2 text-2xl font-bold text-slate-900">{fmtHours(totalPlanHours)}</div>
-            <div className="text-xs text-slate-500 mt-1">{t('dashboard.kpi.yearTotal', '年度合計')}</div>
-          </div>
-          <div className="bg-white border-l-4 border-emerald-500 rounded-lg p-4 shadow-sm flex flex-col justify-center">
-            <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold text-emerald-600 uppercase tracking-wider" style={{ fontSize: `${headingFontSize}px` }}>{t('dashboard.kpi.actualHoursLabel', '実績工数')}</div>
-              <Clock className="w-5 h-5 text-emerald-500" />
-            </div>
-            <div className="mt-2 text-2xl font-bold text-slate-900">{fmtHours(totalActualHours)}</div>
-            <div className="text-xs text-slate-500 mt-1">{t('dashboard.kpi.actualHoursDesc', '年間実績合計')}</div>
-          </div>
-          <div className={`bg-white border-l-4 rounded-lg p-4 shadow-sm flex flex-col justify-center ${totalActualHours - totalPlanHours >= 0 ? 'border-emerald-500' : 'border-rose-500 bg-rose-50'}`}>
-            <div className="flex items-center justify-between">
-              <div className={`text-xs font-semibold uppercase tracking-wider ${totalActualHours - totalPlanHours >= 0 ? 'text-emerald-700' : 'text-rose-700'}`} style={{ fontSize: `${headingFontSize}px` }}>
-                {t('dashboard.kpi.varianceLabel', '差異')}
-              </div>
-              <TrendingUp className={`w-5 h-5 ${totalActualHours - totalPlanHours >= 0 ? 'text-emerald-500' : 'text-rose-500'}`} />
-            </div>
-            <div className={`mt-2 text-2xl font-bold flex items-center gap-1 ${totalActualHours - totalPlanHours >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-              {totalActualHours - totalPlanHours < 0 ? '▲' : '▼'} {fmtHours(Math.abs(totalActualHours - totalPlanHours))}
-            </div>
-            <div className={`text-xs mt-1 ${totalActualHours - totalPlanHours >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-              実績 - 計画
-            </div>
-          </div>
-          <div className="bg-white border-l-4 border-teal-500 rounded-lg p-4 shadow-sm flex flex-col justify-center">
-            <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold text-teal-600 uppercase tracking-wider" style={{ fontSize: `${headingFontSize}px` }}>{t('dashboard.kpi.achievementLabel', '達成率')}</div>
-              <TrendingUp className="w-5 h-5 text-teal-500" />
-            </div>
-            <div className={`mt-2 text-2xl font-bold ${rateColor}`}>{achievementRate.toFixed(1)}%</div>
-            <div className="text-xs text-slate-500 mt-1">{t('dashboard.kpi.remainingLabel', '残工数')} {fmtHours(remainingHours)}</div>
-          </div>
-        </div>
+          <motion.div variants={itemVariants} id="section-core-kpis" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <KpiCard
+              label={t('dashboard.kpi.planHoursLabel', '計画工数')}
+              value={fmtHours(totalPlanHours)}
+              subtitle={t('dashboard.kpi.yearTotal', '年度合計')}
+              icon={Clock}
+              accentColor="sky"
+              headingSize={headingFontSize}
+            />
+            <KpiCard
+              label={t('dashboard.kpi.actualHoursLabel', '実績工数')}
+              value={fmtHours(totalActualHours)}
+              subtitle={t('dashboard.kpi.actualHoursDesc', '年間実績合計')}
+              icon={Clock}
+              accentColor="emerald"
+              headingSize={headingFontSize}
+            />
+            <KpiCard
+              label={t('dashboard.kpi.varianceLabel', '差異')}
+              value={`${fmtHours(Math.abs(totalActualHours - totalPlanHours))}`}
+              subtitle="実績 - 計画"
+              icon={TrendingUp}
+              trend={{
+                direction: totalActualHours >= totalPlanHours ? 'up' : 'down'
+              }}
+              headingSize={headingFontSize}
+            />
+            <KpiCard
+              label={t('dashboard.kpi.achievementLabel', '達成率')}
+              value={`${achievementRate.toFixed(1)}%`}
+              subtitle={`${t('dashboard.kpi.remainingLabel', '残工数')} ${fmtHours(remainingHours)}`}
+              icon={TrendingUp}
+              accentColor="teal"
+              headingSize={headingFontSize}
+            />
+          </motion.div>
 
         {/* Row 2: Gross Revenue */}
-        <div id="section-gross-revenue" className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div
-            className="col-span-1 rounded-xl p-5 shadow-sm text-white"
-            style={{ background: `linear-gradient(to right, ${dashboardColors.grossPlanFrom}, ${dashboardColors.grossPlanTo})` }}
-          >
+        <motion.div variants={itemVariants} id="section-gross-revenue" className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <KpiCard
+            gradient
+            gradientFrom={dashboardColors.grossPlanFrom}
+            gradientTo={dashboardColors.grossPlanTo}
+            label={t('dashboard.gross.plan', '総売上（計画）')}
+            value={fmt(grossRevenuePlan)}
+            subtitle={toMan(grossRevenuePlan)}
+            icon={JapaneseYen}
+            headingSize={headingFontSize}
+          />
+          <KpiCard
+            gradient
+            gradientFrom={dashboardColors.grossActualFrom}
+            gradientTo={dashboardColors.grossActualTo}
+            label={t('dashboard.gross.actual', '総売上（実績）')}
+            value={fmt(grossRevenueActual)}
+            subtitle={toMan(grossRevenueActual)}
+            icon={JapaneseYen}
+            headingSize={headingFontSize}
+          />
+          <Card className={`flex flex-col justify-center p-5 border-2 ${grossRevenueActual >= grossRevenuePlan ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800' : 'bg-rose-50 dark:bg-rose-900/10 border-rose-200 dark:border-rose-800'}`}>
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-wider text-sky-100 font-semibold" style={{ fontSize: `${headingFontSize}px` }}>{t('dashboard.gross.plan', '総売上（計画）')}</p>
-              </div>
-              <JapaneseYen className="w-5 h-5 text-white/70" />
+              <p className={`text-xs uppercase tracking-wider font-semibold ${grossRevenueActual >= grossRevenuePlan ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`} style={{ fontSize: `${headingFontSize}px` }}>
+                {t('dashboard.kpi.varianceLabel', '差異')}
+              </p>
             </div>
-            <div className="mt-3 text-3xl font-bold">{fmt(grossRevenuePlan)}</div>
-            <div className="text-sm text-sky-100 mt-1">{toMan(grossRevenuePlan)}</div>
-            <div className="mt-3 text-xs text-sky-100 border-t border-white/30 pt-2 opacity-80">
-              {t('dashboard.kpi.calculatedPerProject', '期間別プロジェクト単価で算出')}
-            </div>
-          </div>
-          <div
-            className="col-span-1 rounded-xl p-5 shadow-sm text-white"
-            style={{ background: `linear-gradient(to right, ${dashboardColors.grossActualFrom}, ${dashboardColors.grossActualTo})` }}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-wider text-emerald-100 font-semibold" style={{ fontSize: `${headingFontSize}px` }}>{t('dashboard.gross.actual', '総売上（実績）')}</p>
-              </div>
-              <JapaneseYen className="w-5 h-5 text-white/70" />
-            </div>
-            <div className="mt-3 text-3xl font-bold">{fmt(grossRevenueActual)}</div>
-            <div className="text-sm text-emerald-100 mt-1">{toMan(grossRevenueActual)}</div>
-            <div className="mt-3 text-xs text-emerald-100 border-t border-white/30 pt-2 opacity-80">
-              {t('dashboard.kpi.calculatedPerProject', '期間別プロジェクト単価で算出')}
-            </div>
-          </div>
-          <div className={`col-span-1 rounded-xl p-5 shadow-sm border-2 flex flex-col justify-center ${grossRevenueActual - grossRevenuePlan >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={`text-xs uppercase tracking-wider font-semibold ${grossRevenueActual - grossRevenuePlan >= 0 ? 'text-emerald-700' : 'text-rose-700'}`} style={{ fontSize: `${headingFontSize}px` }}>
-                  {t('dashboard.kpi.varianceLabel', '差異')}
-                </p>
-              </div>
-            </div>
-            <div className={`mt-3 text-3xl font-bold pb-1 ${grossRevenueActual - grossRevenuePlan >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+            <div className={`mt-3 text-3xl font-bold pb-1 ${grossRevenueActual >= grossRevenuePlan ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
               <span className="mr-1 text-2xl">{grossRevenueActual - grossRevenuePlan < 0 ? '▲' : '▼'}</span>
               {fmt(Math.abs(grossRevenueActual - grossRevenuePlan))}
             </div>
-            <div className={`text-sm mt-1 font-medium ${grossRevenueActual - grossRevenuePlan >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            <div className={`text-sm mt-1 font-medium ${grossRevenueActual >= grossRevenuePlan ? 'text-emerald-600 dark:text-emerald-500' : 'text-rose-600 dark:text-rose-500'}`}>
               {toMan(Math.abs(grossRevenueActual - grossRevenuePlan))}
             </div>
-          </div>
-        </div>
+          </Card>
+        </motion.div>
 
         {/* Row 3: Net Revenue (Profit) */}
-        <div id="section-net-revenue" className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div
-            className="bg-white rounded-xl p-5 shadow-sm border-2 col-span-1 relative overflow-hidden"
-            style={{ borderColor: dashboardColors.netPlanBorder }}
-          >
-            <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-              <JapaneseYen className="w-24 h-24" />
+        {/* Row 3: Net Revenue (Profit) */}
+        <motion.div variants={itemVariants} id="section-net-revenue" className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="p-5 flex flex-col justify-center border-2 border-slate-200 dark:border-slate-800 relative overflow-hidden group hover:border-teal-300 dark:hover:border-teal-700 transition-colors">
+            <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none group-hover:scale-110 transition-transform duration-500">
+              <JapaneseYen className="w-32 h-32 text-slate-800 dark:text-white" />
             </div>
             <div className="flex items-center justify-between relative z-10">
               <div className="flex flex-col gap-1">
-                <p className="text-xs uppercase tracking-wider text-teal-600 font-semibold" style={{ fontSize: `${headingFontSize}px` }}>{t('dashboard.net.plan', '利益 目標')}</p>
-                <p className="text-[10px] text-slate-500">{t('dashboard.net.plan.subtitle', '計画売上 - ライセンス')}</p>
+                <p className="text-xs uppercase tracking-wider text-teal-600 dark:text-teal-400 font-semibold" style={{ fontSize: `${headingFontSize}px` }}>{t('dashboard.net.plan', '利益 目標')}</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">{t('dashboard.net.plan.subtitle', '計画売上 - ライセンス')}</p>
               </div>
             </div>
-            <div className="mt-4 text-3xl font-bold text-slate-900 relative z-10">{fmtSigned(netRevenuePlan)}</div>
-            <div className="text-sm font-semibold text-teal-600 mt-1 relative z-10">{toMan(netRevenuePlan)}</div>
+            <div className="mt-4 text-3xl font-bold text-slate-900 dark:text-white relative z-10">{fmtSigned(netRevenuePlan)}</div>
+            <div className="text-sm font-semibold text-teal-600 dark:text-teal-400 mt-1 relative z-10">{toMan(netRevenuePlan)}</div>
 
-            <div className="mt-4 text-[11px] font-mono bg-slate-50 p-2 rounded border border-slate-100 text-slate-600 relative z-10">
-              <div className="flex justify-between">
+            <div className="mt-4 text-[11px] font-mono bg-slate-50 dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300 relative z-10">
+              <div className="flex justify-between items-center">
                 <span>総額: {toMan(grossRevenuePlan)}</span>
-                <span className="text-rose-500">- ライセンス: {toMan(licenseTotal)}</span>
+                <span className="text-rose-500 dark:text-rose-400">- ライセンス: {toMan(licenseTotal)}</span>
               </div>
             </div>
-          </div>
+          </Card>
 
-          <div
-            className="bg-white rounded-xl p-5 shadow-sm border-2 col-span-1 relative overflow-hidden"
-            style={{ borderColor: dashboardColors.netActualBorder }}
-          >
-            <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-              <JapaneseYen className="w-24 h-24" />
+          <Card className="p-5 flex flex-col justify-center border-2 border-slate-200 dark:border-slate-800 relative overflow-hidden group hover:border-emerald-300 dark:hover:border-emerald-700 transition-colors">
+            <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none group-hover:scale-110 transition-transform duration-500">
+              <JapaneseYen className="w-32 h-32 text-slate-800 dark:text-white" />
             </div>
             <div className="flex items-center justify-between relative z-10">
               <div className="flex flex-col gap-1">
-                <p className="text-xs uppercase tracking-wider text-slate-600 font-semibold" style={{ fontSize: `${headingFontSize}px` }}>{t('dashboard.net.actual', '利益 実績')}</p>
-                <p className="text-[10px] text-slate-500">{t('dashboard.net.actual.subtitle', '実績売上 - ライセンス')}</p>
+                <p className="text-xs uppercase tracking-wider text-slate-600 dark:text-slate-300 font-semibold" style={{ fontSize: `${headingFontSize}px` }}>{t('dashboard.net.actual', '利益 実績')}</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">{t('dashboard.net.actual.subtitle', '実績売上 - ライセンス')}</p>
               </div>
             </div>
-            <div className={`mt-4 text-3xl font-bold relative z-10 ${netRevenueActual >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+            <div className={`mt-4 text-3xl font-bold relative z-10 ${netRevenueActual >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
               {fmtSigned(netRevenueActual)}
             </div>
-            <div className={`text-sm font-semibold mt-1 relative z-10 ${netRevenueActual >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            <div className={`text-sm font-semibold mt-1 relative z-10 ${netRevenueActual >= 0 ? 'text-emerald-600 dark:text-emerald-500' : 'text-rose-600 dark:text-rose-500'}`}>
               {toMan(netRevenueActual)}
             </div>
 
-            <div className="mt-4 text-[11px] font-mono bg-slate-50 p-2 rounded border border-slate-100 text-slate-600 relative z-10">
-              <div className="flex justify-between">
+            <div className="mt-4 text-[11px] font-mono bg-slate-50 dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300 relative z-10">
+              <div className="flex justify-between items-center">
                 <span>総額: {toMan(grossRevenueActual)}</span>
-                <span className="text-rose-500">- ライセンス: {toMan(licenseTotal)}</span>
+                <span className="text-rose-500 dark:text-rose-400">- ライセンス: {toMan(licenseTotal)}</span>
               </div>
             </div>
-          </div>
+          </Card>
 
-          <div className={`col-span-1 rounded-xl p-5 shadow-sm border-2 flex flex-col justify-center relative overflow-hidden ${netRevenueActual - netRevenuePlan >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+          <Card className={`p-5 flex flex-col justify-center border-2 relative overflow-hidden ${netRevenueActual >= netRevenuePlan ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800' : 'bg-rose-50 dark:bg-rose-900/10 border-rose-200 dark:border-rose-800'}`}>
             <div className="flex items-center justify-between relative z-10">
               <div>
-                <p className={`text-xs uppercase tracking-wider font-semibold ${netRevenueActual - netRevenuePlan >= 0 ? 'text-emerald-700' : 'text-rose-700'}`} style={{ fontSize: `${headingFontSize}px` }}>
+                <p className={`text-xs uppercase tracking-wider font-semibold ${netRevenueActual >= netRevenuePlan ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`} style={{ fontSize: `${headingFontSize}px` }}>
                   {t('dashboard.kpi.varianceLabel', '差異')}
                 </p>
               </div>
             </div>
-            <div className={`mt-4 text-3xl font-bold relative z-10 pb-1 ${netRevenueActual - netRevenuePlan >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-              <span className="mr-1 text-2xl">{netRevenueActual - netRevenuePlan < 0 ? '▲' : '▼'}</span>
+            <div className={`mt-4 text-3xl font-bold relative z-10 pb-1 ${netRevenueActual >= netRevenuePlan ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
+              <span className="mr-1 text-2xl">{netRevenueActual < netRevenuePlan ? '▲' : '▼'}</span>
               {fmt(Math.abs(netRevenueActual - netRevenuePlan))}
             </div>
-            <div className={`text-sm mt-1 font-semibold relative z-10 ${netRevenueActual - netRevenuePlan >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            <div className={`text-sm mt-1 font-semibold relative z-10 ${netRevenueActual >= netRevenuePlan ? 'text-emerald-600 dark:text-emerald-500' : 'text-rose-600 dark:text-rose-500'}`}>
               {toMan(Math.abs(netRevenueActual - netRevenuePlan))}
             </div>
 
-            <div className={`mt-4 text-[11px] font-mono p-2 rounded border relative z-10 ${netRevenueActual - netRevenuePlan >= 0 ? 'bg-emerald-100/50 border-emerald-200 text-emerald-800' : 'bg-rose-100/50 border-rose-200 text-rose-800'}`}>
-              <div className="flex justify-between">
+            <div className={`mt-4 text-[11px] font-mono p-2 rounded-lg border relative z-10 ${netRevenueActual >= netRevenuePlan ? 'bg-emerald-100/50 dark:bg-emerald-900/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300' : 'bg-rose-100/50 dark:bg-rose-900/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300'}`}>
+              <div className="flex justify-between items-center">
                 <span>実績利益</span>
                 <span>- 目標利益</span>
               </div>
             </div>
-          </div>
-        </div>
+          </Card>
+        </motion.div>
 
         {/* Row 4: License Card */}
-        <div
-          id="section-license-card"
-          className="text-white rounded-xl p-5 shadow-md"
-          style={{ background: `linear-gradient(to right, ${dashboardColors.licenseFrom}, ${dashboardColors.licenseTo})` }}
+        {/* Row 4: License Card */}
+        <motion.div variants={itemVariants}>
+          <Card
+            id="section-license-card"
+            gradient
+            fromColor={dashboardColors.licenseFrom}
+            toColor={dashboardColors.licenseTo}
+          className="p-5"
         >
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-4">
             <div>
               <p className="text-xs uppercase tracking-wider text-teal-100 font-semibold" style={{ fontSize: `${headingFontSize}px` }}>{t('dashboard.license.card.title', 'CAD License Management')}</p>
-              <p className="text-lg font-bold">{t('dashboard.license.card.subtitle', 'Annual License Fee')}</p>
+              <p className="text-lg font-bold text-white">{t('dashboard.license.card.subtitle', 'Annual License Fee')}</p>
             </div>
             <div className="text-right">
-              <div className="text-2xl font-bold">{fmt(licenseTotal)}</div>
+              <div className="text-2xl font-bold text-white">{fmt(licenseTotal)}</div>
               <div className="text-sm text-teal-50">{toMan(licenseTotal)}</div>
             </div>
           </div>
           <div className="grid md:grid-cols-3 gap-3">
-            <div className="bg-white/15 rounded-lg p-3 border border-white/20">
-              <div className="text-xs text-teal-50 font-semibold">{t('dashboard.license.count', 'License Seats')}</div>
-              <div className="text-xl font-bold">{licenseComputers.toLocaleString()} {t('dashboard.license.units', 'units')}</div>
-              <div className="text-xs text-teal-50 mt-1">{t('dashboard.license.targetPc', 'Target PCs')}</div>
+            <div className="bg-black/10 dark:bg-black/20 rounded-lg p-3 border border-white/10 backdrop-blur-sm">
+              <div className="text-xs text-teal-50 font-semibold mb-1">{t('dashboard.license.count', 'License Seats')}</div>
+              <div className="text-xl font-bold text-white">{licenseComputers.toLocaleString()} <span className="text-base font-medium opacity-80">{t('dashboard.license.units', 'units')}</span></div>
+              <div className="text-xs text-teal-50/80 mt-1">{t('dashboard.license.targetPc', 'Target PCs')}</div>
             </div>
-            <div className="bg-white/15 rounded-lg p-3 border border-white/20">
-              <div className="text-xs text-teal-50 font-semibold">{t('dashboard.license.perSeat', 'Fee per Seat (JPY)')}</div>
-              <div className="text-xl font-bold">{fmt(licensePerComputer)}</div>
-              <div className="text-xs text-teal-50 mt-1">{toMan(licensePerComputer)}</div>
+            <div className="bg-black/10 dark:bg-black/20 rounded-lg p-3 border border-white/10 backdrop-blur-sm">
+              <div className="text-xs text-teal-50 font-semibold mb-1">{t('dashboard.license.perSeat', 'Fee per Seat (JPY)')}</div>
+              <div className="text-xl font-bold text-white">{fmt(licensePerComputer)}</div>
+              <div className="text-xs text-teal-50/80 mt-1">{toMan(licensePerComputer)}</div>
             </div>
-            <div className="bg-white/15 rounded-lg p-3 border border-white/20">
-              <div className="text-xs text-teal-50 font-semibold">{t('dashboard.license.card.costPerHour', 'Cost per Hour (plan)')}</div>
-              <div className="text-xl font-bold">{fmt(Math.max(0, licenseCostPerHour))}</div>
-              <div className="text-xs text-teal-50 mt-1">{t('dashboard.costAnalysis.subtitle', 'Understand license impact')}</div>
+            <div className="bg-black/10 dark:bg-black/20 rounded-lg p-3 border border-white/10 backdrop-blur-sm">
+              <div className="text-xs text-teal-50 font-semibold mb-1">{t('dashboard.license.card.costPerHour', 'Cost per Hour (plan)')}</div>
+              <div className="text-xl font-bold text-white">{fmt(Math.max(0, licenseCostPerHour))}</div>
+              <div className="text-xs text-teal-50/80 mt-1">{t('dashboard.costAnalysis.subtitle', 'Understand license impact')}</div>
             </div>
           </div>
-        </div>
+          </Card>
+        </motion.div>
         </div> {/* End of inner wrapper */}
         </div> {/* End of section-kpi-summary */}
 
         {/* Row 5: Cost Analysis */}
-        <div
+        <motion.div variants={itemVariants}>
+          <Card
           id="section-cost-analysis"
-          className="bg-white rounded-xl p-5 shadow-sm border"
-          style={{ borderColor: dashboardColors.costAnalysisBorder, borderWidth: '2px' }}
+          className="p-5 border-2"
+          style={{ borderColor: dashboardColors.costAnalysisBorder }}
         >
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-xs uppercase tracking-wider text-amber-700 font-semibold" style={{ fontSize: `${headingFontSize}px` }}>{t('dashboard.costAnalysis.title', 'Cost Analysis')}</p>
-              <p className="text-lg font-bold text-slate-900">{t('dashboard.costAnalysis.subtitle', 'Understand license impact')}</p>
+              <p className="text-xs uppercase tracking-wider text-amber-700 dark:text-amber-500 font-semibold" style={{ fontSize: `${headingFontSize}px` }}>{t('dashboard.costAnalysis.title', 'Cost Analysis')}</p>
+              <p className="text-lg font-bold text-slate-900 dark:text-white">{t('dashboard.costAnalysis.subtitle', 'Understand license impact')}</p>
             </div>
           </div>
           <div className="grid md:grid-cols-3 gap-4">
-            <div className="p-4 rounded-lg border border-amber-100 bg-amber-50">
-              <p className="text-xs font-semibold text-amber-800 uppercase">{t('dashboard.costAnalysis.licensePerHour', 'License / Hour')}</p>
-              <p className="text-2xl font-bold text-amber-900 mt-1">{fmt(licenseCostPerHour)}</p>
-              <p className="text-xs text-amber-700 mt-1">{t('dashboard.notes.allocatePlan', 'Allocated over planned hours')}</p>
+            <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/10 transition-colors">
+              <p className="text-xs font-semibold text-amber-800 dark:text-amber-500 uppercase">{t('dashboard.costAnalysis.licensePerHour', 'License / Hour')}</p>
+              <p className="text-2xl font-bold text-amber-900 dark:text-amber-400 mt-1">{fmt(licenseCostPerHour)}</p>
+              <p className="text-[11px] font-medium text-amber-700 dark:text-amber-500/70 mt-1.5">{t('dashboard.notes.allocatePlan', 'Allocated over planned hours')}</p>
             </div>
-            <div className="p-4 rounded-lg border border-slate-200 bg-slate-50">
-              <p className="text-xs font-semibold text-slate-700 uppercase">{t('dashboard.costAnalysis.netRate', 'Net Hourly Rate')}</p>
-              <p className="text-2xl font-bold text-slate-900 mt-1">{fmt(netHourlyRate)}</p>
-              <p className="text-xs text-slate-600 mt-1">{t('dashboard.notes.unitMinusLicense', 'Unit rate - license/hour')}</p>
+            <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 transition-colors">
+              <p className="text-xs font-semibold text-slate-700 dark:text-slate-400 uppercase">{t('dashboard.costAnalysis.netRate', 'Net Hourly Rate')}</p>
+              <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{fmt(netHourlyRate)}</p>
+              <p className="text-[11px] font-medium text-slate-500 dark:text-slate-500 mt-1.5">{t('dashboard.notes.unitMinusLicense', 'Unit rate - license/hour')}</p>
             </div>
-            <div className="p-4 rounded-lg border border-slate-200 bg-slate-50">
-              <p className="text-xs font-semibold text-slate-700 uppercase">{t('dashboard.costAnalysis.breakEven', 'Break-even Hours')}</p>
-              <p className="text-2xl font-bold text-slate-900 mt-1">{Math.ceil(breakEvenHours).toLocaleString()} h</p>
-              <p className="text-xs text-slate-600 mt-1">{t('dashboard.notes.breakEven', 'License cost ÷ unit rate')}</p>
+            <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 transition-colors">
+              <p className="text-xs font-semibold text-slate-700 dark:text-slate-400 uppercase">{t('dashboard.costAnalysis.breakEven', 'Break-even Hours')}</p>
+              <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{Math.ceil(breakEvenHours).toLocaleString()} h</p>
+              <p className="text-[11px] font-medium text-slate-500 dark:text-slate-500 mt-1.5">{t('dashboard.notes.breakEven', 'License cost ÷ unit rate')}</p>
             </div>
           </div>
-        </div>
+          </Card>
+        </motion.div>
 
         {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-md font-bold text-slate-700 flex items-center">
+        <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-8">
+          <Card className="p-5">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-md font-bold text-slate-700 dark:text-slate-200 flex items-center">
                 <TrendingUp className="w-4 h-4 mr-2 text-blue-500" />
                 {t('dashboard.chart.monthly', '月次売上：計画 vs 実績')}
               </h3>
@@ -799,7 +808,7 @@ export const Dashboard: React.FC = () => {
                 <button
                   data-html2canvas-ignore="true"
                   onClick={() => setShowColorPicker(!showColorPicker)}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 dark:bg-purple-500 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors"
                   title="Customize chart colors"
                 >
                   <Palette className="w-4 h-4" />
@@ -854,10 +863,10 @@ export const Dashboard: React.FC = () => {
             <div id="dashboard-monthly-chart" className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={stats}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={12} />
-                  <YAxis axisLine={false} tickLine={false} fontSize={11} tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
-                  <Tooltip formatter={(val: number) => fmt(val as number)} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.3} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={12} stroke="currentColor" className="text-slate-500 dark:text-slate-400" />
+                  <YAxis axisLine={false} tickLine={false} fontSize={11} stroke="currentColor" className="text-slate-500 dark:text-slate-400" tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
+                  <Tooltip formatter={(val: number) => fmt(val as number)} contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', color: '#fff', borderRadius: '8px', border: 'none' }} itemStyle={{ color: '#fff' }} />
                   <Legend wrapperStyle={{ fontSize: '12px' }} />
                   <Bar dataKey="plannedRevenue" name={planShort} fill={chartColors.planRevenue} radius={[4, 4, 0, 0]}>
                     <LabelList dataKey="plannedRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill={chartColors.planRevenue} />
@@ -868,12 +877,12 @@ export const Dashboard: React.FC = () => {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </Card>
 
-          <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-md font-bold text-slate-700 flex items-center">
-                <TrendingUp className="w-4 h-4 mr-2 text-green-500" />
+          <Card className="p-5">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-md font-bold text-slate-700 dark:text-slate-200 flex items-center">
+                <TrendingUp className="w-4 h-4 mr-2 text-emerald-500" />
                 {t('dashboard.charts.cumulative', 'Cumulative Revenue (Plan vs Actual)')}
               </h3>
               <ChartExportMenu
@@ -891,10 +900,10 @@ export const Dashboard: React.FC = () => {
                       <stop offset="95%" stopColor={chartColors.accActual} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="month" axisLine={false} tickLine={false} fontSize={12} />
-                  <YAxis axisLine={false} tickLine={false} fontSize={11} tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
-                  <Tooltip formatter={(val: number) => fmt(val as number)} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.3} />
+                  <XAxis dataKey="month" axisLine={false} tickLine={false} fontSize={12} stroke="currentColor" className="text-slate-500 dark:text-slate-400" />
+                  <YAxis axisLine={false} tickLine={false} fontSize={11} stroke="currentColor" className="text-slate-500 dark:text-slate-400" tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
+                  <Tooltip formatter={(val: number) => fmt(val as number)} contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', color: '#fff', borderRadius: '8px', border: 'none' }} itemStyle={{ color: '#fff' }} />
                   <Legend wrapperStyle={{ fontSize: '12px' }} />
                   <Area type="monotone" dataKey="accActualRevenue" name={t('dashboard.chart.accActual', actualShort)} stroke={chartColors.accActual} fillOpacity={1} fill="url(#colorAct)" strokeWidth={2}>
                     <LabelList dataKey="accActualRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill={chartColors.accActual} fontWeight="bold" offset={10} />
@@ -905,39 +914,43 @@ export const Dashboard: React.FC = () => {
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
-          </div>
-        </div>
+          </Card>
+        </motion.div>
 
         {/* Financial Summary */}
-        <div
-          id="section-financial-summary"
-          className="text-white rounded-xl p-5 shadow-md flex-shrink-0"
-          style={{ background: `linear-gradient(to right, ${dashboardColors.summaryFrom}, ${dashboardColors.summaryTo})` }}
-        >
-          <div className="grid md:grid-cols-4 gap-4">
-            <div className="bg-white/10 rounded-lg p-4 border border-white/15">
-              <p className="text-xs font-semibold text-indigo-100 uppercase">{t('dashboard.summary.gross', 'Gross (Actual)')}</p>
-              <p className="text-2xl font-bold mt-1">{fmt(grossRevenueActual)}</p>
-              <p className="text-sm text-indigo-100">{toMan(grossRevenueActual)}</p>
+        <motion.div variants={itemVariants}>
+          <Card
+            id="section-financial-summary"
+            gradient
+            fromColor={dashboardColors.summaryFrom}
+            toColor={dashboardColors.summaryTo}
+            className="p-5 flex-shrink-0"
+          >
+            <div className="grid md:grid-cols-4 gap-4">
+              <div className="bg-black/10 dark:bg-black/20 rounded-xl p-4 border border-white/10 backdrop-blur-sm">
+                <p className="text-xs font-semibold text-slate-200 uppercase">{t('dashboard.summary.gross', 'Gross (Actual)')}</p>
+                <p className="text-2xl font-bold mt-1 text-white">{fmt(grossRevenueActual)}</p>
+                <p className="text-[11px] font-medium mt-1 text-slate-300">{toMan(grossRevenueActual)}</p>
+              </div>
+              <div className="bg-black/10 dark:bg-black/20 rounded-xl p-4 border border-white/10 backdrop-blur-sm">
+                <p className="text-xs font-semibold text-slate-200 uppercase">{t('dashboard.summary.license', 'License Cost')}</p>
+                <p className="text-2xl font-bold mt-1 text-white">{fmt(licenseTotal)}</p>
+                <p className="text-[11px] font-medium mt-1 text-slate-300">{toMan(licenseTotal)}</p>
+              </div>
+              <div className="bg-black/10 dark:bg-black/20 rounded-xl p-4 border border-white/10 backdrop-blur-sm">
+                <p className="text-xs font-semibold text-slate-200 uppercase">{t('dashboard.summary.net', 'Net (Actual)')}</p>
+                <p className="text-2xl font-bold mt-1 text-white">{fmtSigned(netRevenueActual)}</p>
+                <p className="text-[11px] font-medium mt-1 text-slate-300">{toMan(netRevenueActual)}</p>
+              </div>
+              <div className="bg-black/10 dark:bg-black/20 rounded-xl p-4 border border-white/10 backdrop-blur-sm">
+                <p className="text-xs font-semibold text-slate-200 uppercase">{t('dashboard.summary.margin', 'Margin (Actual)')}</p>
+                <p className="text-2xl font-bold mt-1 text-white">{profitMarginActual.toFixed(1)}%</p>
+                <p className="text-[11px] font-medium mt-1 text-slate-300">Net / Gross</p>
+              </div>
             </div>
-            <div className="bg-white/10 rounded-lg p-4 border border-white/15">
-              <p className="text-xs font-semibold text-indigo-100 uppercase">{t('dashboard.summary.license', 'License Cost')}</p>
-              <p className="text-2xl font-bold mt-1">{fmt(licenseTotal)}</p>
-              <p className="text-sm text-indigo-100">{toMan(licenseTotal)}</p>
-            </div>
-            <div className="bg-white/10 rounded-lg p-4 border border-white/15">
-              <p className="text-xs font-semibold text-indigo-100 uppercase">{t('dashboard.summary.net', 'Net (Actual)')}</p>
-              <p className="text-2xl font-bold mt-1">{fmtSigned(netRevenueActual)}</p>
-              <p className="text-sm text-indigo-100">{toMan(netRevenueActual)}</p>
-            </div>
-            <div className="bg-white/10 rounded-lg p-4 border border-white/15">
-              <p className="text-xs font-semibold text-indigo-100 uppercase">{t('dashboard.summary.margin', 'Margin (Actual)')}</p>
-              <p className="text-2xl font-bold mt-1">{profitMarginActual.toFixed(1)}%</p>
-              <p className="text-sm text-indigo-100">Net / Gross</p>
-            </div>
-          </div>
-        </div>
+          </Card>
+        </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 };

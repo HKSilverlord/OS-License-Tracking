@@ -70,7 +70,7 @@ export const ChartExportMenu: React.FC<ChartExportMenuProps> = ({
         <div className={`relative inline-block text-left chart-export-menu ${className}`}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-1 px-2 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:text-slate-800 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                className="flex items-center gap-1 px-2 py-1.5 text-sm font-medium text-slate-600 bg-white dark:bg-slate-900 border border-slate-300 rounded-lg hover:bg-slate-50 hover:text-slate-800 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
                 title={t('buttons.export', 'Export')}
             >
                 <Download className="w-4 h-4" />
@@ -78,7 +78,7 @@ export const ChartExportMenu: React.FC<ChartExportMenuProps> = ({
             </button>
 
             {isOpen && (
-                <div className="absolute right-0 mt-2 w-56 origin-top-right bg-white rounded-lg shadow-xl ring-1 ring-black ring-opacity-5 z-50 animate-in fade-in zoom-in-95 duration-100">
+                <div className="absolute right-0 mt-2 w-56 origin-top-right bg-white dark:bg-slate-900 rounded-lg shadow-xl ring-1 ring-black ring-opacity-5 z-50 animate-in fade-in zoom-in-95 duration-100">
                     <div className="py-1" role="menu" aria-orientation="vertical">
                         <div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">
                             {t('export.options', 'Export Options')}
