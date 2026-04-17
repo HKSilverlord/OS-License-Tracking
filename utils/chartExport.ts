@@ -11,28 +11,67 @@ import html2canvas from 'html2canvas';
  * resolve each oklch(...) token to rgb() via a temporary DOM element.
  */
 const resolveOklchColors = (clonedDoc: Document): void => {
-  const oklchRegex = /oklch\([^)]+\)/g;
-
-  const toRgb = (oklchStr: string): string => {
-    const el = document.createElement('span');
-    el.style.color = oklchStr;
-    document.body.appendChild(el);
-    const resolved = window.getComputedStyle(el).color;
-    document.body.removeChild(el);
-    return resolved || 'rgb(0,0,0)';
+  const replaceUnsupportedColors = (cssText: string): string => {
+    let result = cssText;
+    const targets = ['oklch', 'color-mix', 'oklab', 'lch', 'lab'];
+    
+    for (const target of targets) {
+      let startIndex = 0;
+      while ((startIndex = result.indexOf(target + '(', startIndex)) !== -1) {
+        let openCount = 0;
+        let endIndex = -1;
+        for (let i = startIndex + target.length; i < result.length; i++) {
+          if (result[i] === '(') openCount++;
+          else if (result[i] === ')') {
+            openCount--;
+            if (openCount === 0) {
+              endIndex = i;
+              break;
+            }
+          }
+        }
+        
+        if (endIndex !== -1) {
+          const colorStr = result.slice(startIndex, endIndex + 1);
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1;
+            canvas.height = 1;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            if (ctx) {
+              ctx.clearRect(0, 0, 1, 1);
+              ctx.fillStyle = colorStr;
+              ctx.fillRect(0, 0, 1, 1);
+              const data = ctx.getImageData(0, 0, 1, 1).data;
+              const rgba = `rgba(${data[0]}, ${data[1]}, ${data[2]}, ${data[3] / 255})`;
+              result = result.substring(0, startIndex) + rgba + result.substring(endIndex + 1);
+              startIndex += rgba.length;
+              continue;
+            }
+          } catch(e) {}
+        }
+        startIndex++;
+      }
+    }
+    return result;
   };
 
   clonedDoc.querySelectorAll('style').forEach(style => {
-    if (style.textContent?.includes('oklch')) {
-      style.textContent = style.textContent.replace(oklchRegex, toRgb);
+    if (style.textContent) {
+      style.textContent = replaceUnsupportedColors(style.textContent);
     }
   });
 
-  clonedDoc.querySelectorAll<HTMLElement>('[style]').forEach(el => {
+  clonedDoc.querySelectorAll<HTMLElement | SVGElement>('*').forEach(el => {
     const inlineStyle = el.getAttribute('style');
-    if (inlineStyle?.includes('oklch')) {
-      el.setAttribute('style', inlineStyle.replace(oklchRegex, toRgb));
+    if (inlineStyle) {
+      el.setAttribute('style', replaceUnsupportedColors(inlineStyle));
     }
+    const fill = el.getAttribute('fill');
+    if (fill) el.setAttribute('fill', replaceUnsupportedColors(fill));
+    
+    const stroke = el.getAttribute('stroke');
+    if (stroke) el.setAttribute('stroke', replaceUnsupportedColors(stroke));
   });
 };
 
