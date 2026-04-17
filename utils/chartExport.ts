@@ -6,6 +6,37 @@
 import html2canvas from 'html2canvas';
 
 /**
+ * html2canvas doesn't support oklch() (used by Tailwind v4).
+ * Walk the cloned document's <style> tags and inline [style] attributes,
+ * resolve each oklch(...) token to rgb() via a temporary DOM element.
+ */
+const resolveOklchColors = (clonedDoc: Document): void => {
+  const oklchRegex = /oklch\([^)]+\)/g;
+
+  const toRgb = (oklchStr: string): string => {
+    const el = document.createElement('span');
+    el.style.color = oklchStr;
+    document.body.appendChild(el);
+    const resolved = window.getComputedStyle(el).color;
+    document.body.removeChild(el);
+    return resolved || 'rgb(0,0,0)';
+  };
+
+  clonedDoc.querySelectorAll('style').forEach(style => {
+    if (style.textContent?.includes('oklch')) {
+      style.textContent = style.textContent.replace(oklchRegex, toRgb);
+    }
+  });
+
+  clonedDoc.querySelectorAll<HTMLElement>('[style]').forEach(el => {
+    const inlineStyle = el.getAttribute('style');
+    if (inlineStyle?.includes('oklch')) {
+      el.setAttribute('style', inlineStyle.replace(oklchRegex, toRgb));
+    }
+  });
+};
+
+/**
  * Recursively copy ALL computed styles to inline styles
  * This ensures the exported file renders correctly standalone (SVG only)
  */
@@ -141,14 +172,14 @@ export const exportChartToPNG = async (elementId: string, filename: string = 'ch
       useCORS: true, // Handle cross-origin images if any
       width: chartContainer.scrollWidth,
       height: chartContainer.scrollHeight,
-      onclone: (_clonedDoc: Document, clonedEl: HTMLElement) => {
-        // Walk up the parent chain and force overflow visible so nothing clips the SVG
+      onclone: (clonedDoc: Document, clonedEl: HTMLElement) => {
         clonedEl.style.overflow = 'visible';
         let parent = clonedEl.parentElement;
         while (parent) {
           parent.style.overflow = 'visible';
           parent = parent.parentElement;
         }
+        resolveOklchColors(clonedDoc);
       }
     });
 
@@ -226,14 +257,14 @@ export const copyChartToClipboard = async (elementId: string): Promise<void> => 
       useCORS: true,
       width: chartContainer.scrollWidth,
       height: chartContainer.scrollHeight,
-      onclone: (_clonedDoc: Document, clonedEl: HTMLElement) => {
-        // Walk up the parent chain and force overflow visible so nothing clips the SVG
+      onclone: (clonedDoc: Document, clonedEl: HTMLElement) => {
         clonedEl.style.overflow = 'visible';
         let parent = clonedEl.parentElement;
         while (parent) {
           parent.style.overflow = 'visible';
           parent = parent.parentElement;
         }
+        resolveOklchColors(clonedDoc);
       }
     });
 
