@@ -164,7 +164,7 @@ function App() {
   const handleExport = async () => {
     try {
       const projects = await dbService.getProjects();
-      const records = await dbService.getRecords(currentPeriod);
+      const records = await dbService.getAllRecords(currentYear);
       const exportData = projects.map(p => {
         const pRecords: any = {};
         records.filter(r => r.project_id === p.id).forEach(r => {

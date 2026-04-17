@@ -19,11 +19,9 @@ export const exportToExcel = (projects: ProjectRow[], currentPeriodLabel: string
     let totalActual = 0;
 
     // Sum up hours for the current view
-    Object.values(p.records).forEach(r => {
-      if (r.period_label === currentPeriodLabel) {
-        totalPlanned += r.planned_hours || 0;
-        totalActual += r.actual_hours || 0;
-      }
+    Object.values(p.records).forEach((r: any) => {
+      totalPlanned += r.planned_hours || 0;
+      totalActual += r.actual_hours || 0;
     });
 
     const revenue = totalActual * p.unit_price;
