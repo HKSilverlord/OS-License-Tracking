@@ -6,70 +6,92 @@
 import html2canvas from 'html2canvas';
 
 /**
- * html2canvas doesn't support oklch() (used by Tailwind v4).
- * Walk the cloned document's <style> tags and inline [style] attributes,
- * resolve each oklch(...) token to rgb() via a temporary DOM element.
+ * html2canvas doesn't support oklch() / color-mix() / oklab() (Tailwind v4).
+ *
+ * Uses a 1×1 canvas to pixel-render each unsupported color token → rgba(),
+ * then patches:
+ *   1. <link rel="stylesheet"> → fetched, patched, replaced with <style>
+ *      (must be async; html2canvas v1.4.1 onclone supports Promise<void>)
+ *   2. Inline <style> tags
+ *   3. Inline [style] / fill / stroke attributes on every element
  */
-const resolveOklchColors = (clonedDoc: Document): void => {
-  const replaceUnsupportedColors = (cssText: string): string => {
-    let result = cssText;
-    const targets = ['oklch', 'color-mix', 'oklab', 'lch', 'lab'];
-    
-    for (const target of targets) {
-      let startIndex = 0;
-      while ((startIndex = result.indexOf(target + '(', startIndex)) !== -1) {
-        let openCount = 0;
-        let endIndex = -1;
-        for (let i = startIndex + target.length; i < result.length; i++) {
-          if (result[i] === '(') openCount++;
-          else if (result[i] === ')') {
-            openCount--;
-            if (openCount === 0) {
-              endIndex = i;
-              break;
-            }
-          }
+const toRgbaViaCanvas = (colorStr: string): string => {
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (ctx) {
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = colorStr;
+      ctx.fillRect(0, 0, 1, 1);
+      const d = ctx.getImageData(0, 0, 1, 1).data;
+      return `rgba(${d[0]},${d[1]},${d[2]},${+(d[3] / 255).toFixed(3)})`;
+    }
+  } catch { /* ignore */ }
+  return 'rgba(0,0,0,1)';
+};
+
+const replaceUnsupportedColors = (cssText: string): string => {
+  const targets = ['oklch', 'color-mix', 'oklab', 'lch', 'lab'];
+  let result = cssText;
+  for (const fn of targets) {
+    let start = 0;
+    while ((start = result.indexOf(fn + '(', start)) !== -1) {
+      let depth = 0;
+      let end = -1;
+      for (let i = start + fn.length; i < result.length; i++) {
+        if (result[i] === '(') depth++;
+        else if (result[i] === ')') {
+          depth--;
+          if (depth === 0) { end = i; break; }
         }
-        
-        if (endIndex !== -1) {
-          const colorStr = result.slice(startIndex, endIndex + 1);
-          try {
-            const canvas = document.createElement('canvas');
-            canvas.width = 1;
-            canvas.height = 1;
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
-            if (ctx) {
-              ctx.clearRect(0, 0, 1, 1);
-              ctx.fillStyle = colorStr;
-              ctx.fillRect(0, 0, 1, 1);
-              const data = ctx.getImageData(0, 0, 1, 1).data;
-              const rgba = `rgba(${data[0]}, ${data[1]}, ${data[2]}, ${data[3] / 255})`;
-              result = result.substring(0, startIndex) + rgba + result.substring(endIndex + 1);
-              startIndex += rgba.length;
-              continue;
-            }
-          } catch(e) {}
-        }
-        startIndex++;
+      }
+      if (end !== -1) {
+        const token = result.slice(start, end + 1);
+        const rgba = toRgbaViaCanvas(token);
+        result = result.slice(0, start) + rgba + result.slice(end + 1);
+        start += rgba.length;
+      } else {
+        start++;
       }
     }
-    return result;
-  };
+  }
+  return result;
+};
 
+const resolveOklchColors = async (clonedDoc: Document): Promise<void> => {
+  // 1. Fetch <link> stylesheets, patch oklch, swap to inline <style>
+  const linkEls = Array.from(
+    clonedDoc.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')
+  );
+  await Promise.all(
+    linkEls.map(async (link) => {
+      try {
+        const res = await fetch(link.href);
+        const css = replaceUnsupportedColors(await res.text());
+        const style = clonedDoc.createElement('style');
+        style.textContent = css;
+        link.parentNode?.replaceChild(style, link);
+      } catch {
+        link.remove();
+      }
+    })
+  );
+
+  // 2. Patch inline <style> tags
   clonedDoc.querySelectorAll('style').forEach(style => {
     if (style.textContent) {
       style.textContent = replaceUnsupportedColors(style.textContent);
     }
   });
 
+  // 3. Patch element-level attributes
   clonedDoc.querySelectorAll<HTMLElement | SVGElement>('*').forEach(el => {
     const inlineStyle = el.getAttribute('style');
-    if (inlineStyle) {
-      el.setAttribute('style', replaceUnsupportedColors(inlineStyle));
-    }
+    if (inlineStyle) el.setAttribute('style', replaceUnsupportedColors(inlineStyle));
     const fill = el.getAttribute('fill');
     if (fill) el.setAttribute('fill', replaceUnsupportedColors(fill));
-    
     const stroke = el.getAttribute('stroke');
     if (stroke) el.setAttribute('stroke', replaceUnsupportedColors(stroke));
   });
@@ -211,14 +233,14 @@ export const exportChartToPNG = async (elementId: string, filename: string = 'ch
       useCORS: true, // Handle cross-origin images if any
       width: chartContainer.scrollWidth,
       height: chartContainer.scrollHeight,
-      onclone: (clonedDoc: Document, clonedEl: HTMLElement) => {
+      onclone: async (clonedDoc: Document, clonedEl: HTMLElement) => {
         clonedEl.style.overflow = 'visible';
         let parent = clonedEl.parentElement;
         while (parent) {
           parent.style.overflow = 'visible';
           parent = parent.parentElement;
         }
-        resolveOklchColors(clonedDoc);
+        await resolveOklchColors(clonedDoc);
       }
     });
 
@@ -296,14 +318,14 @@ export const copyChartToClipboard = async (elementId: string): Promise<void> => 
       useCORS: true,
       width: chartContainer.scrollWidth,
       height: chartContainer.scrollHeight,
-      onclone: (clonedDoc: Document, clonedEl: HTMLElement) => {
+      onclone: async (clonedDoc: Document, clonedEl: HTMLElement) => {
         clonedEl.style.overflow = 'visible';
         let parent = clonedEl.parentElement;
         while (parent) {
           parent.style.overflow = 'visible';
           parent = parent.parentElement;
         }
-        resolveOklchColors(clonedDoc);
+        await resolveOklchColors(clonedDoc);
       }
     });
 
