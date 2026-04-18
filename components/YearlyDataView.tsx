@@ -4,13 +4,64 @@ import { dbService } from '../services/dbService';
 import { formatCurrency } from '../utils/helpers';
 import { TABLE_COLUMN_WIDTHS, STICKY_CLASSES } from '../utils/tableStyles';
 import { exportTableToCSV, generateCSVFilename } from '../utils/csvExport';
-import { Loader2, FileDown, Copy, Check } from 'lucide-react';
+import { Loader2, FileDown, Copy, Check, GripVertical, ListChecks } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { useLanguage } from '../contexts/LanguageContext';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface YearlyDataViewProps {
   currentYear: number;
 }
+
+const SortableRowContext = React.createContext<{ attributes: any, listeners: any } | null>(null);
+
+const SortableYearlyBody: React.FC<{
+  project: Project;
+  children: React.ReactNode;
+}> = ({ project, children }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: project.id,
+  });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.9 : 1,
+    position: isDragging ? 'relative' : undefined,
+    zIndex: isDragging ? 50 : undefined,
+  };
+
+  return (
+    <tbody ref={setNodeRef} style={style} className={isDragging ? 'bg-blue-50/50 dark:bg-blue-900/20' : 'bg-white dark:bg-slate-900'}>
+      <SortableRowContext.Provider value={{ attributes, listeners }}>
+        {children}
+      </SortableRowContext.Provider>
+    </tbody>
+  );
+};
+
+const DragHandle = () => {
+  const context = React.useContext(SortableRowContext);
+  return (
+    <td rowSpan={2} className="sticky left-0 z-50 bg-white dark:bg-slate-900 w-8 px-1 text-center cursor-grab active:cursor-grabbing border-b border-slate-200 dark:border-slate-700" {...context?.attributes} {...context?.listeners}>
+      <GripVertical className="w-4 h-4 text-slate-400 mx-auto" />
+    </td>
+  );
+};
 
 export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) => {
   const { t, language } = useLanguage();
@@ -19,6 +70,29 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
   const [loading, setLoading] = useState(true);
   const [isCopying, setIsCopying] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+
+  const dragOffset = isEditMode ? 32 : 0;
+
+  const sensors = useSensors(useSensor(PointerSensor));
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = projects.findIndex(p => p.id === active.id);
+    const newIndex = projects.findIndex(p => p.id === over.id);
+    const reordered = arrayMove(projects, oldIndex, newIndex);
+
+    setProjects(reordered);
+
+    const updates = reordered.map((p, i) => ({ id: p.id, display_order: i + 1 }));
+    try {
+      await dbService.updateProjectDisplayOrders(updates);
+    } catch (e) {
+      console.error('Failed to save order:', e);
+    }
+  };
 
   // Constants for layout
   const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
@@ -52,16 +126,24 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
       });
       const relevantProjects = Array.from(uniqueProjectsMap.values());
 
-      // Sort projects by code
-      relevantProjects.sort((a, b) => (a.code || '').localeCompare(b.code || ''));
-
-      setProjects(relevantProjects);
-
       const groupedRecords: Record<string, MonthlyRecord[]> = {};
       recordsData.forEach(r => {
         if (!groupedRecords[r.project_id]) groupedRecords[r.project_id] = [];
         groupedRecords[r.project_id].push(r);
       });
+
+      // Show projects with >0 hours first, then group by display_order
+      relevantProjects.sort((a, b) => {
+        const aTotal = Object.values(groupedRecords[a.id] ?? {})
+          .reduce((s, r) => s + (r.planned_hours ?? 0) + (r.actual_hours ?? 0), 0);
+        const bTotal = Object.values(groupedRecords[b.id] ?? {})
+          .reduce((s, r) => s + (r.planned_hours ?? 0) + (r.actual_hours ?? 0), 0);
+        if (aTotal > 0 && bTotal === 0) return -1;
+        if (aTotal === 0 && bTotal > 0) return 1;
+        return (a.display_order ?? 999) - (b.display_order ?? 999);
+      });
+
+      setProjects(relevantProjects);
       setRecords(groupedRecords);
     } catch (error) {
       console.error("Failed to load data for Yearly Data View", error);
@@ -234,6 +316,17 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
           </h3>
           <div className="flex gap-2">
             <button
+              onClick={() => setIsEditMode(!isEditMode)}
+              className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors shadow-sm border ${
+                isEditMode
+                  ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-200 dark:hover:bg-blue-900/60'
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'
+              }`}
+            >
+              {isEditMode ? <Check className="w-4 h-4" /> : <ListChecks className="w-4 h-4" />}
+              <span className="hidden sm:inline">{isEditMode ? t('tracker.done', '完了') : t('tracker.editOrder', '順序を編集')}</span>
+            </button>
+            <button
               onClick={handleCopyImage}
               disabled={isCopying}
               className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors shadow-sm ${copySuccess
@@ -261,15 +354,18 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
           </div>
         </div>
         <div className="flex-1 min-h-0 overflow-auto relative isolate custom-scrollbar">
-          <table id="yearly-data-table" className="w-full min-w-max border-separate border-spacing-0">
-            <thead className="bg-slate-50 dark:bg-slate-800 sticky top-0 z-40">
-              <tr>
-                <th scope="col" style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-3 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                  {t('tracker.no')}
-                </th>
-                <th scope="col" style={{ left: `${LEFT_NO_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                  {t('tracker.projectName')}
-                </th>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={projects.map(p => p.id)} strategy={verticalListSortingStrategy}>
+              <table id="yearly-data-table" className="w-full min-w-max border-separate border-spacing-0">
+                <thead className="bg-slate-50 dark:bg-slate-800 sticky top-0 z-40">
+                  <tr>
+                    {isEditMode && <th scope="col" style={{ left: 0, width: '32px' }} className={`px-1 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ}`}></th>}
+                    <th scope="col" style={{ left: dragOffset, width: `${LEFT_NO_WIDTH}px` }} className={`px-3 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                      {t('tracker.no')}
+                    </th>
+                    <th scope="col" style={{ left: dragOffset + LEFT_NO_WIDTH, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
+                      {t('tracker.projectName')}
+                    </th>
                 <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800`}>
                   {t('totalView.tableHeader.type')}
                 </th>
@@ -289,10 +385,11 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
 
               {/* Summary Row: Plan Total */}
               <tr className="bg-slate-100 dark:bg-slate-800 border-b border-slate-300 dark:border-slate-700">
-                <td style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-3 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 text-center border-b border-slate-300 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ} bg-slate-100 dark:bg-slate-800`} rowSpan={4}>
+                {isEditMode && <td rowSpan={4} style={{ left: 0, width: '32px' }} className={`px-1 py-2 border-b border-slate-300 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ} bg-slate-100 dark:bg-slate-800`}></td>}
+                <td style={{ left: dragOffset, width: `${LEFT_NO_WIDTH}px` }} className={`px-3 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 text-center border-b border-slate-300 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ} bg-slate-100 dark:bg-slate-800`} rowSpan={4}>
                   Σ
                 </td>
-                <td style={{ left: `${LEFT_NO_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 border-b border-slate-300 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ} bg-slate-100 dark:bg-slate-800`} rowSpan={4}>
+                <td style={{ left: dragOffset + LEFT_NO_WIDTH, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 border-b border-slate-300 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ} bg-slate-100 dark:bg-slate-800`} rowSpan={4}>
                   {t('totalView.tableHeader.total', 'TOTAL')}
                 </td>
                 <td className="px-2 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400 text-center border-r border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
@@ -349,7 +446,6 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
                 <td className="px-2 py-2 border-l border-b-2 border-slate-400 dark:border-slate-600 bg-blue-50/60 dark:bg-blue-900/30"></td>
               </tr>
             </thead>
-            <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-700">
               {projects.map((project, index) => {
                 const projRecords = records[project.id] || [];
                 const monthlyData = months.map(m => {
@@ -364,13 +460,14 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
                 const totalRevenueActual = totalActual * (project.actual_price || project.unit_price || 0);
 
                 return (
-                  <React.Fragment key={project.id}>
+                  <SortableYearlyBody key={project.id} project={project}>
                     {/* Plan Row */}
                     <tr className="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                      <td rowSpan={2} style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-3 py-3 text-sm font-medium text-slate-900 dark:text-slate-100 border-b border-slate-200 dark:border-slate-700 ${stickyLeftClass} align-top text-center`}>
+                      {isEditMode && <DragHandle />}
+                      <td rowSpan={2} style={{ left: dragOffset, width: `${LEFT_NO_WIDTH}px` }} className={`px-3 py-3 text-sm font-medium text-slate-900 dark:text-slate-100 border-b border-slate-200 dark:border-slate-700 ${stickyLeftClass} align-top text-center`}>
                         {index + 1}
                       </td>
-                      <td rowSpan={2} style={{ left: `${LEFT_NO_WIDTH}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-sm text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 ${stickyLeftClass} align-top`}>
+                      <td rowSpan={2} style={{ left: dragOffset + LEFT_NO_WIDTH, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-sm text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 ${stickyLeftClass} align-top`}>
                         <div className="truncate w-44" title={project.name}>{project.name}</div>
                       </td>
                       <td className="px-2 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400 text-center border-r border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
@@ -406,11 +503,12 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
                         {totalRevenueActual > 0 ? formatCurrency(totalRevenueActual) : '-'}
                       </td>
                     </tr>
-                  </React.Fragment>
+                  </SortableYearlyBody>
                 );
               })}
-            </tbody>
-          </table>
+              </table>
+            </SortableContext>
+          </DndContext>
         </div>
       </div>
     </div>
