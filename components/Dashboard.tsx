@@ -8,6 +8,7 @@ import { Loader2, TrendingUp, JapaneseYen, Clock, Calculator, Palette } from 'lu
 import { ChartExportMenu } from './ChartExportMenu';
 import { SectionExportMenu } from './SectionExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useUserRole } from '../contexts/UserRoleContext';
 import { DEFAULT_UNIT_PRICE } from '../constants';
 import { useCatiaStore } from '../stores/useCatiaStore';
 import { Card } from '../src/ui/components/Card';
@@ -86,6 +87,7 @@ export const Dashboard: React.FC = () => {
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const { t, language } = useLanguage();
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const { isAdmin } = useUserRole();
   const [chartColors, setChartColors] = useState<DashboardChartColors>(() => {
     const saved = localStorage.getItem('dashboard_chartColors');
     if (saved) {
@@ -353,15 +355,17 @@ export const Dashboard: React.FC = () => {
 
           <div className="flex flex-col md:flex-row items-end md:items-center gap-4">
             <SectionExportMenu sections={DASHBOARD_EXPORT_SECTIONS} />
-            <button
-              data-html2canvas-ignore="true"
-              onClick={() => setShowKpiColorPicker(!showKpiColorPicker)}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-              title="ダッシュボードの色をカスタマイズ"
-            >
-              <Palette className="w-4 h-4" />
-              色変更
-            </button>
+            {isAdmin && (
+              <button
+                data-html2canvas-ignore="true"
+                onClick={() => setShowKpiColorPicker(!showKpiColorPicker)}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                title="ダッシュボードの色をカスタマイズ"
+              >
+                <Palette className="w-4 h-4" />
+                色変更
+              </button>
+            )}
             <div className="w-full lg:w-auto flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-3 bg-sky-50 px-4 py-3 rounded-lg border border-sky-100">
                 <Calculator className="w-5 h-5 text-blue-600" />
@@ -371,7 +375,8 @@ export const Dashboard: React.FC = () => {
                     <span className="text-sm font-medium text-slate-800 mr-2">1 JPY = </span>
                     <input
                       type="number"
-                      className="w-20 h-8 text-sm border-sky-200 rounded px-2 focus:ring-1 focus:ring-sky-500 text-right font-semibold text-slate-800 bg-white dark:bg-slate-900"
+                      disabled={!isAdmin}
+                      className="w-20 h-8 text-sm border-sky-200 rounded px-2 focus:ring-1 focus:ring-sky-500 text-right font-semibold text-slate-800 bg-white dark:bg-slate-900 disabled:opacity-75 disabled:cursor-not-allowed"
                       value={exchangeRate}
                       onChange={handleRateChange}
                     />
@@ -382,7 +387,8 @@ export const Dashboard: React.FC = () => {
                   <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider pb-1">{t('dashboard.fx.hourly', 'Hourly Rate (JPY)')}</span>
                   <input
                     type="number"
-                    className="w-20 h-8 text-sm border-sky-200 rounded px-2 focus:ring-1 focus:ring-sky-500 text-right font-semibold text-slate-800 bg-white dark:bg-slate-900"
+                    disabled={!isAdmin}
+                    className="w-20 h-8 text-sm border-sky-200 rounded px-2 focus:ring-1 focus:ring-sky-500 text-right font-semibold text-slate-800 bg-white dark:bg-slate-900 disabled:opacity-75 disabled:cursor-not-allowed"
                     value={unitPrice}
                     onChange={handleUnitPriceChange}
                   />
@@ -394,7 +400,8 @@ export const Dashboard: React.FC = () => {
                   <input
                     type="number"
                     min={0}
-                    className="w-full h-9 text-sm border-emerald-200 rounded px-2 focus:ring-1 focus:ring-emerald-500 text-right font-semibold text-emerald-900 bg-white dark:bg-slate-900"
+                    disabled={!isAdmin}
+                    className="w-full h-9 text-sm border-emerald-200 rounded px-2 focus:ring-1 focus:ring-emerald-500 text-right font-semibold text-emerald-900 bg-white dark:bg-slate-900 disabled:opacity-75 disabled:cursor-not-allowed"
                     value={licenseComputers}
                     onChange={handleLicenseComputersChange}
                   />
@@ -404,7 +411,8 @@ export const Dashboard: React.FC = () => {
                   <input
                     type="number"
                     min={0}
-                    className="w-full h-9 text-sm border-emerald-200 rounded px-2 focus:ring-1 focus:ring-emerald-500 text-right font-semibold text-emerald-900 bg-white dark:bg-slate-900"
+                    disabled={!isAdmin}
+                    className="w-full h-9 text-sm border-emerald-200 rounded px-2 focus:ring-1 focus:ring-emerald-500 text-right font-semibold text-emerald-900 bg-white dark:bg-slate-900 disabled:opacity-75 disabled:cursor-not-allowed"
                     value={licensePerComputer}
                     onChange={handleLicensePerComputerChange}
                   />

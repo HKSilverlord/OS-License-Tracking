@@ -18,11 +18,13 @@ import { dbService } from './services/dbService';
 import { exportToExcel } from './services/exportService';
 import { LayoutDashboard, Table, Plus, LogOut, Download, Menu, X, Search, Languages, BarChart3, Calendar as CalendarIcon, TrendingUp, Wrench, ChevronLeft, ChevronRight, Monitor, Moon, Sun } from 'lucide-react';
 import { useLanguage } from './contexts/LanguageContext';
+import { useUserRole } from './contexts/UserRoleContext';
 import { supabase } from './lib/supabase';
 import type { Session } from '@supabase/supabase-js';
 
 function App() {
   const { t, language, toggleLanguage } = useLanguage();
+  const { setRole, setIsLoading, isAdmin } = useUserRole();
   const languageLabels = {
     ja: t('buttons.language.jp'),
     en: t('buttons.language.en'),
@@ -70,18 +72,47 @@ function App() {
 
   // Auth & Init Data
   useEffect(() => {
+    const fetchRole = async (userId: string) => {
+      setIsLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', userId)
+          .single();
+        
+        if (error) {
+          console.warn('User does not have a role row, defaulting to viewer', error);
+          setRole('user');
+        } else {
+          setRole(data?.role as any || 'user');
+        }
+      } catch (e) {
+        console.error('Error fetching role:', e);
+        setRole('user');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      if (session?.user?.id) fetchRole(session.user.id);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      if (session?.user?.id) {
+        fetchRole(session.user.id);
+      } else {
+        setRole(null);
+      }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [setRole, setIsLoading]);
 
   useEffect(() => {
     const init = async () => {
@@ -250,7 +281,9 @@ function App() {
                   </div>
                   <div className="ml-3 overflow-hidden">
                     <p className="text-sm font-medium text-white truncate">{session.user.email}</p>
-                    <p className="text-xs text-slate-400 truncate">Administrator</p>
+                    <p className="text-xs text-slate-400 truncate">
+                      {isAdmin ? 'Administrator' : 'Viewer'}
+                    </p>
                   </div>
                 </div>
                 <button
@@ -394,13 +427,15 @@ function App() {
                 <span className="hidden md:inline">{t('buttons.export')}</span>
               </button>
               
-              <button
-                onClick={handleOpenProjectModal}
-                className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-all shadow-sm active:scale-95"
-              >
-                <Plus className="w-4 h-4 md:mr-2" />
-                <span className="hidden md:inline">{t('buttons.project')}</span>
-              </button>
+              {isAdmin && (
+                <button
+                  onClick={handleOpenProjectModal}
+                  className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-all shadow-sm active:scale-95"
+                >
+                  <Plus className="w-4 h-4 md:mr-2" />
+                  <span className="hidden md:inline">{t('buttons.project')}</span>
+                </button>
+              )}
             </div>
           </header>
 

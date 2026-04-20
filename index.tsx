@@ -4,6 +4,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { UserRoleProvider } from './contexts/UserRoleContext';
 // Initialize DI container
 import './src/ioc/container';
 
@@ -16,7 +17,9 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
     <LanguageProvider>
-      <App />
+      <UserRoleProvider>
+        <App />
+      </UserRoleProvider>
     </LanguageProvider>
   </React.StrictMode>
 );

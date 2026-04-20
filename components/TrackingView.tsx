@@ -3,8 +3,9 @@ import { Project, MonthlyRecord, PeriodType } from '../types';
 import { dbService } from '../services/dbService';
 import { getMonthsForPeriod } from '../utils/helpers';
 import { TABLE_COLUMN_WIDTHS, STICKY_CLASSES } from '../utils/tableStyles';
-import { Save, Loader2, MoreVertical, Edit, Trash, Search, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Check, ListChecks, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Save, Loader2, MoreVertical, Edit, Trash, Search, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Check, ListChecks, PanelLeftClose, PanelLeftOpen, Eye } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useUserRole } from '../contexts/UserRoleContext';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -75,7 +76,8 @@ const ProjectActionsMenu: React.FC<{
   onMoveDown: () => void;
   t: (key: string, defaultVal?: string) => string;
   disableReorder?: boolean;
-}> = ({ project, onEdit, onDelete, onMoveUp, onMoveDown, t, disableReorder }) => {
+  isAdmin?: boolean;
+}> = ({ project, onEdit, onDelete, onMoveUp, onMoveDown, t, disableReorder, isAdmin }) => {
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -99,65 +101,75 @@ const ProjectActionsMenu: React.FC<{
         triggerRef={triggerRef}
       >
         <div className="flex flex-col">
-          <button
-            type="button"
-            disabled={disableReorder}
-            onClick={(e) => {
-              e.stopPropagation();
-              onMoveUp();
-              setIsOpen(false);
-            }}
-            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${disableReorder
-              ? 'text-slate-400 dark:text-slate-500 cursor-not-allowed'
-              : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
-              }`}
-            title={disableReorder ? t('tracker.sortDisabled', 'Sort by No. to reorder') : ''}
-          >
-            <ArrowUp className="w-4 h-4" />
-            {t('common.moveUp', 'Move Up')}
-          </button>
-          <button
-            type="button"
-            disabled={disableReorder}
-            onClick={(e) => {
-              e.stopPropagation();
-              onMoveDown();
-              setIsOpen(false);
-            }}
-            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${disableReorder
-              ? 'text-slate-400 dark:text-slate-500 cursor-not-allowed'
-              : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
-              }`}
-            title={disableReorder ? t('tracker.sortDisabled', 'Sort by No. to reorder') : ''}
-          >
-            <ArrowDown className="w-4 h-4" />
-            {t('common.moveDown', 'Move Down')}
-          </button>
-          <div className="border-t border-slate-100 dark:border-slate-700 my-1"></div>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit();
-              setIsOpen(false);
-            }}
-            className="w-full px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
-          >
-            <Edit className="w-4 h-4" />
-            {t('common.edit', 'Edit')}
-          </button>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-              setIsOpen(false);
-            }}
-            className="w-full px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 flex items-center gap-2"
-          >
-            <Trash className="w-4 h-4" />
-            {t('common.delete', 'Delete')}
-          </button>
+          {isAdmin && (
+            <>
+              <button
+                type="button"
+                disabled={disableReorder}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMoveUp();
+                  setIsOpen(false);
+                }}
+                className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${disableReorder
+                  ? 'text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                  : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  }`}
+                title={disableReorder ? t('tracker.sortDisabled', 'Sort by No. to reorder') : ''}
+              >
+                <ArrowUp className="w-4 h-4" />
+                {t('common.moveUp', 'Move Up')}
+              </button>
+              <button
+                type="button"
+                disabled={disableReorder}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMoveDown();
+                  setIsOpen(false);
+                }}
+                className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${disableReorder
+                  ? 'text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                  : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  }`}
+                title={disableReorder ? t('tracker.sortDisabled', 'Sort by No. to reorder') : ''}
+              >
+                <ArrowDown className="w-4 h-4" />
+                {t('common.moveDown', 'Move Down')}
+              </button>
+              <div className="border-t border-slate-100 dark:border-slate-700 my-1"></div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit();
+                  setIsOpen(false);
+                }}
+                className="w-full px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
+              >
+                <Edit className="w-4 h-4" />
+                {t('common.edit', 'Edit')}
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                  setIsOpen(false);
+                }}
+                className="w-full px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 flex items-center gap-2"
+              >
+                <Trash className="w-4 h-4" />
+                {t('common.delete', 'Delete')}
+              </button>
+            </>
+          )}
+          {!isAdmin && (
+            <div className="px-3 py-2 text-xs text-slate-500 flex items-center gap-2 uppercase tracking-wider font-semibold">
+              <Eye className="w-3 h-3" />
+              {t('common.viewOnly', 'View Only')}
+            </div>
+          )}
         </div>
       </DropdownMenu>
     </>
@@ -167,6 +179,7 @@ const ProjectActionsMenu: React.FC<{
 
 export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQuery, refreshTrigger }) => {
   const { t, language } = useLanguage();
+  const { isAdmin } = useUserRole();
 
   // Tabs State
   const [activeTerm, setActiveTerm] = useState<'H1' | 'H2'>('H1');
@@ -196,6 +209,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
   );
 
   const handleDragEnd = async (event: DragEndEvent) => {
+    if (!isAdmin) return;
     const { active, over } = event;
 
     if (active.id !== over?.id) {
@@ -440,6 +454,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
     field: 'planned_hours' | 'actual_hours',
     value: string
   ) => {
+    if (!isAdmin) return;
     const numValue = value === '' ? 0 : parseFloat(value);
     if (isNaN(numValue) || numValue < 0) return;
 
@@ -491,7 +506,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
   };
 
   const handleDeleteProjects = async (ids: string[]) => {
-    if (!ids.length) return;
+    if (!isAdmin || !ids.length) return;
     const targets = projects.filter(p => ids.includes(p.id));
     const confirmMessage = ids.length === 1
       ? t('tracker.confirmDeleteOne', 'Delete project "{name}"? This removes its records.').replace('{name}', targets[0]?.name || '')
@@ -518,6 +533,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
   };
 
   const handleUpdateProject = async (id: string, updates: Partial<Project>, debounceMs = 0) => {
+    if (!isAdmin) return;
     try {
       // 1. Optimistic update (Immediate UI change)
       setProjects(prev => prev.map(p => {
@@ -684,11 +700,11 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
             {/* Edit Order Toggle */}
             <button
               onClick={() => setIsEditMode(!isEditMode)}
-              disabled={sortConfig.key !== 'display_order'}
-              title={sortConfig.key !== 'display_order' ? t('tracker.reorderDisabledWithSort', 'Reordering disabled while sorted') : ''}
+              disabled={!isAdmin || sortConfig.key !== 'display_order'}
+              title={!isAdmin ? t('tracker.adminOnly', 'Admin access required') : (sortConfig.key !== 'display_order' ? t('tracker.reorderDisabledWithSort', 'Reordering disabled while sorted') : '')}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors ${isEditMode
                 ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/60'
-                : (sortConfig.key !== 'display_order' ? 'opacity-50 cursor-not-allowed text-slate-400 dark:text-slate-500' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800')
+                : (!isAdmin || sortConfig.key !== 'display_order' ? 'opacity-50 cursor-not-allowed text-slate-400 dark:text-slate-500' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800')
                 }`}
             >
               {isEditMode ? <Check className="w-4 h-4" /> : <ListChecks className="w-4 h-4" />}
@@ -705,26 +721,28 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
               <span className="hidden sm:inline">{isCollapsed ? t('tracker.expandBtn', 'Expand') : t('tracker.collapseBtn', 'Collapse')}</span>
             </button>
 
-            <button
-              onClick={handleSaveAll}
-              disabled={!hasPendingChanges || isSaving}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${hasPendingChanges && !isSaving
-                ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600'
-                : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed'
-                }`}
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {t('saving', 'Saving...')}
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  {t('saveAll', 'Save All')}
-                </>
-              )}
-            </button>
+            {isAdmin && (
+              <button
+                onClick={handleSaveAll}
+                disabled={!hasPendingChanges || isSaving}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${hasPendingChanges && !isSaving
+                  ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600'
+                  : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed'
+                  }`}
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    {t('saving', 'Saving...')}
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    {t('saveAll', 'Save All')}
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
 

@@ -13,6 +13,7 @@ import {
 import { dbService } from '../services/dbService';
 import { Project, PeriodType } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useUserRole } from '../contexts/UserRoleContext';
 import { motion } from 'framer-motion';
 
 interface PeriodWithCount {
@@ -25,6 +26,7 @@ interface PeriodWithCount {
 
 export const PeriodManagement: React.FC = () => {
   const { t } = useLanguage();
+  const { isAdmin } = useUserRole();
 
   // State
   const [periods, setPeriods] = useState<PeriodWithCount[]>([]);
@@ -232,13 +234,15 @@ export const PeriodManagement: React.FC = () => {
             {t('managePeriods', 'Create and manage periods with project assignments')}
           </p>
         </div>
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="w-5 h-5" />
-          {t('createNewPeriod', 'Create New Period')}
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-5 h-5" />
+            {t('createNewPeriod', 'Create New Period')}
+          </button>
+        )}
       </div>
 
       {/* Existing Periods List */}
@@ -289,20 +293,24 @@ export const PeriodManagement: React.FC = () => {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleEditClick(period)}
-                      className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
-                      title={t('edit', 'Edit')}
-                    >
-                      <Edit2 className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={() => handleDeletePeriod(period)}
-                      className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                      title={t('delete', 'Delete')}
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
+                    {isAdmin && (
+                      <>
+                        <button
+                          onClick={() => handleEditClick(period)}
+                          className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                          title={t('edit', 'Edit')}
+                        >
+                          <Edit2 className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeletePeriod(period)}
+                          className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                          title={t('delete', 'Delete')}
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </motion.div>
