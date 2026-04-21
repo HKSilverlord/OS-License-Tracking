@@ -75,17 +75,13 @@ function App() {
     const fetchRole = async (userId: string) => {
       setIsLoading(true);
       try {
-        const { data, error } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', userId)
-          .single();
+        const { data, error } = await supabase.rpc('get_my_role');
         
         if (error) {
-          console.warn('User does not have a role row, defaulting to viewer', error);
+          console.warn('Error fetching role via RPC, defaulting to viewer', error);
           setRole('user');
         } else {
-          setRole(data?.role as any || 'user');
+          setRole((data as any) || 'user');
         }
       } catch (e) {
         console.error('Error fetching role:', e);
