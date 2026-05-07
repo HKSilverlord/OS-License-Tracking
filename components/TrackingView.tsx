@@ -839,6 +839,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
                             value={project.exclusion_mark || ''}
                             onChange={(e) => handleProjectFieldChange(project.id, 'exclusion_mark', e.target.value)}
                             placeholder="-"
+                            readOnly={!isAdmin}
                           />
                         </td>
 
@@ -854,6 +855,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
                                 onChange={(e) => handleProjectFieldChange(project.id, 'notes', e.target.value)}
                                 placeholder=""
                                 rows={2}
+                                readOnly={!isAdmin}
                               />
                             </td>
                             <td rowSpan={2} style={{ left: `${POS_SOFTWARE}px`, width: `${LEFT_SOFTWARE_WIDTH}px` }} className={`px-2 py-2 text-xs text-slate-600 dark:text-slate-400 text-center border-b border-slate-200 dark:border-slate-700 ${stickyLeftClass} align-top group-hover:bg-slate-50 dark:group-hover:bg-slate-800/50`}>
@@ -863,6 +865,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
                                 onChange={(e) => handleProjectFieldChange(project.id, 'software', e.target.value)}
                                 placeholder="CAD"
                                 rows={2}
+                                readOnly={!isAdmin}
                               />
                             </td>
                             <td rowSpan={2} style={{ width: `${BUSINESS_CONTENT_WIDTH}px` }} className="px-2 py-2 text-xs text-slate-500 dark:text-slate-400 text-center border-r border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 align-top p-0 group-hover:bg-slate-50 dark:group-hover:bg-slate-800/50">
@@ -871,6 +874,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
                                 value={project.type || ''}
                                 onChange={(e) => handleProjectFieldChange(project.id, 'type', e.target.value)}
                                 placeholder={t('tracker.businessContent')}
+                                readOnly={!isAdmin}
                               />
                             </td>
                           </>
@@ -898,6 +902,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
                                 value={plan === 0 ? '' : plan}
                                 placeholder="-"
                                 onChange={(e) => handleValueChange(project.id, m, 'planned_hours', e.target.value)}
+                                disabled={!isAdmin}
                               />
                               {isSaving && <Save className="w-2 h-2 absolute top-1 right-1 text-blue-500 animate-pulse" />}
                             </td>
@@ -913,6 +918,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
                             onMoveDown={() => handleMoveProject(project.id, 'down')}
                             t={t}
                             disableReorder={sortConfig.key !== 'display_order'}
+                            isAdmin={isAdmin}
                           />
                         </td>
                       </tr>
@@ -942,6 +948,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
                                 value={actual === 0 ? '' : actual}
                                 placeholder="-"
                                 onChange={(e) => handleValueChange(project.id, m, 'actual_hours', e.target.value)}
+                                disabled={!isAdmin}
                               />
                               {isSaving && <Save className="w-2 h-2 absolute top-1 right-1 text-green-500 animate-pulse" />}
                             </td>
