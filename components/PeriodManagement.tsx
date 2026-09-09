@@ -6,15 +6,26 @@ import {
   X,
   Edit2,
   Trash2,
-  CheckSquare,
-  Square,
   Loader2
 } from 'lucide-react';
 import { dbService } from '../services/dbService';
-import { Project, PeriodType } from '../types';
+import { Project } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useToast, useConfirm } from '../contexts/ToastContext';
 import { useUserRole } from '../contexts/UserRoleContext';
 import { motion } from 'framer-motion';
+import type { Variants } from 'framer-motion';
+import { Skeleton } from '../src/ui/components/Skeleton';
+import { createLogger } from '../src/core/logger';
+
+const log = createLogger('PeriodManagement');
+
+/** Postgres unique-violation (duplicate period label). */
+const isDuplicateKeyError = (error: unknown): boolean =>
+  typeof error === 'object' &&
+  error !== null &&
+  'code' in error &&
+  (error as { code?: unknown }).code === '23505';
 
 interface PeriodWithCount {
   label: string;
@@ -26,6 +37,8 @@ interface PeriodWithCount {
 
 export const PeriodManagement: React.FC = () => {
   const { t } = useLanguage();
+  const toast = useToast();
+  const confirm = useConfirm();
   const { isAdmin } = useUserRole();
 
   // State
@@ -58,8 +71,8 @@ export const PeriodManagement: React.FC = () => {
       setPeriods(periodsData);
       setAllProjects(projectsData);
     } catch (error) {
-      console.error('Error loading data:', error);
-      alert('Failed to load data');
+      log.error('Error loading data:', error);
+      toast.error(t('toast.loadFailed', 'Failed to load data'));
     } finally {
       setLoading(false);
     }
@@ -93,7 +106,7 @@ export const PeriodManagement: React.FC = () => {
   // Create period
   const handleCreatePeriod = async () => {
     if (selectedProjectIds.length === 0) {
-      alert(t('pleaseSelectAtLeastOneProject', 'Please select at least one project'));
+      toast.warning(t('periodManagement.selectProjects', 'Select at least one project'));
       return;
     }
 
@@ -108,16 +121,16 @@ export const PeriodManagement: React.FC = () => {
         detail: { periodLabel }
       }));
 
-      alert(t('periodCreatedSuccessfully', 'Period created successfully'));
+      toast.success(t('alerts.periodCreated', 'Period created'));
       setIsCreateModalOpen(false);
       resetForm();
       await loadData();
-    } catch (error: any) {
-      console.error('Error creating period:', error);
-      if (error.code === '23505') {
-        alert(t('periodAlreadyExists', 'This period already exists'));
+    } catch (error) {
+      log.error('Error creating period:', error);
+      if (isDuplicateKeyError(error)) {
+        toast.error(t('alerts.duplicatePeriod', 'This period already exists'));
       } else {
-        alert(t('failedToCreatePeriod', 'Failed to create period'));
+        toast.error(t('alerts.periodCreateFailed', 'Failed to create period'));
       }
     } finally {
       setSubmitting(false);
@@ -132,8 +145,8 @@ export const PeriodManagement: React.FC = () => {
       setSelectedProjectIds(periodProjects.map(p => p.id));
       setIsEditModalOpen(true);
     } catch (error) {
-      console.error('Error loading period projects:', error);
-      alert('Failed to load period projects');
+      log.error('Error loading period projects:', error);
+      toast.error(t('alerts.projectsLoadFailed', 'Failed to load projects'));
     }
   };
 
@@ -144,13 +157,13 @@ export const PeriodManagement: React.FC = () => {
     try {
       setSubmitting(true);
       await dbService.updatePeriodProjects(selectedPeriod.label, selectedProjectIds);
-      alert(t('periodUpdatedSuccessfully', 'Period updated successfully'));
+      toast.success(t('periodManagement.updated', 'Period updated'));
       setIsEditModalOpen(false);
       resetForm();
       await loadData();
     } catch (error) {
-      console.error('Error updating period:', error);
-      alert(t('failedToUpdatePeriod', 'Failed to update period'));
+      log.error('Error updating period:', error);
+      toast.error(t('periodManagement.updateFailed', 'Failed to update period'));
     } finally {
       setSubmitting(false);
     }
@@ -158,20 +171,23 @@ export const PeriodManagement: React.FC = () => {
 
   // Delete period
   const handleDeletePeriod = async (period: PeriodWithCount) => {
-    const confirmMsg = t(
-      'confirmDeletePeriod',
-      `Are you sure you want to delete period ${period.label}? This will remove all project assignments.`
-    );
+    const confirmed = await confirm({
+      title: `${t('delete', 'Delete')} ${period.label}`,
+      message: t('periodManagement.confirmDelete', 'Delete this period and its linked data?'),
+      confirmLabel: t('delete', 'Delete'),
+      cancelLabel: t('cancel', 'Cancel'),
+      danger: true
+    });
 
-    if (!confirm(confirmMsg.replace('${period.label}', period.label))) return;
+    if (!confirmed) return;
 
     try {
       await dbService.deletePeriod(period.label);
-      alert(t('periodDeletedSuccessfully', 'Period deleted successfully'));
+      toast.success(t('periodManagement.deleted', 'Period deleted'));
       await loadData();
     } catch (error) {
-      console.error('Error deleting period:', error);
-      alert(t('failedToDeletePeriod', 'Failed to delete period'));
+      log.error('Error deleting period:', error);
+      toast.error(t('periodManagement.deleteFailed', 'Failed to delete period'));
     }
   };
 
@@ -197,13 +213,19 @@ export const PeriodManagement: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      <div className="p-6 space-y-6" aria-busy="true" aria-label={t('common.loading', 'Loading...')}>
+        <div className="space-y-2">
+          <Skeleton className="h-7 w-64" />
+          <Skeleton className="h-4 w-96 max-w-full" />
+        </div>
+        <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-4">
+          <Skeleton.Table rows={5} cols={3} />
+        </div>
       </div>
     );
   }
 
-  const containerVariants = {
+  const containerVariants: Variants = {
     hidden: { opacity: 0 },
     show: {
       opacity: 1,
@@ -213,7 +235,7 @@ export const PeriodManagement: React.FC = () => {
     }
   };
 
-  const itemVariants = {
+  const itemVariants: Variants = {
     hidden: { opacity: 0, x: -20 },
     show: { opacity: 1, x: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
   };
@@ -237,7 +259,7 @@ export const PeriodManagement: React.FC = () => {
         {isAdmin && (
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
           >
             <Plus className="w-5 h-5" />
             {t('createNewPeriod', 'Create New Period')}
@@ -278,7 +300,7 @@ export const PeriodManagement: React.FC = () => {
                       <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                         {period.year} {period.half}
                         <span className="text-sm font-normal text-slate-600 dark:text-slate-400 ml-2">
-                          ({period.half === 'H1' ? '1月-6月' : '7月-12月'})
+                          ({period.half === 'H1' ? t('periodManagement.monthRange.h1') : t('periodManagement.monthRange.h2')})
                         </span>
                       </h3>
                     </div>
@@ -446,8 +468,8 @@ const PeriodFormModal: React.FC<PeriodFormModalProps> = ({
                   onChange={(e) => onHalfChange?.(e.target.value as 'H1' | 'H2')}
                   className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 >
-                  <option value="H1">H1 (1月-6月 / Jan-Jun)</option>
-                  <option value="H2">H2 (7月-12月 / Jul-Dec)</option>
+                  <option value="H1">{t('modals.period.option.h1', 'H1 (Jan-Jun)')}</option>
+                  <option value="H2">{t('modals.period.option.h2', 'Jul-Dec')}</option>
                 </select>
               </div>
             </div>
@@ -459,7 +481,7 @@ const PeriodFormModal: React.FC<PeriodFormModalProps> = ({
               {t('searchProjects', 'Search Projects')}
             </label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 dark:text-slate-500" />
               <input
                 type="text"
                 value={searchQuery}
@@ -509,7 +531,7 @@ const PeriodFormModal: React.FC<PeriodFormModalProps> = ({
                       type="checkbox"
                       checked={selectedProjectIds.includes(project.id)}
                       onChange={() => onToggleProject(project.id)}
-                      className="w-4 h-4 text-blue-600 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 rounded focus:ring-blue-500 focus:ring-offset-0 dark:focus:ring-offset-slate-900"
+                      className="w-4 h-4 text-blue-600 dark:text-blue-500 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 rounded focus:ring-blue-500 focus:ring-offset-0 dark:focus:ring-offset-slate-900"
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
@@ -539,7 +561,7 @@ const PeriodFormModal: React.FC<PeriodFormModalProps> = ({
           <button
             onClick={onSubmit}
             disabled={submitting || selectedProjectIds.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
             {isEditMode ? t('updatePeriod', 'Update Period') : t('createPeriod', 'Create Period')}

@@ -4,6 +4,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { ToastProvider } from './contexts/ToastContext';
 import { UserRoleProvider } from './contexts/UserRoleContext';
 // Initialize DI container
 import './src/ioc/container';
@@ -17,9 +18,11 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
     <LanguageProvider>
-      <UserRoleProvider>
-        <App />
-      </UserRoleProvider>
+      <ToastProvider>
+        <UserRoleProvider>
+          <App />
+        </UserRoleProvider>
+      </ToastProvider>
     </LanguageProvider>
   </React.StrictMode>
 );

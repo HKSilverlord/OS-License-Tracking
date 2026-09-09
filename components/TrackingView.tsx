@@ -13,7 +13,13 @@ import { CSS } from '@dnd-kit/utilities';
 // ... imports ...
 import { EditProjectModal } from './EditProjectModal';
 import { DropdownMenu } from './DropdownMenu';
-import { formatCurrency } from '../utils/helpers';
+import { useToast, useConfirm } from '../contexts/ToastContext';
+import { setNavigationBlocker } from '../utils/navigationGuard';
+import { resolvePrices } from '../services/pricing';
+import { createLogger } from '../src/core/logger';
+import { Skeleton } from '../src/ui/components/Skeleton';
+
+const log = createLogger('TrackingView');
 
 interface TrackingViewProps {
   currentYear: number;
@@ -54,7 +60,9 @@ const SortableRow = ({ children, id, disabled, className }: { children: React.Re
   );
 };
 
-const SortableRowContext = React.createContext<{ listeners: any } | null>(null);
+type SortableListeners = ReturnType<typeof useSortable>['listeners'];
+
+const SortableRowContext = React.createContext<{ listeners: SortableListeners } | null>(null);
 
 const DragHandleCell = ({ disabled }: { disabled?: boolean }) => {
   const context = React.useContext(SortableRowContext);
@@ -69,7 +77,6 @@ const DragHandleCell = ({ disabled }: { disabled?: boolean }) => {
 };
 
 const ProjectActionsMenu: React.FC<{
-  project: Project;
   onEdit: () => void;
   onDelete: () => void;
   onMoveUp: () => void;
@@ -77,7 +84,7 @@ const ProjectActionsMenu: React.FC<{
   t: (key: string, defaultVal?: string) => string;
   disableReorder?: boolean;
   isAdmin?: boolean;
-}> = ({ project, onEdit, onDelete, onMoveUp, onMoveDown, t, disableReorder, isAdmin }) => {
+}> = ({ onEdit, onDelete, onMoveUp, onMoveDown, t, disableReorder, isAdmin }) => {
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -180,6 +187,8 @@ const ProjectActionsMenu: React.FC<{
 export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQuery, refreshTrigger }) => {
   const { t, language } = useLanguage();
   const { isAdmin } = useUserRole();
+  const toast = useToast();
+  const confirm = useConfirm();
 
   // Tabs State
   const [activeTerm, setActiveTerm] = useState<'H1' | 'H2'>('H1');
@@ -189,7 +198,6 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
   const [records, setRecords] = useState<Record<string, MonthlyRecord[]>>({}); // Key: ProjectId
   const [loading, setLoading] = useState(true);
   const [savingStatus, setSavingStatus] = useState<Record<string, boolean>>({}); // Key: `${projectId}-${month}-${field}`
-  const [deleting, setDeleting] = useState(false);
   const [pendingChanges, setPendingChanges] = useState<Record<string, MonthlyRecord>>({}); // Key: `${projectId}-${month}`
   const [isSaving, setIsSaving] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -199,6 +207,20 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
   // Local Filter & Sort State
   const [localFilter, setLocalFilter] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof Project | null; direction: 'asc' | 'desc' }>({ key: 'display_order', direction: 'asc' });
+
+  const pendingCount = Object.keys(pendingChanges).length;
+  const hasPendingChanges = pendingCount > 0;
+
+  // Latest pending edits, readable from effects without re-running them.
+  const pendingChangesRef = useRef(pendingChanges);
+  useEffect(() => {
+    pendingChangesRef.current = pendingChanges;
+  }, [pendingChanges]);
+
+  // U3 bookkeeping: the period the view is currently showing, and whether the
+  // shell has just asked the user to confirm leaving with unsaved edits.
+  const periodRef = useRef(currentPeriodLabel);
+  const leaveConfirmedRef = useRef(false);
 
   // DnD Sensors
   const sensors = useSensors(
@@ -230,14 +252,14 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
         // Trigger backend update
         const updates = updatedItems.map(p => ({ id: p.id, display_order: p.display_order || 0 }));
 
-        console.log("Saving new order for", updates.length, "items");
+        log.debug('Saving new order for', updates.length, 'items');
 
         // Handle persistence
         dbService.updateProjectDisplayOrders(updates)
-          .then(() => console.log("Order saved successfully"))
+          .then(() => log.debug('Order saved successfully'))
           .catch(err => {
-            console.error("Failed to update order", err);
-            alert("Failed to save new order. Please refresh.");
+            log.error('Failed to update order', err);
+            toast.error(t('tracker.reorderFailed', 'Could not save the new order. Please refresh.'));
           });
 
         return updatedItems;
@@ -246,13 +268,48 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
   };
 
   // Debounce refs
-  const debounceTimers = useRef<Record<string, any>>({});
+  const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const [yearStr, typeStr] = currentPeriodLabel.split('-');
   const year = parseInt(yearStr);
   const periodType = typeStr as PeriodType;
-  const months = useMemo(() => getMonthsForPeriod(year, periodType), [year, periodType]);
+  const months = useMemo(() => getMonthsForPeriod(periodType), [periodType]);
+
+  /** Cancels every debounced project-field save; they all target the current period. */
+  const clearDebounceTimers = useCallback(() => {
+    Object.values(debounceTimers.current).forEach(timer => clearTimeout(timer));
+    debounceTimers.current = {};
+  }, []);
+
+  /**
+   * The single place that throws pending edits away. Every caller has already
+   * obtained the user's consent — nothing else may clear `pendingChanges`.
+   */
+  const discardPendingChanges = useCallback(() => {
+    clearDebounceTimers();
+    leaveConfirmedRef.current = false;
+    setPendingChanges({});
+  }, [clearDebounceTimers]);
+
+  /** Asks before losing edits. Resolves true when it is safe to continue. */
+  const confirmDiscardPending = useCallback(async (): Promise<boolean> => {
+    if (Object.keys(pendingChangesRef.current).length === 0) return true;
+    return confirm({
+      title: t('tracker.unsavedTitle', 'Unsaved changes'),
+      message: t('tracker.unsavedLeaveConfirm', 'You have unsaved changes. Leave without saving?'),
+      confirmLabel: t('common.leave', 'Leave'),
+      cancelLabel: t('common.stay', 'Stay'),
+      danger: true,
+    });
+  }, [confirm, t]);
+
+  const handleTermChange = useCallback(async (term: 'H1' | 'H2') => {
+    if (term === activeTerm) return;
+    if (!(await confirmDiscardPending())) return; // user chose to stay — abort the switch
+    discardPendingChanges();
+    setActiveTerm(term);
+  }, [activeTerm, confirmDiscardPending, discardPendingChanges]);
 
   const formatMonthLabel = useCallback((month: number) => {
     if (language === 'ja') return `${month}月`;
@@ -301,10 +358,10 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
         await dbService.moveProjectDown(projectId, currentPeriodLabel);
       }
     } catch (error) {
-      console.error("Failed to move project", error);
+      log.error('Failed to move project', error);
       // Revert on error? For now, we assume success or user will refresh
       // fetchData(); // Prevent immediate reload to avoid race conditions/flicker
-      alert("Failed to move project. Please refresh."); // Inform user instead
+      toast.error(t('tracker.moveFailed', 'Could not move the project. Please refresh.'));
     }
   };
 
@@ -377,10 +434,12 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
       });
       setRecords(groupedRecords);
     } catch (error) {
-      console.error("Failed to load data", error);
+      log.error('Failed to load data', error);
+      toast.error(t('toast.loadFailed', 'Failed to load data'));
     } finally {
       setLoading(false);
     }
+    // Deliberately keyed on the period only: `toast`/`t` must not trigger a refetch.
   }, [currentPeriodLabel]);
 
   useEffect(() => {
@@ -401,30 +460,85 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
     }
   }, [refreshTrigger, fetchData]);
 
-  // Cleanup debounce timers on unmount and period change
+  // Cleanup debounce timers on unmount
   useEffect(() => {
     return () => {
       // Clear all pending timers on unmount
-      Object.values(debounceTimers.current).forEach(timer => clearTimeout(timer as any));
+      Object.values(debounceTimers.current).forEach(timer => clearTimeout(timer));
       debounceTimers.current = {};
     };
   }, []);
 
+  /* ---------------------------------------------------------------- *
+   * U3 — unsaved-changes guard
+   * ---------------------------------------------------------------- */
+
+  // (a) In-app navigation: the shell calls confirmNavigation() before every
+  // route/year change it controls and only proceeds when this returns null or
+  // the user accepts.
   useEffect(() => {
-    // Clear all pending timers and changes when period changes
-    Object.values(debounceTimers.current).forEach(timer => clearTimeout(timer as any));
-    debounceTimers.current = {};
-    setPendingChanges({});
-  }, [currentPeriodLabel]);
+    return setNavigationBlocker(() => {
+      if (pendingCount === 0) return null;
+      leaveConfirmedRef.current = true;
+      return t('tracker.unsavedLeaveConfirm', 'You have unsaved changes. Leave without saving?');
+    });
+  }, [pendingCount, t]);
+
+  // (b) Refresh / tab close.
+  useEffect(() => {
+    if (pendingCount === 0) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [pendingCount]);
+
+  // (c) The period changed. This used to drop every pending edit silently — the
+  // core of U3. Now the edits are only thrown away once the user has agreed:
+  // the H1/H2 tabs clear them in handleTermChange, and a year change from the
+  // shell passes through the blocker above. If neither happened the edits are
+  // kept (each pending record carries its own period_label, so "Save All" still
+  // writes them to the period they were typed in) and the user is told.
+  useEffect(() => {
+    if (periodRef.current === currentPeriodLabel) return;
+    periodRef.current = currentPeriodLabel;
+
+    // Debounced project-field saves always target the period being left.
+    clearDebounceTimers();
+
+    if (Object.keys(pendingChangesRef.current).length === 0) return;
+
+    if (leaveConfirmedRef.current) {
+      leaveConfirmedRef.current = false;
+      setPendingChanges({});
+      return;
+    }
+
+    toast.warning(
+      t('tracker.unsavedKept', 'Your unsaved changes were kept. Use Save All to store them.')
+    );
+  }, [currentPeriodLabel, clearDebounceTimers, toast, t]);
+
+  /** Cell keys the per-cell save indicator watches for one record. */
+  const savingKeysFor = (record: MonthlyRecord): string[] => [
+    `${record.project_id}-${record.month}-planned_hours`,
+    `${record.project_id}-${record.month}-actual_hours`,
+  ];
 
   const handleSaveAll = async () => {
     const changesToSave: MonthlyRecord[] = Object.values(pendingChanges);
     if (changesToSave.length === 0) {
-      alert(t('noChangesToSave', 'No changes to save'));
+      toast.info(t('toast.nothingToSave', 'No changes to save'));
       return;
     }
 
     setIsSaving(true);
+    const inFlight: Record<string, boolean> = {};
+    changesToSave.forEach(record => savingKeysFor(record).forEach(key => { inFlight[key] = true; }));
+    setSavingStatus(inFlight);
+
     try {
       for (const record of changesToSave) {
         await dbService.upsertRecord({
@@ -435,15 +549,25 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
           planned_hours: record.planned_hours || 0,
           actual_hours: record.actual_hours || 0
         });
+        setSavingStatus(prev => {
+          const next = { ...prev };
+          savingKeysFor(record).forEach(key => { delete next[key]; });
+          return next;
+        });
       }
 
       setPendingChanges({});
+      leaveConfirmedRef.current = false;
+      // Dashboard, TotalView and YearlyDataView refetch on this event — keep it.
       window.dispatchEvent(new CustomEvent('dataUpdated'));
-      alert(t('changesSavedSuccessfully', 'All changes saved successfully!'));
-    } catch (err: any) {
-      console.error('Batch save failed:', err);
-      alert(t('saveFailed', 'Failed to save changes. Please try again.') + '\n\nError: ' + (err.message || err));
+      toast.success(
+        t('tracker.savedCount', 'Saved {count} change(s)').replace('{count}', String(changesToSave.length))
+      );
+    } catch (err) {
+      log.error('Batch save failed:', err);
+      toast.error(t('toast.saveFailed', 'Save failed'));
     } finally {
+      setSavingStatus({});
       setIsSaving(false);
     }
   };
@@ -457,6 +581,9 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
     if (!isAdmin) return;
     const numValue = value === '' ? 0 : parseFloat(value);
     if (isNaN(numValue) || numValue < 0) return;
+
+    // A fresh edit invalidates any earlier "leave without saving" prompt.
+    leaveConfirmedRef.current = false;
 
     const currentRecord = records[projectId]?.find(r => r.month === month);
     const otherField = field === 'planned_hours' ? 'actual_hours' : 'planned_hours';
@@ -509,14 +636,19 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
     if (!isAdmin || !ids.length) return;
     const targets = projects.filter(p => ids.includes(p.id));
     const confirmMessage = ids.length === 1
-      ? t('tracker.confirmDeleteOne', 'Delete project "{name}"? This removes its records.').replace('{name}', targets[0]?.name || '')
+      ? t('tracker.confirmDeleteProject', 'Delete this project? This cannot be undone.')
       : t('tracker.confirmDeleteMany', 'Delete {count} projects and their records?').replace('{count}', `${ids.length}`);
-    const nameList = targets.map(t => t.name).join(', ');
-    const message = nameList ? `${confirmMessage}\n${nameList}` : confirmMessage;
+    const nameList = targets.map(p => p.name).join(', ');
 
-    if (!window.confirm(message)) return;
+    const accepted = await confirm({
+      title: t('common.delete', 'Delete'),
+      message: nameList ? `${confirmMessage}\n${nameList}` : confirmMessage,
+      confirmLabel: t('common.delete', 'Delete'),
+      cancelLabel: t('common.cancel', 'Cancel'),
+      danger: true,
+    });
+    if (!accepted) return;
 
-    setDeleting(true);
     try {
       await dbService.deleteProjects(ids);
       setProjects(prev => prev.filter(p => !ids.includes(p.id)));
@@ -525,10 +657,11 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
         ids.forEach(id => { delete updated[id]; });
         return updated;
       });
+      window.dispatchEvent(new CustomEvent('dataUpdated'));
+      toast.success(t('toast.deleted', 'Deleted'));
     } catch (error) {
-      console.error("Failed to delete projects", error);
-    } finally {
-      setDeleting(false);
+      log.error('Failed to delete projects', error);
+      toast.error(t('toast.deleteFailed', 'Delete failed'));
     }
   };
 
@@ -578,8 +711,9 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
           // Dispatch event only after successful save
           window.dispatchEvent(new CustomEvent('dataUpdated'));
         } catch (error) {
-          console.error("Failed to save project update", error);
+          log.error('Failed to save project update', error);
           // Could revert changes here if strict data integrity needed
+          toast.error(t('toast.saveFailed', 'Save failed'));
         }
       };
 
@@ -603,8 +737,8 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
       }
 
     } catch (error) {
-      console.error("Failed to update project", error);
-      alert("Failed to update project");
+      log.error('Failed to update project', error);
+      toast.error(t('toast.saveFailed', 'Save failed'));
       throw error;
     }
   };
@@ -615,7 +749,17 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
   };
 
   if (loading) {
-    return <div className="flex justify-center items-center h-64"><Loader2 className="animate-spin h-8 w-8 text-blue-600" /></div>;
+    return (
+      <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-2 sm:p-4 md:p-6 overflow-hidden">
+        <div
+          className="w-full border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm bg-white dark:bg-slate-900 p-4 overflow-hidden"
+          aria-busy="true"
+          aria-label={t('common.loading', 'Loading…')}
+        >
+          <Skeleton.Table rows={8} cols={14} />
+        </div>
+      </div>
+    );
   }
 
   // Use shared table styling constants
@@ -635,9 +779,6 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
   const PRICE_WIDTH = 100;
 
   const { leftCell: stickyLeftClass, leftHeader: stickyLeftHeaderClass, rightCell: stickyRightClass, rightHeader: stickyRightHeaderClass, header: stickyHeaderZ, corner: stickyCornerZ } = STICKY_CLASSES;
-
-  const pendingCount = Object.keys(pendingChanges).length;
-  const hasPendingChanges = pendingCount > 0;
 
   // Calculate sticky positions
   // CODE column is effectively hidden (width 0), so we can skip it or it will calculate to same pos
@@ -665,18 +806,22 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
             {/* Period Tabs */}
             <div className="ml-8 flex items-end gap-6">
               <button
-                onClick={() => setActiveTerm('H1')}
+                type="button"
+                onClick={() => { void handleTermChange('H1'); }}
+                aria-current={activeTerm === 'H1'}
                 className={`pb-2 text-sm font-bold transition-all border-b-2 ${activeTerm === 'H1'
-                  ? 'text-slate-900 dark:text-white border-blue-600'
+                  ? 'text-slate-900 dark:text-white border-blue-600 dark:border-blue-400'
                   : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-200'
                   }`}
               >
                 H1 (Jan-Jun)
               </button>
               <button
-                onClick={() => setActiveTerm('H2')}
+                type="button"
+                onClick={() => { void handleTermChange('H2'); }}
+                aria-current={activeTerm === 'H2'}
                 className={`pb-2 text-sm font-bold transition-all border-b-2 ${activeTerm === 'H2'
-                  ? 'text-slate-900 dark:text-white border-blue-600'
+                  ? 'text-slate-900 dark:text-white border-blue-600 dark:border-blue-400'
                   : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-200'
                   }`}
               >
@@ -824,6 +969,10 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
               <SortableContext items={filteredAndSortedProjects.map(p => p.id)} strategy={verticalListSortingStrategy}>
                 {filteredAndSortedProjects.map((project, index) => {
                   const projRecords = records[project.id] || [];
+                  // getProjects(period) already merged the period_projects prices into
+                  // the project, so the period tier is empty here; resolvePrices keeps
+                  // the plan/actual/unit_price fall-through in one place (C1).
+                  const prices = resolvePrices(null, project);
 
                   return (
                     <SortableRow key={project.id} id={project.id} disabled={!isEditMode || sortConfig.key !== 'display_order'}>
@@ -882,7 +1031,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
 
                         {/* Price Column */}
                         <td style={{ width: `${PRICE_WIDTH}px` }} className="px-2 py-2 text-xs text-slate-500 dark:text-slate-400 text-right border-r border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono">
-                          {(project.plan_price || project.unit_price || 0).toLocaleString()}
+                          {prices.plan.toLocaleString()}
                         </td>
 
                         <td className="px-2 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400 text-center border-r border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
@@ -911,7 +1060,6 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
 
                         <td rowSpan={2} className={`px-2 py-3 text-center border-b border-slate-200 dark:border-slate-700 ${stickyRightClass} align-top group-hover:bg-slate-50 dark:group-hover:bg-slate-800/50`} style={{ right: 0, width: `${RIGHT_ACTIONS_WIDTH}px` }}>
                           <ProjectActionsMenu
-                            project={project}
                             onEdit={() => setEditingProject(project)}
                             onDelete={() => handleDeleteProjects([project.id])}
                             onMoveUp={() => handleMoveProject(project.id, 'up')}
@@ -928,7 +1076,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
 
                         {/* Price Column */}
                         <td style={{ width: `${PRICE_WIDTH}px` }} className="px-2 py-2 text-xs text-emerald-600 dark:text-emerald-400 text-right border-r border-b border-slate-200 dark:border-slate-700 bg-emerald-50/10 dark:bg-emerald-900/10 font-mono">
-                          {(project.actual_price || project.unit_price || 0).toLocaleString()}
+                          {prices.actual.toLocaleString()}
                         </td>
 
                         <td className="px-2 py-2 text-xs font-bold text-blue-600 dark:text-blue-400 text-center border-r border-b border-slate-200 dark:border-slate-700 bg-blue-50/30 dark:bg-blue-900/20">

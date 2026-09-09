@@ -2,8 +2,21 @@
  * Chart Export Utilities
  * Multiple export formats: SVG (primary), PNG, PDF, CSV
  * Library: Recharts
+ *
+ * i18n limitation: this module is a plain utility, so the `t()` hook from
+ * LanguageContext is not available here. Its public function signatures are
+ * fixed by read-only call sites (ChartExportMenu / SectionExportMenu), so
+ * user-facing feedback is raised through the imperative `toast` API with
+ * English text. Translating these messages requires either passing a
+ * translator into every export function or moving the messaging up into the
+ * two menu components — both are call-site changes outside this workstream.
  */
 import html2canvas from 'html2canvas';
+import { toast } from '../contexts/ToastContext';
+import { createLogger } from '../src/core/logger';
+import { translate } from '../contexts/LanguageContext';
+
+const log = createLogger('chartExport');
 
 /**
  * html2canvas doesn't support oklch() / color-mix() / oklab() (Tailwind v4).
@@ -158,7 +171,8 @@ export const exportChartToSVG = async (elementId: string, filename: string = 'ch
   const chartContainer = document.getElementById(elementId);
 
   if (!chartContainer) {
-    alert(`Chart element with id "${elementId}" not found`);
+    toast.error(translate('chartExport.notFound', 'Chart not found, nothing was exported'));
+    log.error('SVG export: element not found', elementId);
     return;
   }
 
@@ -167,11 +181,11 @@ export const exportChartToSVG = async (elementId: string, filename: string = 'ch
     const svgElement = chartContainer.querySelector('svg');
 
     if (!svgElement) {
-      alert('No SVG chart found to export');
+      toast.error(translate('chartExport.noChart', 'No chart found to export'));
       return;
     }
 
-    console.log('📊 Exporting chart as SVG...');
+    log.debug('Exporting chart as SVG...');
 
     // Get container dimensions
     const containerRect = chartContainer.getBoundingClientRect();
@@ -189,7 +203,7 @@ export const exportChartToSVG = async (elementId: string, filename: string = 'ch
     clonedSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
 
     // Copy all computed styles inline for standalone rendering
-    console.log('🎨 Copying styles...');
+    log.debug('Copying styles...');
     inlineAllStyles(svgElement, clonedSvg);
 
     // Serialize to string
@@ -199,15 +213,16 @@ export const exportChartToSVG = async (elementId: string, filename: string = 'ch
     // Add XML declaration for proper SVG file
     svgString = '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n' + svgString;
 
-    console.log('✅ SVG created, size:', (svgString.length / 1024).toFixed(2), 'KB');
+    log.debug('SVG created, size:', (svgString.length / 1024).toFixed(2), 'KB');
 
     // Download the SVG file
     downloadFile(svgString, filename, 'image/svg+xml;charset=utf-8');
 
-    console.log('🎉 SVG export successful!');
+    log.debug('SVG export successful');
+    toast.success(translate('chartExport.done', 'Export complete'));
   } catch (error) {
-    console.error('❌ SVG export error:', error);
-    alert('Failed to export SVG: ' + (error as Error).message);
+    log.error('SVG export error:', error);
+    toast.error(`${translate('chartExport.failed', 'Export failed')}: ${(error as Error).message}`);
   }
 };
 
@@ -219,12 +234,13 @@ export const exportChartToPNG = async (elementId: string, filename: string = 'ch
   const chartContainer = document.getElementById(elementId);
 
   if (!chartContainer) {
-    alert(`Chart element with id "${elementId}" not found`);
+    toast.error(translate('chartExport.notFound', 'Chart not found, nothing was exported'));
+    log.error('PNG export: element not found', elementId);
     return;
   }
 
   try {
-    console.log('📊 Exporting chart as PNG using html2canvas...');
+    log.debug('Exporting chart as PNG using html2canvas...');
 
     const canvas = await html2canvas(chartContainer, {
       scale: 3, // High quality
@@ -246,36 +262,41 @@ export const exportChartToPNG = async (elementId: string, filename: string = 'ch
 
     canvas.toBlob((blob) => {
       if (!blob) {
-        alert('Failed to create PNG image');
+        toast.error(translate('chartExport.pngFailed', 'Export failed: could not create the PNG image'));
         return;
       }
-      console.log('✅ PNG created, size:', (blob.size / 1024).toFixed(2), 'KB');
+      log.debug('PNG created, size:', (blob.size / 1024).toFixed(2), 'KB');
       downloadFile(blob, filename, 'image/png');
+      toast.success(translate('chartExport.done', 'Export complete'));
     }, 'image/png', 1.0);
 
   } catch (error) {
-    console.error('❌ PNG export error:', error);
-    alert('Failed to export PNG: ' + (error as Error).message);
+    log.error('PNG export error:', error);
+    toast.error(`${translate('chartExport.failed', 'Export failed')}: ${(error as Error).message}`);
   }
 };
 
 /**
  * Export chart data as CSV for analysis
  */
-export const exportChartDataToCSV = (data: any[], filename: string = 'chart-data.csv'): void => {
+export const exportChartDataToCSV = (data: readonly unknown[], filename: string = 'chart-data.csv'): void => {
   try {
-    if (!data || data.length === 0) {
-      alert('No data to export');
+    const rows = (data ?? []).filter(
+      (row): row is Record<string, unknown> => typeof row === 'object' && row !== null
+    );
+
+    if (rows.length === 0) {
+      toast.error(translate('chartExport.noData', 'There is no data to export'));
       return;
     }
 
-    console.log('📊 Exporting chart data as CSV...');
+    log.debug('Exporting chart data as CSV...');
 
-    const headers = Object.keys(data[0]);
+    const headers = Object.keys(rows[0]);
 
     const csvRows = [
       headers.join(','), // Header row
-      ...data.map(row =>
+      ...rows.map(row =>
         headers.map(header => {
           const value = row[header];
           if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
@@ -288,12 +309,13 @@ export const exportChartDataToCSV = (data: any[], filename: string = 'chart-data
 
     const csvContent = '\uFEFF' + csvRows.join('\n'); // Add BOM for Excel
 
-    console.log('✅ CSV created, rows:', data.length);
+    log.debug('CSV created, rows:', rows.length);
     downloadFile(csvContent, filename, 'text/csv;charset=utf-8');
-    console.log('🎉 CSV export successful!');
+    log.debug('CSV export successful');
+    toast.success(translate('chartExport.done', 'Export complete'));
   } catch (error) {
-    console.error('❌ CSV export error:', error);
-    alert('Failed to export CSV: ' + (error as Error).message);
+    log.error('CSV export error:', error);
+    toast.error(`${translate('chartExport.failed', 'Export failed')}: ${(error as Error).message}`);
   }
 };
 
@@ -304,12 +326,13 @@ export const copyChartToClipboard = async (elementId: string): Promise<void> => 
   const chartContainer = document.getElementById(elementId);
 
   if (!chartContainer) {
-    alert(`Chart element with id "${elementId}" not found`);
+    toast.error(translate('chartExport.notFoundCopy', 'Chart not found, nothing was copied'));
+    log.error('Clipboard copy: element not found', elementId);
     return;
   }
 
   try {
-    console.log('📋 Copying chart to clipboard...');
+    log.debug('Copying chart to clipboard...');
 
     const canvas = await html2canvas(chartContainer, {
       scale: 3, // High quality
@@ -345,26 +368,14 @@ export const copyChartToClipboard = async (elementId: string): Promise<void> => 
       })
     ]);
 
-    console.log('✅ Chart copied to clipboard!');
+    log.debug('Chart copied to clipboard');
 
-    // Show success message
-    const message = document.createElement('div');
-    message.textContent = '✅ Copied to clipboard!';
-    message.style.cssText = 'position:fixed;top:20px;right:20px;background:#10b981;color:white;padding:12px 20px;border-radius:8px;font-size:14px;font-weight:500;box-shadow:0 4px 6px rgba(0,0,0,0.1);z-index:9999;transition:opacity 0.3s ease-out;pointer-events:none;';
-    document.body.appendChild(message);
-
-    setTimeout(() => {
-      message.style.opacity = '0';
-      setTimeout(() => {
-        if (message.parentNode) {
-          document.body.removeChild(message);
-        }
-      }, 300);
-    }, 2000);
-
+    // The hand-rolled floating <div> that used to live here is replaced by the
+    // shared toast stack so success and failure look the same everywhere.
+    toast.success(translate('chartExport.copied', 'Copied to clipboard'));
   } catch (error) {
-    console.error('❌ Copy to clipboard error:', error);
-    alert('Failed to copy chart to clipboard: ' + (error as Error).message);
+    log.error('Copy to clipboard error:', error);
+    toast.error(`${translate('chartExport.copyFailed', 'Copy failed')}: ${(error as Error).message}`);
   }
 };
 

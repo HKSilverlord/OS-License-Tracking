@@ -1,23 +1,14 @@
 /**
- * Supabase Client
+ * Supabase Client (Clean Architecture data layer)
  *
- * IMPORTANT: This code is EXACTLY the same as before.
- * Only the file location has changed (lib/supabase.ts -> data/clients/supabaseClient.ts)
+ * There must be exactly ONE Supabase client in the app: two `createClient` calls
+ * mean two auth instances racing over the same storage key, which shows up as
+ * lost or flapping sessions. `lib/supabase.ts` owns it; this module only
+ * re-exports it so the `@data/clients/supabaseClient` import path keeps working.
  *
- * Environment variables are still read from Vercel dashboard:
+ * Environment variables (read in lib/supabase.ts):
  * - VITE_SUPABASE_URL
  * - VITE_SUPABASE_ANON_KEY
- *
- * NO CHANGES to connection logic or algorithm.
  */
 
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase credentials missing. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment.');
-}
-
-export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '');
+export { supabase } from '../../../lib/supabase';

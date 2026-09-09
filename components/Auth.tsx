@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Lock, Mail, Loader2, AlertCircle } from 'lucide-react';
+import { Lock, Mail, AlertCircle } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
 import { Button } from '../src/ui/components/Button';
@@ -41,9 +41,9 @@ export const Auth: React.FC = () => {
   const bgUrl = supabase.storage.from('public').getPublicUrl('auth-bg.jpg').data.publicUrl;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col md:flex-row">
       {/* Left Panel - Branding (Hidden on small screens) */}
-      <div className="hidden md:flex flex-col flex-1 bg-slate-950 text-white relative overflow-hidden">
+      <div className="hidden md:flex flex-col flex-1 bg-slate-950 dark:bg-slate-950 text-white dark:text-white relative overflow-hidden">
         {/* Abstract background elements */}
         <div className="absolute inset-0 z-0 opacity-40">
           <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-blue-900 via-slate-900 to-slate-950" />

@@ -27,6 +27,25 @@ export interface Project {
   period?: string; // e.g. "2024-H1"
 }
 
+/**
+ * Payload accepted by ProjectService.createProject (contract C3).
+ * A project always belongs to a period: the service inserts the `projects` row and the
+ * matching `period_projects` link, which carries the authoritative per-period price.
+ */
+export interface CreateProjectInput {
+  code?: string;              // omitted/empty -> service calls getNextProjectCode()
+  name: string;
+  type: string;
+  software: string;
+  status: ProjectStatus;
+  period: string;             // e.g. '2025-H1'; REQUIRED
+  plan_price: number;         // JPY per hour, >= 0; 0 means "unset"
+  actual_price: number;       // JPY per hour, >= 0; 0 means "unset"
+  notes?: string;             // default ''
+  exclusion_mark?: string;    // default ''
+  display_order?: number;     // default max(display_order of projects in `period`) + 1, or 1
+}
+
 export interface MonthlyRecord {
   id?: string;
   project_id: string;

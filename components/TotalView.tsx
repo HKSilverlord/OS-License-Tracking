@@ -2,9 +2,12 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { MonthlyRecord } from '../types';
 import { dbService } from '../services/dbService';
 import { exportChartToSVG, exportChartToPNG, exportChartDataToCSV, generateChartFilename, copyChartToClipboard } from '../utils/chartExport';
-import { Loader2, TrendingUp, Download, Palette, Copy, Image } from 'lucide-react';
+import { TrendingUp, Download, Palette, Copy, Image } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, TooltipProps, ReferenceArea, ReferenceLine } from 'recharts';
+import { useToast } from '../contexts/ToastContext';
+import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
+import { Skeleton } from '../src/ui/components/Skeleton';
+import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, TooltipContentProps, ReferenceArea, ReferenceLine } from 'recharts';
 
 interface TotalViewProps {
   currentYear: number;
@@ -26,57 +29,76 @@ interface ChartColors {
   accActual: SeriesStyle;
 }
 
+/** One point of the monthly chart. */
+interface TotalChartRow {
+  name: string;
+  month: number;
+  plan: number;
+  actual: number;
+  accPlan: number;
+  accActual: number;
+}
+
+/** Theme-safe mid-tones (U8) — legible on both bg-white and bg-slate-900. */
+const DEFAULT_CHART_COLORS: ChartColors = {
+  plan: { color: CHART_PALETTE.neutral, opacity: 1, labelColor: CHART_PALETTE.labelNeutral, fontSize: 10, bold: true, stroke: false },
+  actual: { color: CHART_PALETTE.plan, opacity: 1, labelColor: CHART_PALETTE.plan, fontSize: 10, bold: true, stroke: false },
+  accPlan: { color: CHART_PALETTE.labelNeutral, opacity: 1, labelColor: CHART_PALETTE.labelNeutral, fontSize: 10, bold: false, stroke: false },
+  accActual: { color: CHART_PALETTE.actual, opacity: 1, labelColor: CHART_PALETTE.actual, fontSize: 12, bold: true, stroke: true },
+};
+
+const SERIES_KEYS = ['plan', 'actual', 'accPlan', 'accActual'] as const;
+
+/**
+ * Migration for the stored `totalView_chartColors` preference:
+ *  - the oldest format stored a bare colour string per series,
+ *  - later formats stored a partial SeriesStyle, which is merged over the defaults so
+ *    fields added since the preference was written are picked up.
+ */
+const migrateChartColors = (raw: unknown): ChartColors | null => {
+  if (raw === null || typeof raw !== 'object') return null;
+  const parsed = raw as Partial<Record<keyof ChartColors, unknown>>;
+
+  const mergeSeries = (key: keyof ChartColors): SeriesStyle => {
+    const value = parsed[key];
+    if (typeof value === 'string') return { ...DEFAULT_CHART_COLORS[key], color: value };
+    if (value !== null && typeof value === 'object') {
+      return { ...DEFAULT_CHART_COLORS[key], ...(value as Partial<SeriesStyle>) };
+    }
+    return DEFAULT_CHART_COLORS[key];
+  };
+
+  return {
+    plan: mergeSeries('plan'),
+    actual: mergeSeries('actual'),
+    accPlan: mergeSeries('accPlan'),
+    accActual: mergeSeries('accActual'),
+  };
+};
+
 export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   const { t, language } = useLanguage();
+  const toast = useToast();
   const [allRecords, setAllRecords] = useState<MonthlyRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [pinnedMonth, setPinnedMonth] = useState<number | null>(null);
   const columnCoordsRef = useRef<Record<number, number>>({});
-  
-  // Load initial colors from localStorage or default
-  const [chartColors, setChartColors] = useState<ChartColors>(() => {
-    const saved = localStorage.getItem('totalView_chartColors');
-    const defaults: ChartColors = {
-      plan: { color: '#94a3b8', opacity: 1, labelColor: '#64748b', fontSize: 10, bold: true, stroke: false },
-      actual: { color: '#3b82f6', opacity: 1, labelColor: '#1d4ed8', fontSize: 10, bold: true, stroke: false },
-      accPlan: { color: '#64748b', opacity: 1, labelColor: '#64748b', fontSize: 10, bold: false, stroke: false },
-      accActual: { color: '#10b981', opacity: 1, labelColor: '#059669', fontSize: 12, bold: true, stroke: true },
-    };
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        // Migration: if old format (string), convert to SeriesStyle
-        if (typeof parsed.plan === 'string') {
-          return {
-            plan: { ...defaults.plan, color: parsed.plan },
-            actual: { ...defaults.actual, color: parsed.actual },
-            accPlan: { ...defaults.accPlan, color: parsed.accPlan },
-            accActual: { ...defaults.accActual, color: parsed.accActual },
-          };
-        }
-        // Merge to pick up any new fields added since last save
-        return {
-          plan: { ...defaults.plan, ...parsed.plan },
-          actual: { ...defaults.actual, ...parsed.actual },
-          accPlan: { ...defaults.accPlan, ...parsed.accPlan },
-          accActual: { ...defaults.accActual, ...parsed.accActual },
-        };
-      } catch (e) {
-        console.error('Failed to parse saved chart colors', e);
-      }
-    }
-    return defaults;
-  });
 
-  const updateColor = (key: keyof ChartColors, field: keyof SeriesStyle, value: any) => {
-    setChartColors(prev => ({
-      ...prev,
-      [key]: {
-        ...prev[key],
-        [field]: value
-      }
-    }));
+  // Colours live behind the shared preference helper (U8): the localStorage key is unchanged
+  // so existing user picks survive (see `migrateChartColors`), and every set() persists.
+  const [chartColors, setChartColors] = useChartPref<ChartColors>(
+    'totalView_chartColors',
+    DEFAULT_CHART_COLORS,
+    migrateChartColors,
+  );
+
+  const updateColor = <K extends keyof SeriesStyle>(seriesKey: keyof ChartColors, field: K, value: SeriesStyle[K]) => {
+    setChartColors(prev => {
+      const updated: SeriesStyle = { ...prev[seriesKey] };
+      updated[field] = value;
+      return { ...prev, [seriesKey]: updated };
+    });
   };
 
   // Current month highlight
@@ -84,30 +106,32 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   const [showCurrentMonth, setShowCurrentMonth] = useState(true);
 
   // Custom outlined label renderer
-  const OutlinedLabel = ({ x, y, value, dataKey, width = 0 }: any) => {
+  const OutlinedLabel = ({ x, y, value, dataKey, width = 0 }: {
+    x?: number;
+    y?: number;
+    value?: number | string;
+    dataKey: keyof ChartColors;
+    width?: number;
+  }) => {
     if (!value || value === 0) return null;
-    const style = (chartColors as any)[dataKey] as SeriesStyle;
+    const style = chartColors[dataKey];
     if (!style) return null;
     const tx = typeof x === 'number' && typeof width === 'number' ? x + width / 2 : x;
+    const ty = typeof y === 'number' ? y - 4 : y;
     const formatted = typeof value === 'number' && value > 999 ? value.toLocaleString() : value;
     return (
       <g>
         {style.stroke && (
-          <text x={tx} y={y - 4} textAnchor="middle" fontSize={style.fontSize} fontWeight="bold" stroke="white" strokeWidth={3} strokeLinejoin="round" paintOrder="stroke">
+          <text x={tx} y={ty} textAnchor="middle" fontSize={style.fontSize} fontWeight="bold" stroke="white" strokeWidth={3} strokeLinejoin="round" paintOrder="stroke">
             {formatted}
           </text>
         )}
-        <text x={tx} y={y - 4} textAnchor="middle" fontSize={style.fontSize} fontWeight={style.bold ? 'bold' : 'normal'} fill={style.labelColor}>
+        <text x={tx} y={ty} textAnchor="middle" fontSize={style.fontSize} fontWeight={style.bold ? 'bold' : 'normal'} fill={style.labelColor}>
           {formatted}
         </text>
       </g>
     );
   };
-
-  // Save changes to localStorage
-  useEffect(() => {
-    localStorage.setItem('totalView_chartColors', JSON.stringify(chartColors));
-  }, [chartColors]);
 
   // Constants for layout
   const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
@@ -119,6 +143,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
       setAllRecords(recordsData);
     } catch (error) {
       console.error("Failed to load data for Total View", error);
+      toast.error(t('toast.loadFailed', 'Failed to load data'));
     } finally {
       setLoading(false);
     }
@@ -126,6 +151,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentYear]);
 
   // Listen for data updates from other tabs
@@ -136,12 +162,13 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
 
     window.addEventListener('dataUpdated', handleDataUpdated);
     return () => window.removeEventListener('dataUpdated', handleDataUpdated);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentYear]);
 
   // Chart Data Preparation
-  const chartData = useMemo(() => {
+  const chartData = useMemo<TotalChartRow[]>(() => {
     const locale = language === 'ja' ? 'ja-JP' : language === 'vn' ? 'vi-VN' : 'en-US';
-    const data = months.map(m => ({
+    const data: TotalChartRow[] = months.map(m => ({
       name: new Date(currentYear, m - 1).toLocaleString(locale, { month: 'short' }),
       month: m,
       plan: 0,
@@ -169,6 +196,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     });
 
     return data;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allRecords, currentYear, language]);
 
   // Dynamic Y-axis max based on max accumulated values
@@ -177,8 +205,8 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     const maxActual = Math.max(0, ...chartData.map(d => d.accActual || 0));
     const max = Math.max(maxPlan, maxActual);
     const maxLimit = max > 0 ? Math.ceil(max / 1000) * 1000 + 1000 : 20000;
-    
-    const ticks = [];
+
+    const ticks: number[] = [];
     const step = Math.ceil(maxLimit / 10 / 1000) * 1000 || 1000;
     for (let i = 0; i <= maxLimit; i += step) {
       ticks.push(i);
@@ -187,7 +215,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   }, [chartData]);
 
   // Reusable Detail Card Component
-  const MonthDetailCard = ({ data, hideShadow = false }: { data: any; hideShadow?: boolean }) => {
+  const MonthDetailCard = ({ data, hideShadow = false }: { data: TotalChartRow; hideShadow?: boolean }) => {
     const plan = data.plan || 0;
     const actual = data.actual || 0;
     const accPlan = data.accPlan || 0;
@@ -236,13 +264,13 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
 
           <div className="border-t border-slate-200 dark:border-slate-800 pt-2 mt-2">
             <div className="flex items-center justify-between gap-4">
-              <span className="text-slate-700 dark:text-slate-400 font-medium">時間 GAP:</span>
+              <span className="text-slate-700 dark:text-slate-400 font-medium">{t('totalView.timeGap', '時間 GAP')}:</span>
               <span className={`font-semibold ${timeGap >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                 {timeGap >= 0 ? '+' : ''}{timeGap.toLocaleString()}
               </span>
             </div>
             <div className="flex items-center justify-between gap-4">
-              <span className="text-slate-700 dark:text-slate-400 font-medium">% GAP:</span>
+              <span className="text-slate-700 dark:text-slate-400 font-medium">{t('totalView.percentGap', '% GAP')}:</span>
               <span className={`font-semibold ${percentGap >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                 {percentGap >= 0 ? '+' : ''}{percentGap.toFixed(1)}%
               </span>
@@ -253,27 +281,44 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     );
   };
 
-  // Custom Tooltip Wrapper
-  const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
+  // Custom Tooltip Wrapper — recharts 3 hands the content component `TooltipContentProps`
+  const CustomTooltip = ({ active, payload }: TooltipContentProps<number, string>) => {
     if (!active || !payload || payload.length === 0) return null;
-    const data = payload[0].payload;
+    const data = payload[0]?.payload as TotalChartRow | undefined;
+    if (!data) return null;
     return <MonthDetailCard data={data} />;
   };
 
   // Custom bar to capture coordinates
-  const TrackingBar = (props: any) => {
-    const { fill, x, y, width, height, payload, fillOpacity } = props;
+  const TrackingBar = (props: {
+    fill?: string;
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    fillOpacity?: number;
+    payload?: TotalChartRow;
+  }) => {
+    const { fill, x = 0, y = 0, width = 0, height = 0, payload, fillOpacity } = props;
     if (payload?.month) {
       columnCoordsRef.current[payload.month] = x + width / 2;
     }
     const r = 4;
-    const path = `M${x},${y+height} L${x},${y+r} A${r},${r} 0 0,1 ${x+r},${y} L${x+width-r},${y} A${r},${r} 0 0,1 ${x+width},${y+r} L${x+width},${y+height} Z`;
-    const d = height < r ? `M${x},${y} L${x+width},${y} L${x+width},${y+height} L${x},${y+height} Z` : path;
+    const path = `M${x},${y + height} L${x},${y + r} A${r},${r} 0 0,1 ${x + r},${y} L${x + width - r},${y} A${r},${r} 0 0,1 ${x + width},${y + r} L${x + width},${y + height} Z`;
+    const d = height < r ? `M${x},${y} L${x + width},${y} L${x + width},${y + height} L${x},${y + height} Z` : path;
     return <path d={d} stroke="none" fill={fill} fillOpacity={fillOpacity} />;
   };
 
   if (loading) {
-    return <div className="flex justify-center items-center h-64"><Loader2 className="animate-spin h-8 w-8 text-blue-600" /></div>;
+    return (
+      <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-4 md:p-6 overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex-1 flex flex-col gap-4">
+          <Skeleton className="h-5 w-56" />
+          <Skeleton className="flex-1 min-h-[240px] w-full" />
+          <span className="sr-only text-slate-500 dark:text-slate-400">{t('common.loading', 'Loading…')}</span>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -283,7 +328,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
       <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex-1 flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
           <h3 className="text-md font-bold text-slate-700 dark:text-slate-100 flex items-center">
-            <TrendingUp className="w-4 h-4 mr-2 text-blue-600" />
+            <TrendingUp className="w-4 h-4 mr-2 text-blue-600 dark:text-blue-400" />
             {t('totalView.chartTitle')} - {currentYear}
           </h3>
           <div className="flex gap-2 flex-wrap items-center">
@@ -304,43 +349,43 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
             </select>
             <button
               onClick={() => setShowColorPicker(!showColorPicker)}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-              title="Customize chart colors"
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 dark:bg-purple-700 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors"
+              title={t('chart.customizeColors', 'Customize chart colors')}
             >
               <Palette className="w-4 h-4" />
-              Colors
+              {t('chart.colors', 'Colors')}
             </button>
             <button
               onClick={() => copyChartToClipboard('total-view-chart')}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-              title="Copy chart to clipboard (paste into PowerPoint, Word, etc.)"
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-indigo-600 dark:bg-indigo-700 text-white rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors"
+              title={t('export.copyAsImage', 'Copy to Clipboard')}
             >
               <Copy className="w-4 h-4" />
-              Copy
+              {t('buttons.copy', 'Copy')}
             </button>
             <button
               onClick={() => exportChartToPNG('total-view-chart', generateChartFilename(`yearly_overview_${currentYear}`, 'png'))}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors"
-              title="Export as PNG image"
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-rose-600 dark:bg-rose-700 text-white rounded-lg hover:bg-rose-700 dark:hover:bg-rose-600 transition-colors"
+              title={t('export.savePNG', 'Save as PNG')}
             >
               <Image className="w-4 h-4" />
               PNG
             </button>
             <button
               onClick={() => exportChartToSVG('total-view-chart', generateChartFilename(`yearly_overview_${currentYear}`, 'svg'))}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-              title="Export as SVG (vector, best quality)"
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-emerald-600 dark:bg-emerald-700 text-white rounded-lg hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors"
+              title={t('export.saveSVG', 'Save as SVG')}
             >
               <Download className="w-4 h-4" />
               SVG
             </button>
             <button
               onClick={() => exportChartDataToCSV(chartData, generateChartFilename(`yearly_data_${currentYear}`, 'csv'))}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              title="Export chart data as CSV"
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
+              title={t('export.downloadData', 'Download Data (Excel/CSV)')}
             >
               <Download className="w-4 h-4" />
-              Data
+              {t('chart.dataCsv', 'Data')}
             </button>
           </div>
         </div>
@@ -350,15 +395,17 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
           <div className="mb-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
             <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">
               <Palette className="w-4 h-4" />
-              Customize Chart Colors
+              {t('chart.customizeColors', 'Customize chart colors')}
             </h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {([
-                { key: 'plan', label: t('tracker.planShort') },
-                { key: 'actual', label: t('tracker.actualShort') },
-                { key: 'accPlan', label: t('dashboard.chart.accPlan') },
-                { key: 'accActual', label: t('dashboard.chart.accActual') },
-              ] as const).map(({ key, label }) => {
+              {SERIES_KEYS.map((key) => {
+                const label = key === 'plan'
+                  ? t('tracker.planShort')
+                  : key === 'actual'
+                    ? t('tracker.actualShort')
+                    : key === 'accPlan'
+                      ? t('dashboard.chart.accPlan')
+                      : t('dashboard.chart.accActual');
                 const style = chartColors[key];
                 return (
                   <div key={key} className="flex flex-col gap-2 p-2 bg-white dark:bg-slate-800 rounded border border-slate-100 dark:border-slate-700 shadow-sm">
@@ -366,37 +413,37 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
 
                     {/* Color Row */}
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">Color</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">{t('chart.field.color', 'Color')}</span>
                       <div className="flex items-center gap-1 flex-1">
-                        <input type="color" value={style.color} onChange={(e) => updateColor(key, 'color', e.target.value)} className="w-6 h-6 rounded cursor-pointer p-0 border-0" />
-                        <input type="text" value={style.color} onChange={(e) => updateColor(key, 'color', e.target.value)} className="flex-1 w-full px-1 py-0.5 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded" />
+                        <input type="color" aria-label={label} value={style.color} onChange={(e) => updateColor(key, 'color', e.target.value)} className="w-6 h-6 rounded cursor-pointer p-0 border-0" />
+                        <input type="text" aria-label={label} value={style.color} onChange={(e) => updateColor(key, 'color', e.target.value)} className="flex-1 w-full px-1 py-0.5 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded" />
                       </div>
                     </div>
 
                     {/* Opacity Row */}
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">Alpha</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">{t('chart.field.alpha', 'Alpha')}</span>
                       <div className="flex items-center gap-1 flex-1">
                         <input type="range" min="0" max="1" step="0.1" value={style.opacity} onChange={(e) => updateColor(key, 'opacity', parseFloat(e.target.value))} className="w-full h-1 bg-slate-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer" />
-                        <span className="text-[10px] w-5 text-right font-medium dark:text-slate-300">{Math.round(style.opacity * 100)}%</span>
+                        <span className="text-[10px] w-5 text-right font-medium text-slate-600 dark:text-slate-300">{Math.round(style.opacity * 100)}%</span>
                       </div>
                     </div>
 
                     {/* Label Color Row */}
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">Text</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">{t('chart.field.text', 'Text')}</span>
                       <div className="flex items-center gap-1 flex-1">
-                        <input type="color" value={style.labelColor} onChange={(e) => updateColor(key, 'labelColor', e.target.value)} className="w-6 h-6 rounded cursor-pointer p-0 border-0" />
-                        <input type="text" value={style.labelColor} onChange={(e) => updateColor(key, 'labelColor', e.target.value)} className="flex-1 w-full px-1 py-0.5 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded" />
+                        <input type="color" aria-label={label} value={style.labelColor} onChange={(e) => updateColor(key, 'labelColor', e.target.value)} className="w-6 h-6 rounded cursor-pointer p-0 border-0" />
+                        <input type="text" aria-label={label} value={style.labelColor} onChange={(e) => updateColor(key, 'labelColor', e.target.value)} className="flex-1 w-full px-1 py-0.5 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded" />
                       </div>
                     </div>
 
                     {/* Font Size Row */}
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">Size</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">{t('chart.field.size', 'Size')}</span>
                       <div className="flex items-center gap-1 flex-1">
                         <input type="range" min="8" max="20" step="1" value={style.fontSize} onChange={(e) => updateColor(key, 'fontSize', parseInt(e.target.value))} className="w-full h-1 bg-slate-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer" />
-                        <span className="text-[10px] w-5 text-right font-medium dark:text-slate-300">{style.fontSize}</span>
+                        <span className="text-[10px] w-5 text-right font-medium text-slate-600 dark:text-slate-300">{style.fontSize}</span>
                       </div>
                     </div>
 
@@ -404,11 +451,11 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                     <div className="flex items-center gap-3">
                       <label className="flex items-center gap-1 cursor-pointer">
                         <input type="checkbox" checked={style.bold} onChange={(e) => updateColor(key, 'bold', e.target.checked)} className="w-3 h-3" />
-                        <span className="text-[10px] text-slate-600 dark:text-slate-400 font-bold">Bold</span>
+                        <span className="text-[10px] text-slate-600 dark:text-slate-400 font-bold">{t('chart.field.bold', 'Bold')}</span>
                       </label>
                       <label className="flex items-center gap-1 cursor-pointer">
                         <input type="checkbox" checked={style.stroke} onChange={(e) => updateColor(key, 'stroke', e.target.checked)} className="w-3 h-3" />
-                        <span className="text-[10px] text-slate-600 dark:text-slate-400">Outline</span>
+                        <span className="text-[10px] text-slate-600 dark:text-slate-400">{t('chart.field.outline', 'Outline')}</span>
                       </label>
                     </div>
                   </div>
@@ -420,35 +467,35 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
             <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={showCurrentMonth} onChange={(e) => setShowCurrentMonth(e.target.checked)} className="w-4 h-4 accent-orange-500" />
-                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">🗓️ Highlight current month</span>
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('chart.highlightCurrentMonth', 'Highlight current month')}</span>
               </label>
             </div>
           </div>
         )}
         <div id="total-view-chart" className="flex-1 min-h-0 relative">
-          
+
           {/* Pinned Detail Card Overlay */}
           {pinnedMonth !== null && (() => {
             const pinnedData = chartData.find((d) => d.month === pinnedMonth);
             if (!pinnedData) return null;
-            
+
             const isCardOnLeft = pinnedMonth > 8;
             const targetX = columnCoordsRef.current[pinnedMonth] || 100;
             const cardX = isCardOnLeft ? targetX - 230 : targetX + 40;
 
             return (
-              <div 
+              <div
                 className="absolute z-10 pointer-events-none transition-all duration-200 ease-in-out drop-shadow-md"
-                style={{ 
-                  left: cardX, 
+                style={{
+                  left: cardX,
                   top: '40%',
                   transform: 'translateY(-50%)'
                 }}
               >
-                <div 
+                <div
                   className={`absolute top-1/2 -translate-y-1/2 w-[14px] h-[14px] bg-white dark:bg-slate-900 transform rotate-45 pointer-events-none ${
-                    isCardOnLeft 
-                      ? '-right-[7px] border-t border-r border-slate-300 dark:border-slate-700' 
+                    isCardOnLeft
+                      ? '-right-[7px] border-t border-r border-slate-300 dark:border-slate-700'
                       : '-left-[7px] border-b border-l border-slate-300 dark:border-slate-700'
                   }`}
                   style={{ zIndex: 0 }}
@@ -461,31 +508,33 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
           })()}
 
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart 
-              data={chartData} 
+            <ComposedChart
+              data={chartData}
               margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
               onClick={(state) => {
-                if (state && state.activePayload && state.activePayload.length > 0) {
-                  const clickedMonth = state.activePayload[0].payload.month;
-                  setPinnedMonth(prev => prev === clickedMonth ? null : clickedMonth);
-                }
+                // recharts 3 `MouseHandlerDataParam` has no `activePayload` — recover the
+                // clicked datum from the active index instead.
+                const rawIndex = state?.activeIndex;
+                if (rawIndex === undefined || rawIndex === null) return;
+                const index = Number(rawIndex);
+                if (!Number.isInteger(index) || index < 0) return;
+                const clicked = chartData[index];
+                if (!clicked) return;
+                setPinnedMonth(prev => (prev === clicked.month ? null : clicked.month));
               }}
             >
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_PALETTE.grid} />
               <XAxis dataKey="name" fontSize={12} />
               <YAxis yAxisId="left" orientation="left" fontSize={11} domain={[0, yAxisMax]} ticks={yAxisTicks} label={{ value: t('totalView.axis.accumulated'), angle: -90, position: 'insideLeft' }} />
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={CustomTooltip} />
               <Legend />
               {/* Current Month Highlight */}
               {showCurrentMonth && currentMonth !== null && (() => {
-                const monthName = chartData.find(d => {
-                  const m = language === 'ja' ? `${currentMonth}月` : new Date(currentYear, currentMonth - 1).toLocaleString(language === 'vn' ? 'vi-VN' : 'en-US', { month: 'short' });
-                  return d.name === m;
-                })?.name;
+                const monthName = chartData.find(d => d.month === currentMonth)?.name;
                 return monthName ? (
                   <>
                     <ReferenceArea yAxisId="left" x1={monthName} x2={monthName} fill="rgba(251,146,60,0.12)" />
-                    <ReferenceLine yAxisId="left" x={monthName} stroke="#f97316" strokeWidth={2} strokeDasharray="6 3" label={{ value: '今月', position: 'top', fontSize: 10, fill: '#f97316', fontWeight: 'bold' }} />
+                    <ReferenceLine yAxisId="left" x={monthName} stroke="#f97316" strokeWidth={2} strokeDasharray="6 3" label={{ value: t('chart.thisMonth', '今月'), position: 'top', fontSize: 10, fill: '#f97316', fontWeight: 'bold' }} />
                   </>
                 ) : null;
               })()}

@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 interface DropdownMenuProps {
     isOpen: boolean;
     onClose: () => void;
-    triggerRef: React.RefObject<HTMLElement>;
+    triggerRef: React.RefObject<HTMLElement | null>;
     children: React.ReactNode;
 }
 

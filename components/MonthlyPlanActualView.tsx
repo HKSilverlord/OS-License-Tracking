@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Loader2, TrendingUp, Palette } from 'lucide-react';
+import { TrendingUp, Palette } from 'lucide-react';
 import { ChartExportMenu } from './ChartExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipProps, Cell, LabelList, ReferenceLine, ReferenceArea } from 'recharts';
+import { useToast } from '../contexts/ToastContext';
+import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
+import { Skeleton } from '../src/ui/components/Skeleton';
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipContentProps, LabelList, ReferenceLine, ReferenceArea } from 'recharts';
 import { dbService } from '../services/dbService';
 
 // Monthly plan-actual data interface
@@ -34,76 +37,87 @@ interface MonthlyChartColors {
   workingHoursActual: SeriesStyle;
 }
 
+/**
+ * Theme-safe defaults (U8). The four hard-coded values that broke dark-mode contrast
+ * (#5c0000, #000080, #006080, #808080) are now CHART_PALETTE.plan / plan2 / actual / neutral.
+ */
+const DEFAULT_CHART_COLORS: MonthlyChartColors = {
+  capacityLine: { color: CHART_PALETTE.neutral, opacity: 1, labelColor: CHART_PALETTE.neutral, fontSize: 10, bold: false, stroke: false },
+  workingHoursPlan: { color: '#FFB3B3', opacity: 1, labelColor: CHART_PALETTE.plan, fontSize: 10, bold: true, stroke: false, barSize: 60 },
+  salesPlan: { color: '#00BFFF', opacity: 1, labelColor: CHART_PALETTE.actual, fontSize: 10, bold: false, stroke: false },
+  salesActual: { color: CHART_PALETTE.plan2, opacity: 1, labelColor: CHART_PALETTE.plan2, fontSize: 11, bold: true, stroke: true, barSize: 40 },
+  workingHoursActual: { color: '#CC0000', opacity: 1, labelColor: '#ffffff', fontSize: 10, bold: true, stroke: false, barSize: 30 },
+};
+
+const SERIES_KEYS = ['salesPlan', 'salesActual', 'workingHoursPlan', 'workingHoursActual', 'capacityLine'] as const;
+
+/**
+ * Migration for the stored `monthly_chartColors` preference:
+ *  - the oldest format stored a bare colour string per series,
+ *  - later formats stored a partial SeriesStyle, merged over the defaults so fields added
+ *    since the preference was written are picked up.
+ */
+const migrateChartColors = (raw: unknown): MonthlyChartColors | null => {
+  if (raw === null || typeof raw !== 'object') return null;
+  const parsed = raw as Partial<Record<keyof MonthlyChartColors, unknown>>;
+
+  const mergeSeries = (key: keyof MonthlyChartColors): SeriesStyle => {
+    const value = parsed[key];
+    if (typeof value === 'string') return { ...DEFAULT_CHART_COLORS[key], color: value };
+    if (value !== null && typeof value === 'object') {
+      return { ...DEFAULT_CHART_COLORS[key], ...(value as Partial<SeriesStyle>) };
+    }
+    return DEFAULT_CHART_COLORS[key];
+  };
+
+  return {
+    capacityLine: mergeSeries('capacityLine'),
+    workingHoursPlan: mergeSeries('workingHoursPlan'),
+    salesPlan: mergeSeries('salesPlan'),
+    salesActual: mergeSeries('salesActual'),
+    workingHoursActual: mergeSeries('workingHoursActual'),
+  };
+};
+
 interface MonthlyPlanActualViewProps {
   currentYear: number;
 }
 
 export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ currentYear }) => {
   const { t, language } = useLanguage();
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [monthlyData, setMonthlyData] = useState<MonthlyPlanActualData[]>([]);
   const [pinnedMonth, setPinnedMonth] = useState<number | null>(null);
   const columnCoordsRef = useRef<Record<number, number>>({});
 
   const [showColorPicker, setShowColorPicker] = useState(false);
-  const [chartColors, setChartColors] = useState<MonthlyChartColors>(() => {
-    const saved = localStorage.getItem('monthly_chartColors');
-    const defaults: MonthlyChartColors = {
-      capacityLine: { color: '#808080', opacity: 1, labelColor: '#808080', fontSize: 10, bold: false, stroke: false },
-      workingHoursPlan: { color: '#FFB3B3', opacity: 1, labelColor: '#5c0000', fontSize: 10, bold: true, stroke: false, barSize: 60 },
-      salesPlan: { color: '#00BFFF', opacity: 1, labelColor: '#006080', fontSize: 10, bold: false, stroke: false },
-      salesActual: { color: '#000080', opacity: 1, labelColor: '#000080', fontSize: 11, bold: true, stroke: true, barSize: 40 },
-      workingHoursActual: { color: '#CC0000', opacity: 1, labelColor: '#ffffff', fontSize: 10, bold: true, stroke: false, barSize: 30 },
-    };
+  // Colours live behind the shared preference helper (U8): the localStorage key is unchanged
+  // so existing user picks survive (see `migrateChartColors`), and every set() persists.
+  const [chartColors, setChartColors] = useChartPref<MonthlyChartColors>(
+    'monthly_chartColors',
+    DEFAULT_CHART_COLORS,
+    migrateChartColors,
+  );
 
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        // Migration check: if the saved value is a string, convert to SeriesStyle
-        if (typeof parsed.capacityLine === 'string') {
-          return {
-            capacityLine: { ...defaults.capacityLine, color: parsed.capacityLine },
-            workingHoursPlan: { ...defaults.workingHoursPlan, color: parsed.workingHoursPlan },
-            salesPlan: { ...defaults.salesPlan, color: parsed.salesPlan },
-            salesActual: { ...defaults.salesActual, color: parsed.salesActual },
-            workingHoursActual: { ...defaults.workingHoursActual, color: parsed.workingHoursActual },
-          };
-        }
-        return {
-          capacityLine: { ...defaults.capacityLine, ...parsed.capacityLine },
-          workingHoursPlan: { ...defaults.workingHoursPlan, ...parsed.workingHoursPlan },
-          salesPlan: { ...defaults.salesPlan, ...parsed.salesPlan },
-          salesActual: { ...defaults.salesActual, ...parsed.salesActual },
-          workingHoursActual: { ...defaults.workingHoursActual, ...parsed.workingHoursActual },
-        };
-      } catch (e) { /* ignore */ }
-    }
-    return defaults;
-  });
-
-  const updateColor = (key: keyof MonthlyChartColors, field: keyof SeriesStyle, value: any) => {
-    setChartColors(prev => ({
-      ...prev,
-      [key]: {
-        ...prev[key],
-        [field]: value
-      }
-    }));
+  const updateColor = <K extends keyof SeriesStyle>(seriesKey: keyof MonthlyChartColors, field: K, value: SeriesStyle[K]) => {
+    setChartColors(prev => {
+      const updated: SeriesStyle = { ...prev[seriesKey] };
+      updated[field] = value;
+      return { ...prev, [seriesKey]: updated };
+    });
   };
 
   // Current month highlight
   const currentMonth = new Date().getFullYear() === currentYear ? new Date().getMonth() + 1 : null;
   const [showCurrentMonth, setShowCurrentMonth] = useState(true);
 
-  useEffect(() => {
-    localStorage.setItem('monthly_chartColors', JSON.stringify(chartColors));
-  }, [chartColors]);
-
   // Fetch real data from Supabase
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
+        // getCapacityLine(year) returns the real weekday count for `year` (WS-1).
         const [aggregatedData, capacityData] = await Promise.all([
           dbService.getMonthlyAggregatedData(currentYear),
           dbService.getCapacityLine(currentYear)
@@ -130,12 +144,15 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
         setMonthlyData(combined);
       } catch (error) {
         console.error('Failed to load monthly plan-actual data:', error);
+        toast.error(t('toast.loadFailed', 'Failed to load data'));
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
+    // `toast`/`t` are stable for the lifetime of their providers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentYear, language]);
 
   // Calculate Y-axis ranges
@@ -205,35 +222,45 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
     );
   };
 
-  // Custom Tooltip Component (wraps Detail Card)
-  const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
+  // Custom Tooltip Component (wraps Detail Card) — recharts 3 passes `TooltipContentProps`
+  const CustomTooltip = ({ active, payload }: TooltipContentProps<number, string>) => {
     if (!active || !payload || payload.length === 0) return null;
-    const data = payload[0].payload as MonthlyPlanActualData;
+    const data = payload[0]?.payload as MonthlyPlanActualData | undefined;
+    if (!data) return null;
     return <MonthDetailCard data={data} />;
   };
 
   // Custom zero label renderer for the Actual Sales bar
-  const renderZeroLabel = (props: any) => {
-    const { x, y, width, value } = props;
-    if (value === 0) {
-      return (
-        <g>
-          <rect x={x + width / 2 - 8} y={y - 22} width={16} height={20} fill="rgba(255,255,255,0.7)" rx={4} />
-          <text x={x + width / 2} y={y - 8} fill={chartColors.workingHoursActual.labelColor} fontSize={14} fontWeight="bold" textAnchor="middle">0</text>
-        </g>
-      );
-    }
-    return null;
+  const ZeroLabel = ({ x = 0, y = 0, width = 0, value }: {
+    x?: number;
+    y?: number;
+    width?: number;
+    value?: number | string;
+  }) => {
+    if (value !== 0) return null;
+    return (
+      <g>
+        <rect x={x + width / 2 - 8} y={y - 22} width={16} height={20} fill="rgba(255,255,255,0.7)" rx={4} />
+        <text x={x + width / 2} y={y - 8} fill={chartColors.workingHoursActual.labelColor} fontSize={14} fontWeight="bold" textAnchor="middle">0</text>
+      </g>
+    );
   };
 
   // Generic custom label with semi-transparent background pill + optional outline
-  const CustomLabel = (props: any) => {
-    const { x, y, value, width, dataKey, offset = 10, position = 'top' } = props;
+  const CustomLabel = ({ x = 0, y = 0, value, width = 0, dataKey, offset = 10, position = 'top' }: {
+    x?: number;
+    y?: number;
+    value?: number | string;
+    width?: number;
+    dataKey: keyof MonthlyChartColors;
+    offset?: number;
+    position?: 'top' | 'insideTop' | 'left';
+  }) => {
     if (value === 0 || !value) return null;
 
     const formatted = typeof value === 'number' && value > 1000 ? value.toLocaleString() : value;
-    const style = (chartColors as any)[dataKey] as SeriesStyle;
-    const color = style?.labelColor || '#333';
+    const style = chartColors[dataKey];
+    const color = style?.labelColor || CHART_PALETTE.labelNeutral;
     const fSize = style?.fontSize || 10;
     const isBold = style?.bold !== false;
     const hasStroke = style?.stroke === true;
@@ -296,10 +323,16 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
   };
 
   // Custom Bar for Working Hours Actual with Gap Connector (Idea E)
-  const WorkingHoursActualBar = (props: any) => {
-    const { fill, x, y, width, height, payload } = props;
-    const planValue = payload.workingHoursPlan || 0;
-    const actualValue = payload.workingHoursActual || 0;
+  const WorkingHoursActualBar = ({ fill, x = 0, y = 0, width = 0, height = 0, payload }: {
+    fill?: string;
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    payload?: MonthlyPlanActualData;
+  }) => {
+    const planValue = payload?.workingHoursPlan || 0;
+    const actualValue = payload?.workingHoursActual || 0;
 
     // Track the center X coordinate of the column for correct tooltip pinning
     if (payload?.month) {
@@ -337,7 +370,15 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
   };
 
   if (loading) {
-    return <div className="flex justify-center items-center h-64"><Loader2 className="animate-spin h-8 w-8 text-blue-600" /></div>;
+    return (
+      <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-4 md:p-6 overflow-auto">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex-1 flex flex-col gap-4">
+          <Skeleton className="h-5 w-64" />
+          <Skeleton className="flex-1 min-h-[320px] w-full" />
+          <span className="sr-only text-slate-500 dark:text-slate-400">{t('common.loading', 'Loading…')}</span>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -371,11 +412,11 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
             </select>
             <button
               onClick={() => setShowColorPicker(!showColorPicker)}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-              title="Customize chart colors"
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 dark:bg-purple-700 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors"
+              title={t('chart.customizeColors', 'Customize chart colors')}
             >
               <Palette className="w-4 h-4" />
-              Colors
+              {t('chart.colors', 'Colors')}
             </button>
             <ChartExportMenu
               chartId="monthly-plan-actual-chart"
@@ -390,17 +431,20 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
           <div className="mb-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
             <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">
               <Palette className="w-4 h-4" />
-              Customize Chart Colors
+              {t('chart.customizeColors', 'Customize chart colors')}
             </h4>
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
               {/* Render Color Options Helper */}
-              {([
-                { key: 'salesPlan', label: t('monthlyPlanActual.legend.salesPlan', '売上計画') },
-                { key: 'salesActual', label: t('monthlyPlanActual.legend.salesActual', '売上実績') },
-                { key: 'workingHoursPlan', label: t('monthlyPlanActual.legend.workingPlan', '稼働計画') },
-                { key: 'workingHoursActual', label: t('monthlyPlanActual.legend.workingActual', '稼働実績') },
-                { key: 'capacityLine', label: t('monthlyPlanActual.legend.capacityLine', '能力線') },
-              ] as const).map(({ key, label }) => {
+              {SERIES_KEYS.map((key) => {
+                const label = key === 'salesPlan'
+                  ? t('monthlyPlanActual.legend.salesPlan', '売上計画')
+                  : key === 'salesActual'
+                    ? t('monthlyPlanActual.legend.salesActual', '売上実績')
+                    : key === 'workingHoursPlan'
+                      ? t('monthlyPlanActual.legend.workingPlan', '稼働計画')
+                      : key === 'workingHoursActual'
+                        ? t('monthlyPlanActual.legend.workingActual', '稼働実績')
+                        : t('monthlyPlanActual.legend.capacityLine', '能力線');
                 const style = chartColors[key];
                 return (
                   <div key={key} className="flex flex-col gap-2 p-2 bg-white dark:bg-slate-800 rounded border border-slate-100 dark:border-slate-700 shadow-sm">
@@ -408,47 +452,47 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
 
                     {/* Color Row */}
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">Color</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">{t('chart.field.color', 'Color')}</span>
                       <div className="flex items-center gap-1 flex-1">
-                        <input type="color" value={style.color} onChange={(e) => updateColor(key, 'color', e.target.value)} className="w-6 h-6 rounded cursor-pointer p-0 border-0" />
-                        <input type="text" value={style.color} onChange={(e) => updateColor(key, 'color', e.target.value)} className="flex-1 w-full px-1 py-0.5 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded" />
+                        <input type="color" aria-label={label} value={style.color} onChange={(e) => updateColor(key, 'color', e.target.value)} className="w-6 h-6 rounded cursor-pointer p-0 border-0" />
+                        <input type="text" aria-label={label} value={style.color} onChange={(e) => updateColor(key, 'color', e.target.value)} className="flex-1 w-full px-1 py-0.5 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded" />
                       </div>
                     </div>
 
                     {/* Opacity Row */}
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">Alpha</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">{t('chart.field.alpha', 'Alpha')}</span>
                       <div className="flex items-center gap-1 flex-1">
                         <input type="range" min="0" max="1" step="0.1" value={style.opacity} onChange={(e) => updateColor(key, 'opacity', parseFloat(e.target.value))} className="w-full h-1 bg-slate-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer" />
-                        <span className="text-[10px] w-5 text-right font-medium dark:text-slate-300">{Math.round(style.opacity * 100)}%</span>
+                        <span className="text-[10px] w-5 text-right font-medium text-slate-600 dark:text-slate-300">{Math.round(style.opacity * 100)}%</span>
                       </div>
                     </div>
 
                     {/* Label Color Row */}
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">Text</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">{t('chart.field.text', 'Text')}</span>
                       <div className="flex items-center gap-1 flex-1">
-                        <input type="color" value={style.labelColor} onChange={(e) => updateColor(key, 'labelColor', e.target.value)} className="w-6 h-6 rounded cursor-pointer p-0 border-0" />
-                        <input type="text" value={style.labelColor} onChange={(e) => updateColor(key, 'labelColor', e.target.value)} className="flex-1 w-full px-1 py-0.5 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded" />
+                        <input type="color" aria-label={label} value={style.labelColor} onChange={(e) => updateColor(key, 'labelColor', e.target.value)} className="w-6 h-6 rounded cursor-pointer p-0 border-0" />
+                        <input type="text" aria-label={label} value={style.labelColor} onChange={(e) => updateColor(key, 'labelColor', e.target.value)} className="flex-1 w-full px-1 py-0.5 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded" />
                       </div>
                     </div>
 
                     {/* Font Size Row */}
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">Size</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">{t('chart.field.size', 'Size')}</span>
                       <div className="flex items-center gap-1 flex-1">
                         <input type="range" min="8" max="20" step="1" value={style.fontSize ?? 10} onChange={(e) => updateColor(key, 'fontSize', parseInt(e.target.value))} className="w-full h-1 bg-slate-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer" />
-                        <span className="text-[10px] w-5 text-right font-medium dark:text-slate-300">{style.fontSize ?? 10}</span>
+                        <span className="text-[10px] w-5 text-right font-medium text-slate-600 dark:text-slate-300">{style.fontSize ?? 10}</span>
                       </div>
                     </div>
 
                     {/* Bar Width Row (only for bar series) */}
                     {style.barSize !== undefined && (
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">Width</span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">{t('chart.field.width', 'Width')}</span>
                         <div className="flex items-center gap-1 flex-1">
                           <input type="range" min="10" max="100" step="5" value={style.barSize} onChange={(e) => updateColor(key, 'barSize', parseInt(e.target.value))} className="w-full h-1 bg-slate-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer" />
-                          <span className="text-[10px] w-7 text-right font-medium dark:text-slate-300">{style.barSize}px</span>
+                          <span className="text-[10px] w-7 text-right font-medium text-slate-600 dark:text-slate-300">{style.barSize}px</span>
                         </div>
                       </div>
                     )}
@@ -457,11 +501,11 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                     <div className="flex items-center gap-3">
                       <label className="flex items-center gap-1 cursor-pointer">
                         <input type="checkbox" checked={style.bold ?? true} onChange={(e) => updateColor(key, 'bold', e.target.checked)} className="w-3 h-3" />
-                        <span className="text-[10px] text-slate-600 dark:text-slate-400 font-bold">Bold</span>
+                        <span className="text-[10px] text-slate-600 dark:text-slate-400 font-bold">{t('chart.field.bold', 'Bold')}</span>
                       </label>
                       <label className="flex items-center gap-1 cursor-pointer">
                         <input type="checkbox" checked={style.stroke ?? false} onChange={(e) => updateColor(key, 'stroke', e.target.checked)} className="w-3 h-3" />
-                        <span className="text-[10px] text-slate-600 dark:text-slate-400">Outline</span>
+                        <span className="text-[10px] text-slate-600 dark:text-slate-400">{t('chart.field.outline', 'Outline')}</span>
                       </label>
                     </div>
                   </div>
@@ -473,7 +517,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
             <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={showCurrentMonth} onChange={(e) => setShowCurrentMonth(e.target.checked)} className="w-4 h-4 accent-orange-500" />
-                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">🗓️ Highlight current month</span>
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('chart.highlightCurrentMonth', 'Highlight current month')}</span>
               </label>
             </div>
           </div>
@@ -481,30 +525,30 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
 
         {/* Chart Container */}
         <div id="monthly-plan-actual-chart" className="flex-1 min-h-[420px] w-full relative overflow-visible">
-          
+
           {/* Pinned Detail Card Overlay */}
           {pinnedMonth !== null && (() => {
             const pinnedData = monthlyData.find((d) => d.month === pinnedMonth);
             if (!pinnedData) return null;
-            
+
             const isCardOnLeft = pinnedMonth > 8;
             const targetX = columnCoordsRef.current[pinnedMonth] || 100;
             const cardX = isCardOnLeft ? targetX - 230 : targetX + 40;
 
             return (
-              <div 
+              <div
                 className="absolute z-10 pointer-events-none transition-all duration-200 ease-in-out drop-shadow-md"
-                style={{ 
-                  left: cardX, 
+                style={{
+                  left: cardX,
                   top: '45%',
                   transform: 'translateY(-50%)'
                 }}
               >
                 {/* Connecting Arrow */}
-                <div 
+                <div
                   className={`absolute top-1/2 -translate-y-1/2 w-[14px] h-[14px] bg-white dark:bg-slate-900 transform rotate-45 pointer-events-none ${
-                    isCardOnLeft 
-                      ? '-right-[7px] border-t border-r border-slate-300 dark:border-slate-700' 
+                    isCardOnLeft
+                      ? '-right-[7px] border-t border-r border-slate-300 dark:border-slate-700'
                       : '-left-[7px] border-b border-l border-slate-300 dark:border-slate-700'
                   }`}
                   style={{ zIndex: 0 }}
@@ -521,15 +565,20 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
               data={monthlyData}
               margin={{ top: 20, right: 60, left: 20, bottom: 5 }}
               onClick={(state) => {
-                if (state && state.activePayload && state.activePayload.length > 0 && state.activeCoordinate) {
-                  const clickedMonth = state.activePayload[0].payload.month;
-                  
-                  // Toggle off if clicking the same month, otherwise set the month
-                  setPinnedMonth(prev => prev === clickedMonth ? null : clickedMonth);
-                }
+                // recharts 3 `MouseHandlerDataParam` has no `activePayload` — recover the
+                // clicked datum from the active index instead.
+                const rawIndex = state?.activeIndex;
+                if (rawIndex === undefined || rawIndex === null) return;
+                const index = Number(rawIndex);
+                if (!Number.isInteger(index) || index < 0) return;
+                const clicked = monthlyData[index];
+                if (!clicked) return;
+
+                // Toggle off if clicking the same month, otherwise set the month
+                setPinnedMonth(prev => (prev === clicked.month ? null : clicked.month));
               }}
             >
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e0e0" />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_PALETTE.grid} />
 
               {/* Current Month Highlight */}
               {showCurrentMonth && currentMonth !== null && (() => {
@@ -538,7 +587,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 return monthLabel ? (
                   <>
                     <ReferenceArea yAxisId="left" xAxisId="main" x1={monthLabel} x2={monthLabel} fill="rgba(251,146,60,0.12)" />
-                    <ReferenceLine yAxisId="left" xAxisId="main" x={monthLabel} stroke="#f97316" strokeWidth={2} strokeDasharray="6 3" label={{ value: '今月', position: 'top', fontSize: 10, fill: '#f97316', fontWeight: 'bold' }} />
+                    <ReferenceLine yAxisId="left" xAxisId="main" x={monthLabel} stroke="#f97316" strokeWidth={2} strokeDasharray="6 3" label={{ value: t('chart.thisMonth', '今月'), position: 'top', fontSize: 10, fill: '#f97316', fontWeight: 'bold' }} />
                   </>
                 ) : null;
               })()}
@@ -573,7 +622,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                   value: t('monthlyPlanActual.axis.sales', '売上（万円）'),
                   angle: -90,
                   position: 'insideLeft',
-                  style: { fill: '#0066CC' }
+                  style: { fill: chartColors.salesActual.color }
                 }}
               />
 
@@ -587,11 +636,11 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                   value: t('monthlyPlanActual.axis.workingHours', '月間稼働時間（時間）'),
                   angle: 90,
                   position: 'insideRight',
-                  style: { fill: '#CC0000' }
+                  style: { fill: chartColors.workingHoursActual.color }
                 }}
               />
 
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={CustomTooltip} />
               <Legend
                 verticalAlign="top"
                 height={36}
@@ -619,7 +668,8 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                               borderRadius: 2,
                             }} />
                           )}
-                          <span style={{ fontSize: 12, color: '#374151' }}>{entry.value}</span>
+                          {/* Mid-tone label so the legend stays legible in both themes */}
+                          <span style={{ fontSize: 12, color: CHART_PALETTE.labelNeutral }}>{entry.value}</span>
                         </div>
                       );
                     })}
@@ -683,7 +733,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 maxBarSize={chartColors.salesActual.barSize ?? 40}
               >
                 <LabelList dataKey="salesActual" position="top" content={<CustomLabel position="top" dataKey="salesActual" />} />
-                <LabelList content={renderZeroLabel} />
+                <LabelList content={<ZeroLabel />} />
               </Bar>
 
               {/* === BULLET CHART ACTUAL LAYER === */}

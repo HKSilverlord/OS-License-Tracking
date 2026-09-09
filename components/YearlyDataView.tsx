@@ -1,12 +1,16 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Project, MonthlyRecord } from '../types';
 import { dbService } from '../services/dbService';
+import { buildPriceIndex, lookupPrices } from '../services/pricing';
+import type { PriceIndex } from '../services/pricing';
 import { formatCurrency } from '../utils/helpers';
 import { TABLE_COLUMN_WIDTHS, STICKY_CLASSES } from '../utils/tableStyles';
 import { exportTableToCSV, generateCSVFilename } from '../utils/csvExport';
 import { Loader2, FileDown, Copy, Check, GripVertical, ListChecks } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useToast } from '../contexts/ToastContext';
+import { Skeleton } from '../src/ui/components/Skeleton';
 import {
   DndContext,
   closestCenter,
@@ -27,7 +31,9 @@ interface YearlyDataViewProps {
   currentYear: number;
 }
 
-const SortableRowContext = React.createContext<{ attributes: any, listeners: any } | null>(null);
+type SortableHandleProps = Pick<ReturnType<typeof useSortable>, 'attributes' | 'listeners'>;
+
+const SortableRowContext = React.createContext<SortableHandleProps | null>(null);
 
 const SortableYearlyBody: React.FC<{
   project: Project;
@@ -58,15 +64,27 @@ const DragHandle = () => {
   const context = React.useContext(SortableRowContext);
   return (
     <td rowSpan={2} className="sticky left-0 z-50 bg-white dark:bg-slate-900 w-8 px-1 text-center cursor-grab active:cursor-grabbing border-b border-slate-200 dark:border-slate-700" {...context?.attributes} {...context?.listeners}>
-      <GripVertical className="w-4 h-4 text-slate-400 mx-auto" />
+      <GripVertical className="w-4 h-4 text-slate-400 dark:text-slate-500 mx-auto" />
     </td>
   );
 };
 
+/** Revenue of one project for the whole year, priced per (period, project). */
+interface ProjectRevenue {
+  plan: number;
+  actual: number;
+}
+
+const EMPTY_PRICE_INDEX: PriceIndex = buildPriceIndex([], []);
+
 export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) => {
   const { t, language } = useLanguage();
+  const toast = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [records, setRecords] = useState<Record<string, MonthlyRecord[]>>({});
+  // Per-(period, project) prices for the whole year — fetched in ONE request (A5).
+  const [priceIndex, setPriceIndex] = useState<PriceIndex>(EMPTY_PRICE_INDEX);
+  const [periodLabels, setPeriodLabels] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCopying, setIsCopying] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
@@ -91,6 +109,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
       await dbService.updateProjectDisplayOrders(updates);
     } catch (e) {
       console.error('Failed to save order:', e);
+      toast.error(t('toast.saveFailed', 'Save failed'));
     }
   };
 
@@ -104,27 +123,15 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [periodsLabel, recordsData] = await Promise.all([
-        dbService.getPeriods(),
+      // A5: one year-scoped call replaces getPeriods() + getProjects(period) per period.
+      // A1: `yearPrices.index` resolves the price of a (period_label, project_id) pair, so a
+      // project priced differently in H1 and H2 keeps BOTH prices instead of the last one won.
+      const [yearPrices, recordsData] = await Promise.all([
+        dbService.getYearProjectPrices(currentYear),
         dbService.getAllRecords(currentYear)
       ]);
 
-      // Identify periods belonging to this year
-      // e.g. "2025-H1", "2025-H2"
-      const yearPeriods = periodsLabel.filter(p => p.startsWith(currentYear.toString()));
-
-      // Fetch projects for each relevant period
-      // This ensures we get projects even if they are linked via period_projects (Shared model)
-      const projectPromises = yearPeriods.map(p => dbService.getProjects(p));
-      const projectsArrays = await Promise.all(projectPromises);
-
-      // Flatten and deduplicate by ID
-      const allProjects = projectsArrays.flat();
-      const uniqueProjectsMap = new Map<string, Project>();
-      allProjects.forEach(p => {
-        if (p && p.id) uniqueProjectsMap.set(p.id, p);
-      });
-      const relevantProjects = Array.from(uniqueProjectsMap.values());
+      const relevantProjects = [...yearPrices.projects];
 
       const groupedRecords: Record<string, MonthlyRecord[]> = {};
       recordsData.forEach(r => {
@@ -145,8 +152,11 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
 
       setProjects(relevantProjects);
       setRecords(groupedRecords);
+      setPriceIndex(yearPrices.index);
+      setPeriodLabels(yearPrices.periodLabels);
     } catch (error) {
       console.error("Failed to load data for Yearly Data View", error);
+      toast.error(t('toast.loadFailed', 'Failed to load data'));
     } finally {
       setLoading(false);
     }
@@ -156,6 +166,42 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentYear]);
+
+  /**
+   * A1/A2 — revenue is summed PER RECORD, priced with the (period_label, project_id) price.
+   * A project at 2,500 JPY/h in 2025-H1 and 2,300 JPY/h in 2025-H2 yields
+   * H1 hours x 2,500 + H2 hours x 2,300, which is what the Dashboard KPI and the Excel
+   * TOTAL row compute from the same index.
+   */
+  const projectRevenues = useMemo(() => {
+    const totals: Record<string, ProjectRevenue> = {};
+    projects.forEach(project => {
+      let plan = 0;
+      let actual = 0;
+      (records[project.id] || []).forEach(rec => {
+        const prices = lookupPrices(priceIndex, rec.period_label, project.id);
+        plan += (rec.planned_hours || 0) * prices.plan;
+        actual += (rec.actual_hours || 0) * prices.actual;
+      });
+      totals[project.id] = { plan, actual };
+    });
+    return totals;
+  }, [projects, records, priceIndex]);
+
+  /**
+   * Tooltip listing the per-period unit price of a project, but only when the periods of the
+   * year disagree — that is exactly the case the old per-project price map used to flatten.
+   */
+  const priceBreakdown = (projectId: string, kind: 'plan' | 'actual'): string | undefined => {
+    if (periodLabels.length < 2) return undefined;
+    const entries = periodLabels.map(label => ({
+      label,
+      value: lookupPrices(priceIndex, label, projectId)[kind],
+    }));
+    const distinct = new Set(entries.map(e => e.value));
+    if (distinct.size < 2) return undefined;
+    return entries.map(e => `${e.label}: ${formatCurrency(e.value)}`).join(' / ');
+  };
 
   // Compute monthly totals for all projects in this year
   const monthlyTotals = useMemo(() => {
@@ -173,6 +219,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
       return { month: m, plan: planSum, actual: actualSum };
     });
     return totals;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projects, records]);
 
   // Compute accumulated (running) totals from monthlyTotals
@@ -194,6 +241,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
 
     window.addEventListener('dataUpdated', handleDataUpdated);
     return () => window.removeEventListener('dataUpdated', handleDataUpdated);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentYear]);
 
   // CSV Export Function
@@ -219,8 +267,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
 
       const totalPlan = monthlyData.reduce((sum, d) => sum + d.plan, 0);
       const totalActual = monthlyData.reduce((sum, d) => sum + d.actual, 0);
-      const totalRevenuePlan = totalPlan * (project.plan_price || project.unit_price || 0);
-      const totalRevenueActual = totalActual * (project.actual_price || project.unit_price || 0);
+      const revenue = projectRevenues[project.id] ?? { plan: 0, actual: 0 };
 
       // Plan row
       const planRow = [
@@ -229,7 +276,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
         t('tracker.planShort'),
         ...monthlyData.map(d => d.plan > 0 ? d.plan.toString() : '-'),
         totalPlan > 0 ? totalPlan.toString() : '-',
-        totalRevenuePlan > 0 ? totalRevenuePlan.toString() : '-'
+        revenue.plan > 0 ? revenue.plan.toString() : '-'
       ];
 
       // Actual row
@@ -239,7 +286,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
         t('tracker.actualShort'),
         ...monthlyData.map(d => d.actual > 0 ? d.actual.toString() : '-'),
         totalActual > 0 ? totalActual.toString() : '-',
-        totalRevenueActual > 0 ? totalRevenueActual.toString() : '-'
+        revenue.actual > 0 ? revenue.actual.toString() : '-'
       ];
 
       rows.push(planRow);
@@ -286,23 +333,31 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
             const item = new ClipboardItem({ 'image/png': blob });
             await navigator.clipboard.write([item]);
             setCopySuccess(true);
+            toast.success(t('toast.copied', 'Copied to clipboard'));
             setTimeout(() => setCopySuccess(false), 2000);
           } catch (err) {
             console.error('Failed to write to clipboard:', err);
-            alert('Failed to copy image to clipboard. Try saving CSV instead.');
+            toast.error(t('toast.copyFailed', 'Copy failed'));
           }
         }
       }, 'image/png', 1.0);
     } catch (err) {
       console.error('Failed to generate image:', err);
-      alert('Error generating table image.');
+      toast.error(t('toast.copyFailed', 'Copy failed'));
     } finally {
       setIsCopying(false);
     }
   };
 
   if (loading) {
-    return <div className="flex justify-center items-center h-64"><Loader2 className="animate-spin h-8 w-8 text-blue-600" /></div>;
+    return (
+      <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-4 md:p-6 overflow-hidden">
+        <div className="flex-1 min-h-0 bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-200 dark:border-slate-800 p-4">
+          <Skeleton.Table rows={8} cols={6} />
+          <span className="sr-only text-slate-500 dark:text-slate-400">{t('common.loading', 'Loading…')}</span>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -341,11 +396,11 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
               ) : (
                 <Copy className="w-4 h-4 text-slate-500 dark:text-slate-400" />
               )}
-              {isCopying ? 'Copying...' : copySuccess ? 'Copied!' : 'Copy Image'}
+              {isCopying ? t('common.loading', 'Loading…') : copySuccess ? t('export.copied', 'Copied!') : t('export.copyImage', 'Copy Image')}
             </button>
             <button
               onClick={handleExportCSV}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-sm"
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-emerald-600 dark:bg-emerald-700 text-white rounded-lg hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors shadow-sm"
               title={t('buttons.exportTable', 'Export Table')}
             >
               <FileDown className="w-4 h-4" />
@@ -456,8 +511,10 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
                 const totalPlan = monthlyData.reduce((sum, d) => sum + d.plan, 0);
                 const totalActual = monthlyData.reduce((sum, d) => sum + d.actual, 0);
 
-                const totalRevenuePlan = totalPlan * (project.plan_price || project.unit_price || 0);
-                const totalRevenueActual = totalActual * (project.actual_price || project.unit_price || 0);
+                // Per-record, per-period pricing (A1/A2) — never a single flattened price.
+                const revenue = projectRevenues[project.id] ?? { plan: 0, actual: 0 };
+                const planPriceNote = priceBreakdown(project.id, 'plan');
+                const actualPriceNote = priceBreakdown(project.id, 'actual');
 
                 return (
                   <SortableYearlyBody key={project.id} project={project}>
@@ -481,8 +538,11 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
                       <td className="px-2 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 text-right border-l border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
                         {totalPlan > 0 ? totalPlan.toLocaleString() : '-'}
                       </td>
-                      <td className="px-2 py-2 text-xs font-bold text-amber-700 dark:text-amber-400 text-right border-l border-b border-slate-200 dark:border-slate-700 bg-amber-50/30 dark:bg-amber-900/20">
-                        {totalRevenuePlan > 0 ? formatCurrency(totalRevenuePlan) : '-'}
+                      <td
+                        className="px-2 py-2 text-xs font-bold text-amber-700 dark:text-amber-400 text-right border-l border-b border-slate-200 dark:border-slate-700 bg-amber-50/30 dark:bg-amber-900/20"
+                        title={planPriceNote}
+                      >
+                        {revenue.plan > 0 ? formatCurrency(revenue.plan) : '-'}
                       </td>
                     </tr>
 
@@ -499,8 +559,11 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
                       <td className="px-2 py-2 text-xs font-bold text-blue-700 dark:text-blue-400 text-right border-l border-b border-slate-200 dark:border-slate-700 bg-blue-50/30 dark:bg-blue-900/20">
                         {totalActual > 0 ? totalActual.toLocaleString() : '-'}
                       </td>
-                      <td className="px-2 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-400 text-right border-l border-b border-slate-200 dark:border-slate-700 bg-emerald-50/30 dark:bg-emerald-900/20">
-                        {totalRevenueActual > 0 ? formatCurrency(totalRevenueActual) : '-'}
+                      <td
+                        className="px-2 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-400 text-right border-l border-b border-slate-200 dark:border-slate-700 bg-emerald-50/30 dark:bg-emerald-900/20"
+                        title={actualPriceNote}
+                      >
+                        {revenue.actual > 0 ? formatCurrency(revenue.actual) : '-'}
                       </td>
                     </tr>
                   </SortableYearlyBody>

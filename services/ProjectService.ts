@@ -1,6 +1,50 @@
 
 import { BaseService } from './BaseService';
-import { Project } from '../types';
+import { periodService } from './PeriodService';
+import { buildPriceIndex, resolvePrices } from './pricing';
+import type { PeriodProjectPriceRow, PriceIndex } from './pricing';
+import { createLogger } from '../src/core/logger';
+import type { CreateProjectInput, Project } from '../types';
+
+const log = createLogger('ProjectService');
+
+/** Everything the year-scoped views need, fetched in at most two Supabase round-trips. */
+export interface YearProjectPrices {
+    year: number;
+    /** period labels of the year present in `periods`, ascending, e.g. ['2025-H1','2025-H2'] */
+    periodLabels: string[];
+    /** projects linked to each period via period_projects, per-period prices already merged
+     *  (same shape getProjects(period) returns today), sorted by display_order asc */
+    projectsByPeriod: Record<string, Project[]>;
+    /** every distinct project of the year (union across periods), sorted by display_order asc */
+    projects: Project[];
+    /** raw period_projects rows for the year, un-merged */
+    periodRows: PeriodProjectPriceRow[];
+    index: PriceIndex;
+}
+
+/** Shape of the `period_projects ... projects(*)` join used by the period-scoped queries.
+ *  PostgREST types an embedded resource as an array when the cardinality is unknown, while
+ *  this relation returns a single object at runtime — accept both and normalise. */
+interface PeriodProjectJoinRow extends PeriodProjectPriceRow {
+    projects: Project | Project[] | null;
+}
+
+/** Normalises an embedded PostgREST resource to a single row. */
+const embeddedOne = <T,>(value: T | T[] | null | undefined): T | null => {
+    if (Array.isArray(value)) return value.length > 0 ? value[0] : null;
+    return value ?? null;
+};
+
+const byDisplayOrder = (a: Project, b: Project): number =>
+    (a.display_order || 0) - (b.display_order || 0);
+
+/** Merge the period-specific price over the project's global price (null period price = keep global). */
+const mergePeriodPrices = (project: Project, row: PeriodProjectPriceRow): Project => ({
+    ...project,
+    plan_price: row.plan_price ?? project.plan_price,
+    actual_price: row.actual_price ?? project.actual_price,
+});
 
 export class ProjectService extends BaseService {
 
@@ -8,18 +52,17 @@ export class ProjectService extends BaseService {
 
     /**
      * Generates the next available project code in PRJ-XXX format
-     * @param period Optional period to scope the code generation (if you want per-period codes)
+     * @param _period Optional period to scope the code generation (codes are global today)
      * @returns Promise<string> Next code in format PRJ-001, PRJ-002, etc.
      */
-    async getNextProjectCode(period?: string): Promise<string> {
+    async getNextProjectCode(_period?: string): Promise<string> {
         try {
             // Query all projects to find the highest code number
-            let query = this.supabase
+            const query = this.supabase
                 .from('projects')
                 .select('code');
 
-            // Optional: Scope by period if you want codes to be period-specific
-            // if (period) query = query.eq('period', period);
+            // Codes are global for now; scoping by period would go here.
 
             const { data, error } = await query;
             this.handleError(error);
@@ -45,7 +88,7 @@ export class ProjectService extends BaseService {
 
             return code;
         } catch (error) {
-            console.error('Error generating next project code:', error);
+            log.error('Error generating next project code:', error);
             throw error;
         }
     }
@@ -59,72 +102,47 @@ export class ProjectService extends BaseService {
         return /^PRJ-\d{3}$/.test(code);
     }
 
-    async generateNextProjectCode() {
-        const { data, error } = await this.supabase
-            .from('projects')
-            .select('code');
-
-        if (error) throw error;
-
-        // Extract numbers from codes like "PRJ-001"
-        const numbers = data
-            .map(p => {
-                const match = p.code.match(/PRJ-(\d+)/);
-                return match ? parseInt(match[1], 10) : 0;
-            })
-            .filter(n => !isNaN(n));
-
-        const maxNum = Math.max(0, ...numbers);
-        const nextNum = maxNum + 1;
-
-        // Pad with leading zeros to 3 digits
-        return `PRJ-${nextNum.toString().padStart(3, '0')}`;
-    }
-
-
     // --- CRUD Operations ---
 
     async getProjects(period?: string) {
         if (period) {
-            console.log('[ProjectService] Fetching projects for period:', period);
+            log.debug('Fetching projects for period:', period);
 
             // Query projects through the period_projects junction table
             const { data, error } = await this.supabase
                 .from('period_projects')
-                .select('plan_price, actual_price, projects(*)')
+                .select('period_label, project_id, plan_price, actual_price, projects(*)')
                 .eq('period_label', period);
 
             if (error) {
-                console.error('[ProjectService] Error fetching projects:', error);
+                log.error('Error fetching projects:', error);
                 throw error;
             }
 
-            console.log('[ProjectService] Raw data from period_projects:', data?.length || 0, 'items');
+            const rows: PeriodProjectJoinRow[] = data || [];
+            log.debug('Raw data from period_projects:', rows.length, 'items');
 
             // Extract projects from the junction table result and sort by display_order
-            const projects = (data || []).map((pp: any) => {
-                const project = pp.projects;
+            const projects: Project[] = [];
+            for (const pp of rows) {
+                const project = embeddedOne(pp.projects);
                 if (!project) {
-                    console.warn('[ProjectService] Found period_project without nested project data:', pp);
-                    return null;
+                    log.warn('Found period_project without nested project data:', pp);
+                    continue;
                 }
 
-                // Override global prices with period-specific prices if available
-                // If period_price is null, fallback to global price
-                return {
-                    ...project,
-                    plan_price: pp.plan_price ?? project.plan_price,
-                    actual_price: pp.actual_price ?? project.actual_price,
-                };
-            }).filter(Boolean) as Project[];
+                // Override global prices with period-specific prices if available.
+                // If the period price is null, fall back to the global price.
+                projects.push(mergePeriodPrices(project, pp));
+            }
 
-            // Sort by display_order in JavaScript since Supabase doesn't support nested ordering
-            projects.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+            // Sort by display_order in JavaScript since Supabase does not support nested ordering
+            projects.sort(byDisplayOrder);
 
-            console.log('[ProjectService] Returning', projects.length, 'projects');
+            log.debug('Returning', projects.length, 'projects');
             return projects;
         } else {
-            console.log('[ProjectService] Fetching all projects (no period filter)');
+            log.debug('Fetching all projects (no period filter)');
 
             // If no period specified, return all projects sorted by display_order
             const { data, error } = await this.supabase
@@ -133,18 +151,99 @@ export class ProjectService extends BaseService {
                 .order('display_order', { ascending: true });
 
             if (error) {
-                console.error('[ProjectService] Error fetching projects:', error);
+                log.error('Error fetching projects:', error);
                 throw error;
             }
 
-            console.log('[ProjectService] Returning', data?.length || 0, 'projects');
+            log.debug('Returning', data?.length || 0, 'projects');
             return data as Project[];
         }
     }
 
+    /**
+     * One-shot loader for a whole year: every period of `year`, the projects linked to each
+     * of those periods (with per-period prices merged in) and a `PriceIndex` that resolves a
+     * price for any (period_label, project_id) pair. Costs at most two Supabase requests and
+     * replaces the getPeriods() + getProjects(p)-per-period N+1 storm (A5).
+     */
+    async getYearProjectPrices(year: number): Promise<YearProjectPrices> {
+        const allLabels: string[] = await periodService.getPeriods();
+        const periodLabels = allLabels
+            .filter((label) => typeof label === 'string' && label.startsWith(`${year}-`))
+            .sort((a, b) => a.localeCompare(b));
+
+        if (periodLabels.length === 0) {
+            log.debug('No periods found for year', year);
+            return {
+                year,
+                periodLabels,
+                projectsByPeriod: {},
+                projects: [],
+                periodRows: [],
+                index: buildPriceIndex([], []),
+            };
+        }
+
+        const { data, error } = await this.supabase
+            .from('period_projects')
+            .select('period_label, project_id, plan_price, actual_price, projects(*)')
+            .in('period_label', periodLabels);
+
+        if (error) {
+            log.error('Error fetching period_projects for year:', year, error);
+            throw error;
+        }
+
+        const rows: PeriodProjectJoinRow[] = data || [];
+
+        const projectsByPeriod: Record<string, Project[]> = {};
+        for (const label of periodLabels) projectsByPeriod[label] = [];
+
+        const periodRows: PeriodProjectPriceRow[] = [];
+        // Union of the raw (un-merged) projects — this is the global fallback tier of the index.
+        const projectsById = new Map<string, Project>();
+
+        for (const row of rows) {
+            periodRows.push({
+                period_label: row.period_label,
+                project_id: row.project_id,
+                plan_price: row.plan_price,
+                actual_price: row.actual_price,
+            });
+
+            const project = embeddedOne(row.projects);
+            if (!project) {
+                log.warn('Found period_project without nested project data:', row.period_label, row.project_id);
+                continue;
+            }
+
+            if (!projectsByPeriod[row.period_label]) projectsByPeriod[row.period_label] = [];
+            projectsByPeriod[row.period_label].push(mergePeriodPrices(project, row));
+
+            if (!projectsById.has(project.id)) projectsById.set(project.id, project);
+        }
+
+        for (const label of Object.keys(projectsByPeriod)) {
+            projectsByPeriod[label].sort(byDisplayOrder);
+        }
+
+        const projects = Array.from(projectsById.values()).sort(byDisplayOrder);
+
+        log.debug('getYearProjectPrices', year, '->', periodLabels.length, 'periods,', projects.length, 'projects');
+
+        return {
+            year,
+            periodLabels,
+            projectsByPeriod,
+            projects,
+            periodRows,
+            index: buildPriceIndex(periodRows, projects),
+        };
+    }
+
     async getProjectsForCarryOver() {
         try {
-            console.log('[DEBUG ProjectService] Starting getProjectsForCarryOver');
+            log.debug('Starting getProjectsForCarryOver');
 
             // Fetch ALL projects without any period filtering
             const { data, error } = await this.supabase
@@ -155,7 +254,7 @@ export class ProjectService extends BaseService {
             if (error) throw error; // Will be caught by catch block
 
             if (!data) {
-                console.log('[DEBUG ProjectService] No data returned (null/undefined)');
+                log.debug('No data returned (null/undefined)');
                 return [];
             }
 
@@ -167,56 +266,110 @@ export class ProjectService extends BaseService {
             return uniqueProjects as Project[];
 
         } catch (err) {
-            console.error('[DEBUG ProjectService] Error:', err);
+            log.error('getProjectsForCarryOver failed:', err);
             throw err;
         }
     }
 
-    async createProject(project: Omit<Project, 'id' | 'created_at' | 'code'> & { code?: string }) {
-        console.log('[ProjectService] Creating project with period:', project.period);
+    /**
+     * Highest display_order among the projects already linked to `period`, plus one.
+     * Falls back to 1 when the period is empty or the lookup fails.
+     */
+    private async getNextDisplayOrder(period: string): Promise<number> {
+        const { data, error } = await this.supabase
+            .from('period_projects')
+            .select('projects(display_order)')
+            .eq('period_label', period);
 
-        // Auto-generate code if not provided or invalid
-        let finalCode = project.code;
-
-        if (!finalCode || !this.isValidProjectCode(finalCode)) {
-            finalCode = await this.getNextProjectCode(project.period);
+        if (error) {
+            log.warn('Could not determine display_order for period', period, error);
+            return 1;
         }
 
-        // Extract period for linking
-        const periodLabel = project.period;
+        type OrderRow = { display_order: number | null };
+        const rows: Array<{ projects: OrderRow | OrderRow[] | null }> = data || [];
+        let max = 0;
+        for (const row of rows) {
+            const order = embeddedOne(row.projects)?.display_order;
+            if (typeof order === 'number' && Number.isFinite(order) && order > max) max = order;
+        }
 
-        // Insert project into projects table
+        return max + 1;
+    }
+
+    /**
+     * Creates a project and its `period_projects` link.
+     * The link carries the authoritative per-period price; `unit_price` is written only to
+     * keep the deprecated column consistent with `plan_price`.
+     * If the link insert fails, the orphan `projects` row is removed (best effort) and the
+     * error is rethrown — a project without a period link is invisible everywhere.
+     */
+    async createProject(input: CreateProjectInput): Promise<Project> {
+        log.debug('Creating project with period:', input.period);
+
+        // Auto-generate code if not provided or invalid
+        let finalCode = input.code;
+
+        if (!finalCode || !this.isValidProjectCode(finalCode)) {
+            finalCode = await this.getNextProjectCode(input.period);
+        }
+
+        const displayOrder = input.display_order ?? await this.getNextDisplayOrder(input.period);
+
         const { data: createdProject, error } = await this.supabase
             .from('projects')
-            .insert({ ...project, code: finalCode })
+            .insert({
+                code: finalCode,
+                name: input.name,
+                type: input.type,
+                software: input.software,
+                status: input.status,
+                period: input.period,
+                plan_price: input.plan_price,
+                actual_price: input.actual_price,
+                unit_price: input.plan_price,
+                notes: input.notes ?? '',
+                exclusion_mark: input.exclusion_mark ?? '',
+                display_order: displayOrder,
+            })
             .select()
             .single();
 
         if (error) {
-            console.error('[ProjectService] Error creating project:', error);
+            log.error('Error creating project:', error);
             throw error;
         }
 
-        // Link project to period in period_projects table
-        if (periodLabel && createdProject?.id) {
-            console.log('[ProjectService] Linking to period:', periodLabel);
+        const project = createdProject as Project;
 
-            const { error: linkError } = await this.supabase
-                .from('period_projects')
-                .insert({
-                    period_label: periodLabel,
-                    project_id: createdProject.id,
-                    plan_price: project.plan_price || project.unit_price || null,
-                    actual_price: project.actual_price || project.unit_price || null
-                });
+        // Link project to period in the period_projects table
+        log.debug('Linking to period:', input.period);
 
-            if (linkError) {
-                console.error('[ProjectService] ERROR linking project to period:', linkError);
-                // Don't throw - project was created successfully
+        const { error: linkError } = await this.supabase
+            .from('period_projects')
+            .insert({
+                period_label: input.period,
+                project_id: project.id,
+                plan_price: input.plan_price || null,
+                actual_price: input.actual_price || null,
+            });
+
+        if (linkError) {
+            log.error('ERROR linking project to period, rolling back:', linkError);
+
+            const { error: rollbackError } = await this.supabase
+                .from('projects')
+                .delete()
+                .eq('id', project.id);
+
+            if (rollbackError) {
+                log.error('Failed to roll back orphan project', project.id, rollbackError);
             }
+
+            throw linkError;
         }
 
-        return createdProject as Project;
+        return project;
     }
 
     async updateProject(id: string, updates: Partial<Project>) {
@@ -311,8 +464,10 @@ export class ProjectService extends BaseService {
         const periodProjectsPayload = sourceProjects.map(p => ({
             period_label: targetPeriod,
             project_id: p.id,
-            plan_price: p.plan_price || p.unit_price || null,
-            actual_price: p.actual_price || p.unit_price || null
+            // Seed the junction from the project's own prices through the frozen rule in
+            // services/pricing.ts, so this write cannot drift from how reads resolve.
+            plan_price: resolvePrices(null, p).plan || null,
+            actual_price: resolvePrices(null, p).actual || null
         }));
 
         const { error: insertError } = await this.supabase
@@ -350,24 +505,12 @@ export class ProjectService extends BaseService {
         const currentProject = periodProjects[currentIndex];
         const aboveProject = periodProjects[currentIndex - 1];
 
-        // 3. Swap display_order values
-        // Note: We need to update the PROJECTS table, not the junction table, as display_order is likely on the Project entity.
-        // CHECK: If display_order is on projects table, it affects this project in ALL periods.
-        // If sorting is per-period, display_order should be on period_projects. 
-        // Based on previous code: "projects" table has "display_order".
-        // This implies Global Ordering. 
-        // IF we have global ordering but local filtering, "Move Up" is ambiguous.
-        // However, user wants to move it up visually in THIS period.
-        // If we swap display_order with the visible neighbor, it works for this view.
-        // It might affect other views, but that's the tradeoff of global order + local view.
-
-        // Critical: We must swap their display_order values.
+        // 3. Swap display_order values.
+        // display_order lives on the `projects` table, so ordering is global while the view is
+        // period-local; swapping with the visible neighbour is the accepted trade-off.
 
         const currentOrder = currentProject.display_order || 0;
         const aboveOrder = aboveProject.display_order || 0;
-
-        // If orders are identical (bad data), force a spread? 
-        // For now, standard swap.
 
         await this.supabase.from('projects').update({ display_order: aboveOrder }).eq('id', currentProject.id);
         await this.supabase.from('projects').update({ display_order: currentOrder }).eq('id', aboveProject.id);
@@ -390,10 +533,11 @@ export class ProjectService extends BaseService {
         await this.supabase.from('projects').update({ display_order: belowOrder }).eq('id', currentProject.id);
         await this.supabase.from('projects').update({ display_order: currentOrder }).eq('id', belowProject.id);
     }
+
     async updateProjectDisplayOrders(items: { id: string, display_order: number }[]) {
         if (!items || items.length === 0) return;
 
-        console.log(`[ProjectService] Updating display_order for ${items.length} items`);
+        log.debug(`Updating display_order for ${items.length} items`);
 
         // Perform parallel updates
         const updates = items.map(item =>
@@ -403,14 +547,14 @@ export class ProjectService extends BaseService {
                 .eq('id', item.id)
                 .then(({ error }) => {
                     if (error) {
-                        console.error(`[ProjectService] Failed to update project ${item.id}:`, error);
+                        log.error(`Failed to update project ${item.id}:`, error);
                         throw error;
                     }
                 })
         );
 
         await Promise.all(updates);
-        console.log(`[ProjectService] Successfully updated ${items.length} items`);
+        log.debug(`Successfully updated ${items.length} items`);
     }
 }
 

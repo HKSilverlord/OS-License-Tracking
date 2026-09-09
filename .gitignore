@@ -7,17 +7,22 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies & build output
 node_modules
-dist
+dist/
 dist-ssr
 *.local
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Generated / exported documents
 *.xlsx
 *.csv
 *.docx
 *.doc
-*.txt
-*.env
-*.sql
 *.png
 *.jpg
 
@@ -32,10 +37,8 @@ dist-ssr
 *.sln
 *.sw?
 
-# Data & DB
+# Local data dumps
 data/
-db/*.sql
-db/*.md
 os_tracking_app.jsx
 
 # Project Knowledge Skill (Local)

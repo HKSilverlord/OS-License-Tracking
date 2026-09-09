@@ -122,7 +122,7 @@ export const DatabaseDiagnostic: React.FC = () => {
 
         {/* Quick Check Results */}
         {quickCheck && (
-          <div className="bg-slate-50 rounded-lg p-4 mb-4 border border-slate-200">
+          <div className="bg-slate-50 dark:bg-slate-800/60 rounded-lg p-4 mb-4 border border-slate-200 dark:border-slate-700">
             <h3 className="font-semibold text-slate-700 mb-3">Quick Check Results:</h3>
             <div className="grid grid-cols-2 gap-3">
               <StatusItem label="Projects" status={quickCheck.hasProjects} />
@@ -135,7 +135,7 @@ export const DatabaseDiagnostic: React.FC = () => {
 
         {/* Full Diagnostic Results */}
         {result && (
-          <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+          <div className="bg-slate-50 dark:bg-slate-800/60 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
             <h3 className="font-semibold text-slate-700 mb-3">Diagnostic Results:</h3>
             <div className="space-y-2 mb-4">
               <ResultRow label="Total Projects" value={result.totalProjects} />
@@ -201,7 +201,7 @@ export const DatabaseDiagnostic: React.FC = () => {
                 {detailedResult.projects.sample.length > 0 ? (
                   <div className="space-y-1 text-xs">
                     {detailedResult.projects.sample.map((p: any, i: number) => (
-                      <div key={i} className="flex justify-between gap-2 p-2 bg-slate-50 rounded">
+                      <div key={i} className="flex justify-between gap-2 p-2 bg-slate-50 dark:bg-slate-800/60 rounded">
                         <span className="font-mono text-slate-600">{p.code}</span>
                         <span className="text-slate-700 truncate flex-1">{p.name}</span>
                         <span className="text-slate-500">{p.period || 'No period'}</span>
@@ -240,7 +240,7 @@ export const DatabaseDiagnostic: React.FC = () => {
                   <div>
                     <div className="text-xs space-y-1 mb-2">
                       {Object.entries(detailedResult.periodProjects.byPeriod).map(([period, count]) => (
-                        <div key={period} className="flex justify-between p-1 bg-slate-50 rounded">
+                        <div key={period} className="flex justify-between p-1 bg-slate-50 dark:bg-slate-800/60 rounded">
                           <span className="text-slate-700">{period}:</span>
                           <span className="font-medium text-slate-900">{count} projects</span>
                         </div>
@@ -250,7 +250,7 @@ export const DatabaseDiagnostic: React.FC = () => {
                       <summary className="cursor-pointer text-purple-600 hover:text-purple-800">Show sample links</summary>
                       <div className="mt-2 space-y-1">
                         {detailedResult.periodProjects.sample.slice(0, 5).map((pp: any, i: number) => (
-                          <div key={i} className="p-2 bg-slate-50 rounded font-mono text-xs">
+                          <div key={i} className="p-2 bg-slate-50 dark:bg-slate-800/60 rounded font-mono text-xs">
                             {pp.period_label} → {pp.project_id.substring(0, 8)}...
                           </div>
                         ))}
@@ -270,7 +270,7 @@ export const DatabaseDiagnostic: React.FC = () => {
                 {detailedResult.monthlyRecords.total > 0 ? (
                   <div className="text-xs space-y-1">
                     {Object.entries(detailedResult.monthlyRecords.byYear).map(([year, count]) => (
-                      <div key={year} className="flex justify-between p-1 bg-slate-50 rounded">
+                      <div key={year} className="flex justify-between p-1 bg-slate-50 dark:bg-slate-800/60 rounded">
                         <span className="text-slate-700">Year {year}:</span>
                         <span className="font-medium text-slate-900">{count} records</span>
                       </div>

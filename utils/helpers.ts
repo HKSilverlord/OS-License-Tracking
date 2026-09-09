@@ -20,7 +20,12 @@ export const getCurrentPeriod = (): { year: number; type: PeriodType; label: str
   };
 };
 
-export const getMonthsForPeriod = (year: number, type: PeriodType) => {
+/**
+ * Calendar months covered by a half-year period.
+ * The calendar year is irrelevant here — H1 is always Jan–Jun and H2 Jul–Dec —
+ * so the signature only takes the period type.
+ */
+export const getMonthsForPeriod = (type: PeriodType): number[] => {
   return type === PeriodType.H1 ? [1, 2, 3, 4, 5, 6] : [7, 8, 9, 10, 11, 12];
 };
 

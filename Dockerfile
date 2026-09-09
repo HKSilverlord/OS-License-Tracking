@@ -10,17 +10,15 @@ RUN npm ci
 # Copy the rest of the application code
 COPY . .
 
-# Build the application
-# Note: Ensure ARG/ENVs are provided during build if baking is necessary,
-# OR rely on runtime configuration if using a config.js injection strategy.
-# For this setup, we assume environment variables are provided at build time via --build-arg
+# Build the application.
+# Vite inlines VITE_* variables into the bundle at build time, so they must be
+# supplied here via --build-arg. These are the only two the app needs; the anon
+# key is a public key, but do not pass the Supabase service_role key.
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
-ARG GEMINI_API_KEY 
 
 ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
-ENV GEMINI_API_KEY=$GEMINI_API_KEY
 
 RUN npm run build
 

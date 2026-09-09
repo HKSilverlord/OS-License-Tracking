@@ -1,20 +1,29 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { dbService } from '../services/dbService';
 import { formatCurrency } from '../utils/helpers';
-import { exportChartToSVG, generateChartFilename } from '../utils/chartExport';
-import { MonthlyStats, AccumulatedStats } from '../types';
+import type { AccumulatedStats, DashboardRecord, MonthlyStats } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Area, Line, LabelList } from 'recharts';
-import { Loader2, TrendingUp, JapaneseYen, Clock, Calculator, Palette } from 'lucide-react';
+import { TrendingUp, JapaneseYen, Clock, Calculator, Palette } from 'lucide-react';
 import { ChartExportMenu } from './ChartExportMenu';
 import { SectionExportMenu } from './SectionExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUserRole } from '../contexts/UserRoleContext';
+import { toast } from '../contexts/ToastContext';
 import { DEFAULT_UNIT_PRICE } from '../constants';
-import { useCatiaStore } from '../stores/useCatiaStore';
+import { computeYearlyCost, useCatiaStore } from '../stores/useCatiaStore';
+import { buildPriceIndex, lookupPrices } from '../services/pricing';
+import type { PriceIndex } from '../services/pricing';
+import { CHART_PALETTE, useChartPref } from '../utils/chartColorPrefs';
 import { Card } from '../src/ui/components/Card';
 import { KpiCard } from '../src/ui/components/KpiCard';
-import { PageHeader } from '../src/ui/components/PageHeader';
+import { Skeleton } from '../src/ui/components/Skeleton';
 import { motion } from 'framer-motion';
+import type { Variants } from 'framer-motion';
+
+export interface DashboardProps {
+  /** Single source of truth for the year — owned by the App shell top bar (U1 / C10). */
+  currentYear: number;
+}
 
 interface DashboardChartColors {
   planRevenue: string;
@@ -37,6 +46,16 @@ interface DashboardKpiColors {
   summaryTo: string;
 }
 
+/** Chart series defaults come from the shared, theme-safe palette (U8 / C7). */
+const DEFAULT_CHART_COLORS: DashboardChartColors = {
+  planRevenue: CHART_PALETTE.neutral,
+  actualRevenue: CHART_PALETTE.plan,
+  accPlan: CHART_PALETTE.neutral,
+  accActual: CHART_PALETTE.actual,
+};
+
+const CHART_COLOR_KEYS = ['planRevenue', 'actualRevenue', 'accPlan', 'accActual'] as const;
+
 const DEFAULT_KPI_COLORS: DashboardKpiColors = {
   grossPlanFrom: '#0ea5e9', // sky-500
   grossPlanTo: '#0284c7', // sky-600
@@ -51,188 +70,314 @@ const DEFAULT_KPI_COLORS: DashboardKpiColors = {
   summaryTo: '#0d9488', // teal-600
 };
 
+const KPI_COLOR_KEYS = [
+  'grossPlanFrom', 'grossPlanTo', 'grossActualFrom', 'grossActualTo',
+  'netPlanBorder', 'netActualBorder', 'licenseFrom', 'licenseTo',
+  'costAnalysisBorder', 'summaryFrom', 'summaryTo',
+] as const;
+
+const DEFAULT_HEADING_FONT_SIZE = 18;
+const MIN_HEADING_FONT_SIZE = 10;
+const MAX_HEADING_FONT_SIZE = 22;
+
 const DASHBOARD_EXPORT_SECTIONS = [
   { id: 'section-kpi-summary', labelKey: 'export.kpiSummary', defaultLabel: '業績ハイライト (KPI〜ライセンス)' },
   { id: 'section-cost-analysis', labelKey: 'export.costAnalysis', defaultLabel: 'コスト分析' },
   { id: 'section-financial-summary', labelKey: 'export.financialSummary', defaultLabel: '財務サマリー' },
 ];
 
-export const Dashboard: React.FC = () => {
-  const [stats, setStats] = useState<MonthlyStats[]>([]);
-  const [accumulatedStats, setAccumulatedStats] = useState<AccumulatedStats[]>([]);
+/* ------------------------------------------------------------------ *
+ * Stored-preference migration (U8) — the localStorage keys are unchanged
+ * so preferences saved by the previous implementation keep working.
+ * ------------------------------------------------------------------ */
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const readColor = (raw: Record<string, unknown>, key: string, fallback: string): string => {
+  const value = raw[key];
+  return typeof value === 'string' && value.trim() !== '' ? value : fallback;
+};
+
+const migrateChartColors = (raw: unknown): DashboardChartColors | null => {
+  if (!isRecord(raw)) return null;
+  const merged: DashboardChartColors = { ...DEFAULT_CHART_COLORS };
+  for (const key of CHART_COLOR_KEYS) {
+    merged[key] = readColor(raw, key, DEFAULT_CHART_COLORS[key]);
+  }
+  return merged;
+};
+
+const migrateKpiColors = (raw: unknown): DashboardKpiColors | null => {
+  if (!isRecord(raw)) return null;
+  const merged: DashboardKpiColors = { ...DEFAULT_KPI_COLORS };
+  for (const key of KPI_COLOR_KEYS) {
+    merged[key] = readColor(raw, key, DEFAULT_KPI_COLORS[key]);
+  }
+  return merged;
+};
+
+/** The old code stored the raw integer ("18"), which JSON.parse still reads as a number. */
+const migrateHeadingFontSize = (raw: unknown): number | null => {
+  const value = typeof raw === 'number'
+    ? raw
+    : typeof raw === 'string'
+      ? Number.parseInt(raw, 10)
+      : Number.NaN;
+  if (!Number.isFinite(value)) return null;
+  return Math.min(MAX_HEADING_FONT_SIZE, Math.max(MIN_HEADING_FONT_SIZE, Math.round(value)));
+};
+
+/* ------------------------------------------------------------------ *
+ * Animation variants (framer-motion `Variants` — `transition.type` has to
+ * be the literal 'spring', not the widened `string`).
+ * ------------------------------------------------------------------ */
+
+const containerVariants: Variants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+    },
+  },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } },
+};
+
+/* ------------------------------------------------------------------ *
+ * Money maths — ONE code path (A2 / A5)
+ * ------------------------------------------------------------------ */
+
+const EMPTY_PRICE_INDEX: PriceIndex = buildPriceIndex([], []);
+
+interface PricedRecord {
+  plannedHours: number;
+  actualHours: number;
+  plannedRevenue: number;
+  actualRevenue: number;
+}
+
+/**
+ * THE single pricing code path for this view.
+ *
+ * A2: the price is resolved per (period_label, project_id) — a project whose H1
+ * price differs from its H2 price is now priced correctly in each half — using
+ * the frozen resolution rule in services/pricing.ts.
+ *
+ * INVARIANT: every revenue number rendered by this component is built by
+ * summing `priceRecord()` over `rawRecords`. The monthly buckets are the only
+ * accumulator; the gross KPI is the sum of those buckets (see `stats` /
+ * `grossRevenuePlan` below), so `Σ monthly plannedRevenue === grossRevenuePlan`
+ * and `Σ monthly actualRevenue === grossRevenueActual` hold by construction —
+ * they are literally the same additions.
+ */
+const priceRecord = (record: DashboardRecord, index: PriceIndex): PricedRecord => {
+  const plannedHours = Number(record.planned_hours) || 0;
+  const actualHours = Number(record.actual_hours) || 0;
+  const prices = lookupPrices(index, record.period_label, record.project_id);
+  return {
+    plannedHours,
+    actualHours,
+    plannedRevenue: plannedHours * prices.plan,
+    actualRevenue: actualHours * prices.actual,
+  };
+};
+
+/* ------------------------------------------------------------------ *
+ * Small presentational helpers
+ * ------------------------------------------------------------------ */
+
+/** recharts 3 `LabelFormatter` receives `RenderableText`, which is not exported from the package root. */
+type ChartLabelValue = string | number | boolean | null | undefined;
+
+/** Bar/line data labels stay in 万 (10k JPY) units, exactly as before. */
+const manLabel = (value: ChartLabelValue): string =>
+  typeof value === 'number' && value > 0 ? (value / 10000).toFixed(0) : '';
+
+interface ColorFieldProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  labelClassName?: string;
+}
+
+const ColorField: React.FC<ColorFieldProps> = ({
+  label,
+  value,
+  onChange,
+  labelClassName = 'text-[10px] uppercase text-slate-500 dark:text-slate-400',
+}) => (
+  <div className="flex flex-col gap-1 flex-1">
+    <label className={labelClassName}>{label}</label>
+    <div className="flex items-center gap-2">
+      <input
+        type="color"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-9 h-8 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 cursor-pointer"
+      />
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full min-w-0 px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+      />
+    </div>
+  </div>
+);
+
+const ColorGroup: React.FC<{ title: string; className?: string; children: React.ReactNode }> = ({
+  title,
+  className = '',
+  children,
+}) => (
+  <div className={`bg-slate-50 dark:bg-slate-800/60 p-3 rounded-lg border border-slate-100 dark:border-slate-700 ${className}`}>
+    <p className="text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">{title}</p>
+    {children}
+  </div>
+);
+
+const KpiSkeletonCard: React.FC = () => (
+  <Card className="p-5 space-y-3">
+    <Skeleton className="h-3 w-24" />
+    <Skeleton className="h-8 w-32" />
+    <Skeleton className="h-3 w-20" />
+  </Card>
+);
+
+/* ------------------------------------------------------------------ */
+
+export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
+  const { t, language } = useLanguage();
+  const { isAdmin } = useUserRole();
+
   const [loading, setLoading] = useState(true);
-
-  // Animation variants
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1
-      }
-    }
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
-  };
+  const [rawRecords, setRawRecords] = useState<DashboardRecord[]>([]);
+  const [priceIndex, setPriceIndex] = useState<PriceIndex>(EMPTY_PRICE_INDEX);
 
   const [exchangeRate, setExchangeRate] = useState(172);
   const [unitPrice, setUnitPrice] = useState(DEFAULT_UNIT_PRICE);
   const [licenseComputers, setLicenseComputers] = useState(7);
   const [licensePerComputer, setLicensePerComputer] = useState(2517143);
-  const [rawRecords, setRawRecords] = useState<any[]>([]);
-  const [availableYears, setAvailableYears] = useState<number[]>([]);
-  const [selectedYear, setSelectedYear] = useState<number | null>(null);
-  const { t, language } = useLanguage();
+
   const [showColorPicker, setShowColorPicker] = useState(false);
-  const { isAdmin } = useUserRole();
-  const [chartColors, setChartColors] = useState<DashboardChartColors>(() => {
-    const saved = localStorage.getItem('dashboard_chartColors');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { /* ignore */ }
-    }
-    return { planRevenue: '#94a3b8', actualRevenue: '#2563eb', accPlan: '#94a3b8', accActual: '#10b981' };
-  });
-
-  const getYearlyCost = useCatiaStore(state => state.getYearlyCost);
-
   const [showKpiColorPicker, setShowKpiColorPicker] = useState(false);
-  const [dashboardColors, setDashboardColors] = useState<DashboardKpiColors>(() => {
-    const saved = localStorage.getItem('dashboard_kpiColors');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { /* ignore */ }
-    }
-    return DEFAULT_KPI_COLORS;
-  });
 
-  const [headingFontSize, setHeadingFontSize] = useState<number>(() => {
-    const saved = localStorage.getItem('dashboard_headingFontSize');
-    if (saved) {
-      try { return parseInt(saved, 10) || 18; } catch (e) { /* ignore */ }
-    }
-    return 18;
-  });
+  const [chartColors, setChartColors] = useChartPref<DashboardChartColors>(
+    'dashboard_chartColors', DEFAULT_CHART_COLORS, migrateChartColors,
+  );
+  const [dashboardColors, setDashboardColors, resetDashboardColors] = useChartPref<DashboardKpiColors>(
+    'dashboard_kpiColors', DEFAULT_KPI_COLORS, migrateKpiColors,
+  );
+  const [headingFontSize, setHeadingFontSize] = useChartPref<number>(
+    'dashboard_headingFontSize', DEFAULT_HEADING_FONT_SIZE, migrateHeadingFontSize,
+  );
 
+  // A4 (D6): select the computed NUMBER, never the stable `getYearlyCost` function —
+  // selecting the function reference means the KPI never re-renders on CATIA edits.
+  const licenseTotal = useCatiaStore(s => computeYearlyCost(s.licenseCosts, currentYear));
+  const catiaSyncStatus = useCatiaStore(s => s.syncStatus);
+
+  // A4: the CATIA numbers now live in Supabase — pull them once on mount.
   useEffect(() => {
-    localStorage.setItem('dashboard_headingFontSize', headingFontSize.toString());
-  }, [headingFontSize]);
+    void useCatiaStore.getState().hydrate();
+  }, []);
 
+  // `t` is memoised per language; keeping it in a ref keeps `loadDashboard`
+  // stable across language switches so the year is the only refetch trigger.
+  const tRef = useRef(t);
   useEffect(() => {
-    localStorage.setItem('dashboard_chartColors', JSON.stringify(chartColors));
-  }, [chartColors]);
-
-  useEffect(() => {
-    localStorage.setItem('dashboard_kpiColors', JSON.stringify(dashboardColors));
-  }, [dashboardColors]);
+    tRef.current = t;
+  }, [t]);
 
   const planShort = t('tracker.planShort', 'Plan');
   const actualShort = t('tracker.actualShort', 'Actual');
 
+  /**
+   * A5: one settings call + one records call + ONE `getYearProjectPrices` call
+   * (≤ 2 Supabase requests) replaces the previous getPeriods() + getProjects(period)
+   * per-period request storm.
+   */
+  const loadDashboard = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) setLoading(true);
+    try {
+      const [settings, records, yearPrices] = await Promise.all([
+        dbService.getSettings(),
+        dbService.getDashboardStats(currentYear),
+        dbService.getYearProjectPrices(currentYear),
+      ]);
+
+      if (typeof settings.exchangeRate === 'number') setExchangeRate(settings.exchangeRate);
+      if (typeof settings.licenseComputers === 'number') setLicenseComputers(settings.licenseComputers);
+      if (typeof settings.licensePerComputer === 'number') setLicensePerComputer(settings.licensePerComputer);
+      if (typeof settings.unitPrice === 'number') setUnitPrice(settings.unitPrice);
+
+      setRawRecords(records);
+      setPriceIndex(yearPrices.index);
+    } catch (error) {
+      console.error('Failed to load dashboard data', error);
+      toast.error(tRef.current('toast.loadFailed', 'Failed to load data'));
+    } finally {
+      setLoading(false);
+    }
+  }, [currentYear]);
+
+  // U1: the load re-runs whenever the shell's year changes.
   useEffect(() => {
-    const loadYears = async () => {
-      try {
-        const years = await dbService.getRecordYears();
-        setAvailableYears(years);
-        if (years.length > 0) {
-          const realYear = new Date().getFullYear();
-          setSelectedYear(years.includes(realYear) ? realYear : years[0]);
-        } else {
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error('Failed to load years', error);
-        setLoading(false);
-      }
+    void loadDashboard();
+  }, [loadDashboard]);
+
+  // U2: hours saved in /tracking (and newly created periods) refresh the KPIs.
+  useEffect(() => {
+    // Refresh in place — no skeleton flash for an event-driven update.
+    const handleRefresh = () => {
+      void loadDashboard({ silent: true });
     };
-    loadYears();
-  }, []);
-
-  const [yearlyData, setYearlyData] = useState<{ salesPlan: number, salesActual: number | null }>({ salesPlan: 0, salesActual: 0 });
-  // Price map from period_projects junction table (same source as YearlyDataView)
-  const [projectPriceMap, setProjectPriceMap] = useState<Record<string, { planPrice: number, actPrice: number }>>({});
-
-  useEffect(() => {
-    if (selectedYear === null) return;
-    const load = async () => {
-      try {
-        const settings = await dbService.getSettings();
-        if (typeof settings.exchangeRate === 'number') setExchangeRate(settings.exchangeRate);
-        if (typeof settings.licenseComputers === 'number') setLicenseComputers(settings.licenseComputers);
-        if (typeof settings.licensePerComputer === 'number') setLicensePerComputer(settings.licensePerComputer);
-        if (typeof settings.unitPrice === 'number') setUnitPrice(settings.unitPrice);
-
-        const records = await dbService.getDashboardStats(selectedYear);
-        setRawRecords(records);
-
-        // Fetch projects via period_projects (exactly like YearlyDataView)
-        // This is the ONLY way to get the correct plan_price/actual_price
-        const periods = await dbService.getPeriods();
-        const yearPeriods = periods.filter(p => p.startsWith(selectedYear.toString()));
-        const projectPromises = yearPeriods.map(p => dbService.getProjects(p));
-        const projectsArrays = await Promise.all(projectPromises);
-        const allProjects = projectsArrays.flat();
-
-        // Build price map from period_projects data (deduplicated by project ID)
-        const priceMap: Record<string, { planPrice: number, actPrice: number }> = {};
-        allProjects.forEach(p => {
-          if (p && p.id) {
-            priceMap[p.id] = {
-              planPrice: p.plan_price || p.unit_price || 0,
-              actPrice: p.actual_price || p.unit_price || 0
-            };
-          }
-        });
-        setProjectPriceMap(priceMap);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
+    window.addEventListener('dataUpdated', handleRefresh);
+    window.addEventListener('periodCreated', handleRefresh);
+    return () => {
+      window.removeEventListener('dataUpdated', handleRefresh);
+      window.removeEventListener('periodCreated', handleRefresh);
     };
-    load();
-  }, [selectedYear]);
+  }, [loadDashboard]);
 
-  useEffect(() => {
-    if (!selectedYear) return;
-
-    // Aggregate by month
+  const stats = useMemo<MonthlyStats[]>(() => {
     const locale = language === 'ja' ? 'ja-JP' : language === 'vn' ? 'vi-VN' : 'en-US';
-    const monthlyData = Array.from({ length: 12 }, (_, i) => ({
+    const monthly: MonthlyStats[] = Array.from({ length: 12 }, (_, i) => ({
       month: i + 1,
-      name: new Date(selectedYear, i).toLocaleString(locale, { month: 'short' }),
+      name: new Date(currentYear, i).toLocaleString(locale, { month: 'short' }),
       plannedHours: 0,
       actualHours: 0,
       plannedRevenue: 0,
       actualRevenue: 0,
     }));
 
-    rawRecords.forEach((r: any) => {
-      if (r.month >= 1 && r.month <= 12) {
-        const target = monthlyData[r.month - 1];
-        target.plannedHours += Number(r.planned_hours) || 0;
-        target.actualHours += Number(r.actual_hours) || 0;
-        // Use prices from period_projects (same source as YearlyDataView table)
-        const prices = projectPriceMap[r.project_id];
-        const planPrice = prices?.planPrice || 0;
-        const actualPrice = prices?.actPrice || 0;
-        target.plannedRevenue += (Number(r.planned_hours) || 0) * planPrice;
-        target.actualRevenue += (Number(r.actual_hours) || 0) * actualPrice;
-      }
-    });
+    for (const record of rawRecords) {
+      if (record.month < 1 || record.month > 12) continue;
+      const priced = priceRecord(record, priceIndex);
+      const target = monthly[record.month - 1];
+      target.plannedHours += priced.plannedHours;
+      target.actualHours += priced.actualHours;
+      target.plannedRevenue += priced.plannedRevenue;
+      target.actualRevenue += priced.actualRevenue;
+    }
 
-    setStats(monthlyData);
+    return monthly;
+  }, [rawRecords, priceIndex, language, currentYear]);
 
+  const accumulatedStats = useMemo<AccumulatedStats[]>(() => {
     let accPlan = 0;
-    let accAct = 0;
-    const accData = monthlyData.map(d => {
+    let accActual = 0;
+    return stats.map(d => {
       accPlan += d.plannedRevenue;
-      accAct += d.actualRevenue;
-      return { month: d.name, accPlannedRevenue: accPlan, accActualRevenue: accAct };
+      accActual += d.actualRevenue;
+      return { month: d.name, accPlannedRevenue: accPlan, accActualRevenue: accActual };
     });
-    setAccumulatedStats(accData);
-  }, [rawRecords, unitPrice, language, selectedYear, projectPriceMap]);
+  }, [stats]);
 
   const handleRateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value) || 0;
@@ -258,15 +403,56 @@ export const Dashboard: React.FC = () => {
     dbService.saveSettings({ licensePerComputer: val });
   };
 
+  // U6: a Skeleton shell instead of a bare centred spinner.
   if (loading) {
-    return <div className="flex justify-center p-12"><Loader2 className="animate-spin text-blue-600" /></div>;
+    return (
+      <div
+        role="status"
+        aria-busy="true"
+        aria-label={t('common.loading', 'Loading…')}
+        className="h-full overflow-y-auto p-4 md:p-6 bg-slate-50 dark:bg-slate-950 transition-colors duration-200"
+      >
+        <div className="max-w-7xl mx-auto space-y-6">
+          <Card className="p-4">
+            <div className="flex flex-col lg:flex-row justify-between gap-4">
+              <div className="space-y-2">
+                <Skeleton className="h-6 w-56" />
+                <Skeleton className="h-4 w-72" />
+              </div>
+              <Skeleton className="h-16 w-full lg:w-96" />
+            </div>
+          </Card>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            {[0, 1, 2, 3].map(i => <KpiSkeletonCard key={`kpi-${i}`} />)}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[0, 1, 2].map(i => <KpiSkeletonCard key={`gross-${i}`} />)}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-8">
+            {[0, 1].map(i => (
+              <Card key={`chart-${i}`} className="p-5 space-y-4">
+                <Skeleton className="h-5 w-48" />
+                <Skeleton className="h-72 w-full" />
+              </Card>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   }
 
-  if (availableYears.length === 0 && !loading) {
+  // U1: the empty state now follows the shell's year instead of a private year list.
+  if (rawRecords.length === 0) {
     return (
-      <div className="h-full flex items-center justify-center bg-slate-50">
-        <div className="bg-white dark:bg-slate-900 shadow rounded-lg p-6 text-center">
-          <p className="text-slate-600 text-sm">{t('dashboard.empty')}</p>
+      <div className="h-full flex items-center justify-center bg-slate-50 dark:bg-slate-950 transition-colors duration-200">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow rounded-lg p-6 text-center">
+          <p className="text-slate-600 dark:text-slate-300 text-sm">
+            {t('dashboard.noDataForYear', 'No data for {year}').replace('{year}', String(currentYear))}
+          </p>
+          <p className="text-slate-500 dark:text-slate-400 text-xs mt-2">{t('dashboard.empty')}</p>
         </div>
       </div>
     );
@@ -275,37 +461,14 @@ export const Dashboard: React.FC = () => {
   const totalPlanHours = stats.reduce((acc, curr) => acc + curr.plannedHours, 0);
   const totalActualHours = stats.reduce((acc, curr) => acc + curr.actualHours, 0);
 
-  // Replicate YearlyDataView logic exactly: group yearly hours by project, then multiply by price from period_projects
-  const projectGrossList: Record<string, { planH: number, actH: number, planP: number, actP: number }> = {};
-  rawRecords.forEach(r => {
-    const pid = r.project_id;
-    if (!projectGrossList[pid]) {
-      const prices = projectPriceMap[pid];
-      projectGrossList[pid] = {
-        planH: 0, actH: 0,
-        planP: prices?.planPrice || 0,
-        actP: prices?.actPrice || 0
-      };
-    }
-    projectGrossList[pid].planH += (Number(r.planned_hours) || 0);
-    projectGrossList[pid].actH += (Number(r.actual_hours) || 0);
-  });
+  // A2 INVARIANT: the gross KPIs are the sum of the very same monthly buckets the
+  // chart renders, so Σ monthly revenue === gross revenue exactly (same additions).
+  const grossRevenuePlan = stats.reduce((acc, curr) => acc + curr.plannedRevenue, 0);
+  const grossRevenueActual = stats.reduce((acc, curr) => acc + curr.actualRevenue, 0);
 
-  let exactGrossRevenuePlan = 0;
-  let exactGrossRevenueActual = 0;
-  Object.values(projectGrossList).forEach(p => {
-    exactGrossRevenuePlan += p.planH * p.planP;
-    exactGrossRevenueActual += p.actH * p.actP;
-  });
-
-  const grossRevenuePlan = exactGrossRevenuePlan;
-  const grossRevenueActual = exactGrossRevenueActual;
-
-  const licenseTotal = selectedYear ? getYearlyCost(selectedYear) : (licenseComputers * licensePerComputer);
   const netRevenuePlan = grossRevenuePlan - licenseTotal;
   const netRevenueActual = grossRevenueActual - licenseTotal;
   const achievementRate = totalPlanHours !== 0 ? (totalActualHours / totalPlanHours) * 100 : 0;
-  const profitMarginPlan = grossRevenuePlan !== 0 ? (netRevenuePlan / grossRevenuePlan) * 100 : 0;
   const profitMarginActual = grossRevenueActual !== 0 ? (netRevenueActual / grossRevenueActual) * 100 : 0;
   const licenseCostPerHour = totalPlanHours !== 0 ? licenseTotal / totalPlanHours : 0;
   const netHourlyRate = unitPrice - licenseCostPerHour;
@@ -320,11 +483,13 @@ export const Dashboard: React.FC = () => {
     return `${sign}${formatCurrency(abs)}`;
   };
   const fmtHours = (val: number) => `${Math.round(val).toLocaleString()}h`;
-  const rateColor = achievementRate >= 100 ? 'text-emerald-600' : achievementRate >= 80 ? 'text-yellow-600' : 'text-red-600';
-  const netActualTone = netRevenueActual >= 0 ? 'text-emerald-700 border-emerald-500' : 'text-red-700 border-red-500';
+
+  const gradientSuffix = t('dashboard.colors.gradientSuffix', '(Gradient)');
+  const fromLabel = t('dashboard.colors.from', 'From');
+  const toLabel = t('dashboard.colors.to', 'To');
 
   return (
-    <motion.div 
+    <motion.div
       variants={containerVariants}
       initial="hidden"
       animate="show"
@@ -338,19 +503,9 @@ export const Dashboard: React.FC = () => {
           <motion.div variants={itemVariants} className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors duration-200">
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-3">
-              <h2 className="text-xl font-bold text-slate-800">{`${t('header.dashboardTitle', 'Dashboard')} ${selectedYear}`}</h2>
-              <select
-                data-html2canvas-ignore="true"
-                value={selectedYear ?? ''}
-                onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
-                className="text-sm border border-slate-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {availableYears.map(year => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
+              <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">{`${t('header.dashboardTitle', 'Dashboard')} ${currentYear}`}</h2>
             </div>
-            <p className="text-sm text-slate-500">{t('dashboard.header.desc', 'Review progress and revenue by year')}</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">{t('dashboard.header.desc', 'Review progress and revenue by year')}</p>
           </div>
 
           <div className="flex flex-col md:flex-row items-end md:items-center gap-4">
@@ -359,71 +514,77 @@ export const Dashboard: React.FC = () => {
               <button
                 data-html2canvas-ignore="true"
                 onClick={() => setShowKpiColorPicker(!showKpiColorPicker)}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                title="ダッシュボードの色をカスタマイズ"
+                className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 dark:bg-purple-500 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors"
+                title={t('dashboard.colors.title')}
               >
                 <Palette className="w-4 h-4" />
-                色変更
+                {t('dashboard.colors.button')}
               </button>
             )}
             <div className="w-full lg:w-auto flex flex-col gap-2">
-              <div className="flex flex-wrap items-center gap-3 bg-sky-50 px-4 py-3 rounded-lg border border-sky-100">
-                <Calculator className="w-5 h-5 text-blue-600" />
+              <div className="flex flex-wrap items-center gap-3 bg-sky-50 dark:bg-sky-900/20 px-4 py-3 rounded-lg border border-sky-100 dark:border-sky-800">
+                <Calculator className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                 <div className="flex flex-col">
-                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider pb-1">{t('dashboard.fx.label', 'Exchange Rate')}</span>
+                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider pb-1">{t('dashboard.fx.label', 'Exchange Rate')}</span>
                   <div className="flex items-center">
-                    <span className="text-sm font-medium text-slate-800 mr-2">1 JPY = </span>
+                    <span className="text-sm font-medium text-slate-800 dark:text-slate-200 mr-2">1 JPY = </span>
                     <input
                       type="number"
                       disabled={!isAdmin}
-                      className="w-20 h-8 text-sm border-sky-200 rounded px-2 focus:ring-1 focus:ring-sky-500 text-right font-semibold text-slate-800 bg-white dark:bg-slate-900 disabled:opacity-75 disabled:cursor-not-allowed"
+                      className="w-20 h-8 text-sm border border-sky-200 dark:border-sky-700 rounded px-2 focus:ring-1 focus:ring-sky-500 text-right font-semibold text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900 disabled:opacity-75 disabled:cursor-not-allowed"
                       value={exchangeRate}
                       onChange={handleRateChange}
                     />
-                    <span className="text-sm font-medium text-slate-800 ml-1">VND</span>
+                    <span className="text-sm font-medium text-slate-800 dark:text-slate-200 ml-1">VND</span>
                   </div>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider pb-1">{t('dashboard.fx.hourly', 'Hourly Rate (JPY)')}</span>
+                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider pb-1">{t('dashboard.fx.hourly', 'Hourly Rate (JPY)')}</span>
                   <input
                     type="number"
                     disabled={!isAdmin}
-                    className="w-20 h-8 text-sm border-sky-200 rounded px-2 focus:ring-1 focus:ring-sky-500 text-right font-semibold text-slate-800 bg-white dark:bg-slate-900 disabled:opacity-75 disabled:cursor-not-allowed"
+                    className="w-20 h-8 text-sm border border-sky-200 dark:border-sky-700 rounded px-2 focus:ring-1 focus:ring-sky-500 text-right font-semibold text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900 disabled:opacity-75 disabled:cursor-not-allowed"
                     value={unitPrice}
                     onChange={handleUnitPriceChange}
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-emerald-50 px-4 py-3 rounded-lg border border-emerald-200">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-3 rounded-lg border border-emerald-200 dark:border-emerald-800">
                 <div className="flex flex-col">
-                  <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider pb-1">{t('dashboard.license.count', 'License Seats')}</span>
+                  <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider pb-1">{t('dashboard.license.count', 'License Seats')}</span>
                   <input
                     type="number"
                     min={0}
                     disabled={!isAdmin}
-                    className="w-full h-9 text-sm border-emerald-200 rounded px-2 focus:ring-1 focus:ring-emerald-500 text-right font-semibold text-emerald-900 bg-white dark:bg-slate-900 disabled:opacity-75 disabled:cursor-not-allowed"
+                    className="w-full h-9 text-sm border border-emerald-200 dark:border-emerald-700 rounded px-2 focus:ring-1 focus:ring-emerald-500 text-right font-semibold text-emerald-900 dark:text-emerald-200 bg-white dark:bg-slate-900 disabled:opacity-75 disabled:cursor-not-allowed"
                     value={licenseComputers}
                     onChange={handleLicenseComputersChange}
                   />
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider pb-1">{t('dashboard.license.perSeat', 'Fee per Seat (JPY)')}</span>
+                  <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider pb-1">{t('dashboard.license.perSeat', 'Fee per Seat (JPY)')}</span>
                   <input
                     type="number"
                     min={0}
                     disabled={!isAdmin}
-                    className="w-full h-9 text-sm border-emerald-200 rounded px-2 focus:ring-1 focus:ring-emerald-500 text-right font-semibold text-emerald-900 bg-white dark:bg-slate-900 disabled:opacity-75 disabled:cursor-not-allowed"
+                    className="w-full h-9 text-sm border border-emerald-200 dark:border-emerald-700 rounded px-2 focus:ring-1 focus:ring-emerald-500 text-right font-semibold text-emerald-900 dark:text-emerald-200 bg-white dark:bg-slate-900 disabled:opacity-75 disabled:cursor-not-allowed"
                     value={licensePerComputer}
                     onChange={handleLicensePerComputerChange}
                   />
                 </div>
                 <div className="flex flex-col justify-end">
-                  <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider pb-1">
+                  <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider pb-1">
                     {t('dashboard.license.total', 'Annual License Cost')} (CATIA)
                   </span>
-                  <div className="h-9 flex items-center justify-end text-sm font-bold text-emerald-900 bg-white dark:bg-slate-900 px-2 rounded border border-emerald-200" title="Dynamically calculated from CATIA License table">
+                  <div className="h-9 flex items-center justify-end text-sm font-bold text-emerald-900 dark:text-emerald-200 bg-white dark:bg-slate-900 px-2 rounded border border-emerald-200 dark:border-emerald-700" title="Dynamically calculated from CATIA License table">
                     {fmt(licenseTotal)} / {toMan(licenseTotal)}
                   </div>
+                  {catiaSyncStatus === 'loading' && (
+                    <span className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-1 text-right">{t('dashboard.licenseSyncing', 'Syncing license data…')}</span>
+                  )}
+                  {catiaSyncStatus === 'error' && (
+                    <span className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 text-right">{t('catia.syncError', 'Sync failed — showing local values')}</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -432,147 +593,120 @@ export const Dashboard: React.FC = () => {
 
         {/* Dashboard KPI Color Picker Panel */}
         {showKpiColorPicker && (
-          <div data-html2canvas-ignore="true" className="bg-white dark:bg-slate-900 p-5 rounded-xl shadow-sm border border-slate-200 mb-6 animate-in slide-in-from-top-2">
+          <div data-html2canvas-ignore="true" className="bg-white dark:bg-slate-900 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 mb-6 animate-in slide-in-from-top-2">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-6 flex-wrap">
-                <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                  <Palette className="w-4 h-4 text-purple-600" />
-                  Customize Dashboard Colors
+                <h4 className="text-sm font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                  <Palette className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  {t('dashboard.colors.title', 'Customize Dashboard Colors')}
                 </h4>
-                <div className="flex items-center gap-3 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-                  <label className="text-xs font-semibold text-slate-600">Heading Size:</label>
-                  <input 
-                    type="range" 
-                    min="10" 
-                    max="22" 
-                    step="1" 
-                    value={headingFontSize} 
-                    onChange={(e) => setHeadingFontSize(parseInt(e.target.value, 10))}
-                    className="w-24 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">{t('dashboard.colors.headingSize', 'Heading Size')}:</label>
+                  <input
+                    type="range"
+                    min={MIN_HEADING_FONT_SIZE}
+                    max={MAX_HEADING_FONT_SIZE}
+                    step="1"
+                    value={headingFontSize}
+                    onChange={(e) => setHeadingFontSize(parseInt(e.target.value, 10) || DEFAULT_HEADING_FONT_SIZE)}
+                    className="w-24 h-1.5 bg-slate-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer"
                   />
-                  <span className="text-xs font-bold w-10 text-right">{headingFontSize}px</span>
+                  <span className="text-xs font-bold w-10 text-right text-slate-700 dark:text-slate-200">{headingFontSize}px</span>
                 </div>
               </div>
               <button
-                onClick={() => setDashboardColors(DEFAULT_KPI_COLORS)}
-                className="text-xs px-3 py-1 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded transition-colors"
+                onClick={resetDashboardColors}
+                className="text-xs px-3 py-1 text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded transition-colors"
               >
-                Reset Defaults
+                {t('dashboard.colors.reset', 'Reset Defaults')}
               </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {/* Gross Plan */}
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                <p className="text-xs font-bold text-slate-600 mb-2">{t('dashboard.gross.plan', 'Gross Revenue (Plan)')} (Gradient)</p>
+              <ColorGroup title={`${t('dashboard.gross.plan', 'Gross Revenue (Plan)')} ${gradientSuffix}`}>
                 <div className="flex gap-4">
-                  <div className="flex flex-col gap-1 flex-1">
-                    <label className="text-[10px] uppercase text-slate-500">From</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={dashboardColors.grossPlanFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, grossPlanFrom: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
-                      <input type="text" value={dashboardColors.grossPlanFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, grossPlanFrom: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-1 flex-1">
-                    <label className="text-[10px] uppercase text-slate-500">To</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={dashboardColors.grossPlanTo} onChange={(e) => setDashboardColors({ ...dashboardColors, grossPlanTo: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
-                      <input type="text" value={dashboardColors.grossPlanTo} onChange={(e) => setDashboardColors({ ...dashboardColors, grossPlanTo: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
-                    </div>
-                  </div>
+                  <ColorField
+                    label={fromLabel}
+                    value={dashboardColors.grossPlanFrom}
+                    onChange={(grossPlanFrom) => setDashboardColors({ ...dashboardColors, grossPlanFrom })}
+                  />
+                  <ColorField
+                    label={toLabel}
+                    value={dashboardColors.grossPlanTo}
+                    onChange={(grossPlanTo) => setDashboardColors({ ...dashboardColors, grossPlanTo })}
+                  />
                 </div>
-              </div>
+              </ColorGroup>
 
               {/* Gross Actual */}
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                <p className="text-xs font-bold text-slate-600 mb-2">{t('dashboard.gross.actual', 'Gross Revenue (Actual)')} (Gradient)</p>
+              <ColorGroup title={`${t('dashboard.gross.actual', 'Gross Revenue (Actual)')} ${gradientSuffix}`}>
                 <div className="flex gap-4">
-                  <div className="flex flex-col gap-1 flex-1">
-                    <label className="text-[10px] uppercase text-slate-500">From</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={dashboardColors.grossActualFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, grossActualFrom: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
-                      <input type="text" value={dashboardColors.grossActualFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, grossActualFrom: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-1 flex-1">
-                    <label className="text-[10px] uppercase text-slate-500">To</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={dashboardColors.grossActualTo} onChange={(e) => setDashboardColors({ ...dashboardColors, grossActualTo: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
-                      <input type="text" value={dashboardColors.grossActualTo} onChange={(e) => setDashboardColors({ ...dashboardColors, grossActualTo: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
-                    </div>
-                  </div>
+                  <ColorField
+                    label={fromLabel}
+                    value={dashboardColors.grossActualFrom}
+                    onChange={(grossActualFrom) => setDashboardColors({ ...dashboardColors, grossActualFrom })}
+                  />
+                  <ColorField
+                    label={toLabel}
+                    value={dashboardColors.grossActualTo}
+                    onChange={(grossActualTo) => setDashboardColors({ ...dashboardColors, grossActualTo })}
+                  />
                 </div>
-              </div>
+              </ColorGroup>
 
               {/* License */}
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                <p className="text-xs font-bold text-slate-600 mb-2">{t('dashboard.license.card.subtitle', 'Annual License Fee')} (Gradient)</p>
+              <ColorGroup title={`${t('dashboard.license.card.subtitle', 'Annual License Fee')} ${gradientSuffix}`}>
                 <div className="flex gap-4">
-                  <div className="flex flex-col gap-1 flex-1">
-                    <label className="text-[10px] uppercase text-slate-500">From</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={dashboardColors.licenseFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, licenseFrom: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
-                      <input type="text" value={dashboardColors.licenseFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, licenseFrom: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-1 flex-1">
-                    <label className="text-[10px] uppercase text-slate-500">To</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={dashboardColors.licenseTo} onChange={(e) => setDashboardColors({ ...dashboardColors, licenseTo: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
-                      <input type="text" value={dashboardColors.licenseTo} onChange={(e) => setDashboardColors({ ...dashboardColors, licenseTo: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
-                    </div>
-                  </div>
+                  <ColorField
+                    label={fromLabel}
+                    value={dashboardColors.licenseFrom}
+                    onChange={(licenseFrom) => setDashboardColors({ ...dashboardColors, licenseFrom })}
+                  />
+                  <ColorField
+                    label={toLabel}
+                    value={dashboardColors.licenseTo}
+                    onChange={(licenseTo) => setDashboardColors({ ...dashboardColors, licenseTo })}
+                  />
                 </div>
-              </div>
+              </ColorGroup>
 
               {/* Summary */}
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                <p className="text-xs font-bold text-slate-600 mb-2">Financial Summary (Gradient)</p>
+              <ColorGroup title={`${t('dashboard.summary.title', 'Financial Summary')} ${gradientSuffix}`}>
                 <div className="flex gap-4">
-                  <div className="flex flex-col gap-1 flex-1">
-                    <label className="text-[10px] uppercase text-slate-500">From</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={dashboardColors.summaryFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, summaryFrom: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
-                      <input type="text" value={dashboardColors.summaryFrom} onChange={(e) => setDashboardColors({ ...dashboardColors, summaryFrom: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-1 flex-1">
-                    <label className="text-[10px] uppercase text-slate-500">To</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={dashboardColors.summaryTo} onChange={(e) => setDashboardColors({ ...dashboardColors, summaryTo: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
-                      <input type="text" value={dashboardColors.summaryTo} onChange={(e) => setDashboardColors({ ...dashboardColors, summaryTo: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
-                    </div>
-                  </div>
+                  <ColorField
+                    label={fromLabel}
+                    value={dashboardColors.summaryFrom}
+                    onChange={(summaryFrom) => setDashboardColors({ ...dashboardColors, summaryFrom })}
+                  />
+                  <ColorField
+                    label={toLabel}
+                    value={dashboardColors.summaryTo}
+                    onChange={(summaryTo) => setDashboardColors({ ...dashboardColors, summaryTo })}
+                  />
                 </div>
-              </div>
+              </ColorGroup>
 
               {/* Solid Borders (Net Plan, Net Actual, Cost) */}
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 xl:col-span-2">
-                <p className="text-xs font-bold text-slate-600 mb-2">Card Borders (Solid)</p>
+              <ColorGroup title={t('dashboard.colors.cardBorders', 'Card Borders (Solid)')} className="xl:col-span-2">
                 <div className="grid grid-cols-3 gap-4">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] uppercase text-slate-500">{t('dashboard.net.plan', 'Net Plan')}</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={dashboardColors.netPlanBorder} onChange={(e) => setDashboardColors({ ...dashboardColors, netPlanBorder: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
-                      <input type="text" value={dashboardColors.netPlanBorder} onChange={(e) => setDashboardColors({ ...dashboardColors, netPlanBorder: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] uppercase text-slate-500">{t('dashboard.net.actual', 'Net Actual')}</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={dashboardColors.netActualBorder} onChange={(e) => setDashboardColors({ ...dashboardColors, netActualBorder: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
-                      <input type="text" value={dashboardColors.netActualBorder} onChange={(e) => setDashboardColors({ ...dashboardColors, netActualBorder: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] uppercase text-slate-500">{t('dashboard.costAnalysis.title', 'Cost')}</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={dashboardColors.costAnalysisBorder} onChange={(e) => setDashboardColors({ ...dashboardColors, costAnalysisBorder: e.target.value })} className="w-8 h-8 rounded cursor-pointer" />
-                      <input type="text" value={dashboardColors.costAnalysisBorder} onChange={(e) => setDashboardColors({ ...dashboardColors, costAnalysisBorder: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" />
-                    </div>
-                  </div>
+                  <ColorField
+                    label={t('dashboard.net.plan', 'Net Plan')}
+                    value={dashboardColors.netPlanBorder}
+                    onChange={(netPlanBorder) => setDashboardColors({ ...dashboardColors, netPlanBorder })}
+                  />
+                  <ColorField
+                    label={t('dashboard.net.actual', 'Net Actual')}
+                    value={dashboardColors.netActualBorder}
+                    onChange={(netActualBorder) => setDashboardColors({ ...dashboardColors, netActualBorder })}
+                  />
+                  <ColorField
+                    label={t('dashboard.costAnalysis.title', 'Cost')}
+                    value={dashboardColors.costAnalysisBorder}
+                    onChange={(costAnalysisBorder) => setDashboardColors({ ...dashboardColors, costAnalysisBorder })}
+                  />
                 </div>
-              </div>
+              </ColorGroup>
             </div>
           </div>
         )}
@@ -600,7 +734,7 @@ export const Dashboard: React.FC = () => {
             <KpiCard
               label={t('dashboard.kpi.varianceLabel', '差異')}
               value={`${fmtHours(Math.abs(totalActualHours - totalPlanHours))}`}
-              subtitle="実績 - 計画"
+              subtitle={t('dashboard.kpi.varianceDesc')}
               icon={TrendingUp}
               trend={{
                 direction: totalActualHours >= totalPlanHours ? 'up' : 'down'
@@ -655,7 +789,6 @@ export const Dashboard: React.FC = () => {
           </Card>
         </motion.div>
 
-        {/* Row 3: Net Revenue (Profit) */}
         {/* Row 3: Net Revenue (Profit) */}
         <motion.div variants={itemVariants} id="section-net-revenue" className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card className="p-5 flex flex-col justify-center border-2 border-slate-200 dark:border-slate-800 relative overflow-hidden group hover:border-teal-300 dark:hover:border-teal-700 transition-colors">
@@ -729,7 +862,6 @@ export const Dashboard: React.FC = () => {
           </Card>
         </motion.div>
 
-        {/* Row 4: License Card */}
         {/* Row 4: License Card */}
         <motion.div variants={itemVariants}>
           <Card
@@ -809,7 +941,7 @@ export const Dashboard: React.FC = () => {
           <Card className="p-5">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-md font-bold text-slate-700 dark:text-slate-200 flex items-center">
-                <TrendingUp className="w-4 h-4 mr-2 text-blue-500" />
+                <TrendingUp className="w-4 h-4 mr-2 text-blue-500 dark:text-blue-400" />
                 {t('dashboard.chart.monthly', '月次売上：計画 vs 実績')}
               </h3>
               <div className="flex gap-2">
@@ -817,70 +949,71 @@ export const Dashboard: React.FC = () => {
                   data-html2canvas-ignore="true"
                   onClick={() => setShowColorPicker(!showColorPicker)}
                   className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 dark:bg-purple-500 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors"
-                  title="Customize chart colors"
+                  title={t('dashboard.colors.chartTitle', 'Customize chart colors')}
                 >
                   <Palette className="w-4 h-4" />
-                  Colors
+                  {t('dashboard.colors.button', 'Colors')}
                 </button>
                 <ChartExportMenu
                   chartId="dashboard-monthly-chart"
-                  filenameRequest={`monthly_revenue_${selectedYear}`}
+                  filenameRequest={`monthly_revenue_${currentYear}`}
                   data={stats}
                 />
               </div>
             </div>
             {/* Color Picker Section */}
             {showColorPicker && (
-              <div data-html2canvas-ignore="true" className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+              <div data-html2canvas-ignore="true" className="mb-4 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">
                   <Palette className="w-4 h-4" />
                   チャートの色をカスタマイズ
                 </h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-medium text-slate-600">売上（{planShort}）</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={chartColors.planRevenue} onChange={(e) => setChartColors({ ...chartColors, planRevenue: e.target.value })} className="w-10 h-8 rounded border border-slate-300 cursor-pointer" />
-                      <input type="text" value={chartColors.planRevenue} onChange={(e) => setChartColors({ ...chartColors, planRevenue: e.target.value })} className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded" />
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-medium text-slate-600">売上（{actualShort}）</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={chartColors.actualRevenue} onChange={(e) => setChartColors({ ...chartColors, actualRevenue: e.target.value })} className="w-10 h-8 rounded border border-slate-300 cursor-pointer" />
-                      <input type="text" value={chartColors.actualRevenue} onChange={(e) => setChartColors({ ...chartColors, actualRevenue: e.target.value })} className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded" />
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-medium text-slate-600">{t('dashboard.chart.accPlan', '累計（計画）')}</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={chartColors.accPlan} onChange={(e) => setChartColors({ ...chartColors, accPlan: e.target.value })} className="w-10 h-8 rounded border border-slate-300 cursor-pointer" />
-                      <input type="text" value={chartColors.accPlan} onChange={(e) => setChartColors({ ...chartColors, accPlan: e.target.value })} className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded" />
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-medium text-slate-600">{t('dashboard.chart.accActual', '累計（実績）')}</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={chartColors.accActual} onChange={(e) => setChartColors({ ...chartColors, accActual: e.target.value })} className="w-10 h-8 rounded border border-slate-300 cursor-pointer" />
-                      <input type="text" value={chartColors.accActual} onChange={(e) => setChartColors({ ...chartColors, accActual: e.target.value })} className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded" />
-                    </div>
-                  </div>
+                  <ColorField
+                    label={`売上（${planShort}）`}
+                    labelClassName="text-xs font-medium text-slate-600 dark:text-slate-300"
+                    value={chartColors.planRevenue}
+                    onChange={(planRevenue) => setChartColors({ ...chartColors, planRevenue })}
+                  />
+                  <ColorField
+                    label={`売上（${actualShort}）`}
+                    labelClassName="text-xs font-medium text-slate-600 dark:text-slate-300"
+                    value={chartColors.actualRevenue}
+                    onChange={(actualRevenue) => setChartColors({ ...chartColors, actualRevenue })}
+                  />
+                  <ColorField
+                    label={t('dashboard.chart.accPlan', '累計（計画）')}
+                    labelClassName="text-xs font-medium text-slate-600 dark:text-slate-300"
+                    value={chartColors.accPlan}
+                    onChange={(accPlan) => setChartColors({ ...chartColors, accPlan })}
+                  />
+                  <ColorField
+                    label={t('dashboard.chart.accActual', '累計（実績）')}
+                    labelClassName="text-xs font-medium text-slate-600 dark:text-slate-300"
+                    value={chartColors.accActual}
+                    onChange={(accActual) => setChartColors({ ...chartColors, accActual })}
+                  />
                 </div>
               </div>
             )}
             <div id="dashboard-monthly-chart" className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={stats}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.3} />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={12} stroke="currentColor" className="text-slate-500 dark:text-slate-400" />
-                  <YAxis axisLine={false} tickLine={false} fontSize={11} stroke="currentColor" className="text-slate-500 dark:text-slate-400" tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
-                  <Tooltip formatter={(val: number) => fmt(val as number)} contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', color: '#fff', borderRadius: '8px', border: 'none' }} itemStyle={{ color: '#fff' }} />
-                  <Legend wrapperStyle={{ fontSize: '12px' }} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_PALETTE.grid} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} stroke={CHART_PALETTE.labelNeutral} tick={{ fill: CHART_PALETTE.labelNeutral, fontSize: 12 }} />
+                  <YAxis axisLine={false} tickLine={false} stroke={CHART_PALETTE.labelNeutral} tick={{ fill: CHART_PALETTE.labelNeutral, fontSize: 11 }} tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
+                  <Tooltip
+                    formatter={(val: number) => fmt(val)}
+                    contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.92)', color: '#fff', borderRadius: '8px', border: `1px solid ${CHART_PALETTE.grid}` }}
+                    itemStyle={{ color: '#fff' }}
+                    labelStyle={{ color: '#fff' }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '12px', color: CHART_PALETTE.labelNeutral }} />
                   <Bar dataKey="plannedRevenue" name={planShort} fill={chartColors.planRevenue} radius={[4, 4, 0, 0]}>
-                    <LabelList dataKey="plannedRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill={chartColors.planRevenue} />
+                    <LabelList dataKey="plannedRevenue" position="top" formatter={manLabel} fontSize={10} fill={chartColors.planRevenue} />
                   </Bar>
                   <Bar dataKey="actualRevenue" name={actualShort} fill={chartColors.actualRevenue} radius={[4, 4, 0, 0]}>
-                    <LabelList dataKey="actualRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill={chartColors.actualRevenue} fontWeight="bold" />
+                    <LabelList dataKey="actualRevenue" position="top" formatter={manLabel} fontSize={10} fill={chartColors.actualRevenue} fontWeight="bold" />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -890,12 +1023,12 @@ export const Dashboard: React.FC = () => {
           <Card className="p-5">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-md font-bold text-slate-700 dark:text-slate-200 flex items-center">
-                <TrendingUp className="w-4 h-4 mr-2 text-emerald-500" />
+                <TrendingUp className="w-4 h-4 mr-2 text-emerald-500 dark:text-emerald-400" />
                 {t('dashboard.charts.cumulative', 'Cumulative Revenue (Plan vs Actual)')}
               </h3>
               <ChartExportMenu
                 chartId="dashboard-cumulative-chart"
-                filenameRequest={`cumulative_revenue_${selectedYear}`}
+                filenameRequest={`cumulative_revenue_${currentYear}`}
                 data={accumulatedStats}
               />
             </div>
@@ -908,16 +1041,21 @@ export const Dashboard: React.FC = () => {
                       <stop offset="95%" stopColor={chartColors.accActual} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.3} />
-                  <XAxis dataKey="month" axisLine={false} tickLine={false} fontSize={12} stroke="currentColor" className="text-slate-500 dark:text-slate-400" />
-                  <YAxis axisLine={false} tickLine={false} fontSize={11} stroke="currentColor" className="text-slate-500 dark:text-slate-400" tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
-                  <Tooltip formatter={(val: number) => fmt(val as number)} contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', color: '#fff', borderRadius: '8px', border: 'none' }} itemStyle={{ color: '#fff' }} />
-                  <Legend wrapperStyle={{ fontSize: '12px' }} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_PALETTE.grid} />
+                  <XAxis dataKey="month" axisLine={false} tickLine={false} stroke={CHART_PALETTE.labelNeutral} tick={{ fill: CHART_PALETTE.labelNeutral, fontSize: 12 }} />
+                  <YAxis axisLine={false} tickLine={false} stroke={CHART_PALETTE.labelNeutral} tick={{ fill: CHART_PALETTE.labelNeutral, fontSize: 11 }} tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
+                  <Tooltip
+                    formatter={(val: number) => fmt(val)}
+                    contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.92)', color: '#fff', borderRadius: '8px', border: `1px solid ${CHART_PALETTE.grid}` }}
+                    itemStyle={{ color: '#fff' }}
+                    labelStyle={{ color: '#fff' }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '12px', color: CHART_PALETTE.labelNeutral }} />
                   <Area type="monotone" dataKey="accActualRevenue" name={t('dashboard.chart.accActual', actualShort)} stroke={chartColors.accActual} fillOpacity={1} fill="url(#colorAct)" strokeWidth={2}>
-                    <LabelList dataKey="accActualRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill={chartColors.accActual} fontWeight="bold" offset={10} />
+                    <LabelList dataKey="accActualRevenue" position="top" formatter={manLabel} fontSize={10} fill={chartColors.accActual} fontWeight="bold" offset={10} />
                   </Area>
                   <Line type="monotone" strokeDasharray="3 3" dataKey="accPlannedRevenue" name={t('dashboard.chart.accPlan', planShort)} stroke={chartColors.accPlan} strokeWidth={2} dot={false}>
-                    <LabelList dataKey="accPlannedRevenue" position="top" formatter={(val: number) => val > 0 ? (val / 10000).toFixed(0) : ''} fontSize={10} fill={chartColors.accPlan} offset={-10} />
+                    <LabelList dataKey="accPlannedRevenue" position="top" formatter={manLabel} fontSize={10} fill={chartColors.accPlan} offset={-10} />
                   </Line>
                 </ComposedChart>
               </ResponsiveContainer>
@@ -953,7 +1091,7 @@ export const Dashboard: React.FC = () => {
               <div className="bg-black/10 dark:bg-black/20 rounded-xl p-4 border border-white/10 backdrop-blur-sm">
                 <p className="text-xs font-semibold text-slate-200 uppercase">{t('dashboard.summary.margin', 'Margin (Actual)')}</p>
                 <p className="text-2xl font-bold mt-1 text-white">{profitMarginActual.toFixed(1)}%</p>
-                <p className="text-[11px] font-medium mt-1 text-slate-300">Net / Gross</p>
+                <p className="text-[11px] font-medium mt-1 text-slate-300">{t('dashboard.summary.netOverGross', 'Net / Gross')}</p>
               </div>
             </div>
           </Card>
@@ -962,3 +1100,5 @@ export const Dashboard: React.FC = () => {
     </motion.div>
   );
 };
+
+export default Dashboard;

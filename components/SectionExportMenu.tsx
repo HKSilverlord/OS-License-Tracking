@@ -47,16 +47,16 @@ export const SectionExportMenu: React.FC<SectionExportMenuProps> = ({
         <div data-html2canvas-ignore="true" className={`relative inline-block text-left section-export-menu ${className}`}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-slate-700 bg-white dark:bg-slate-900 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
+                className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-sm"
             >
                 <Download className="w-4 h-4" />
                 <span>{t('export.sections', 'Export Section')}</span>
             </button>
 
             {isOpen && (
-                <div className="absolute right-0 mt-2 w-64 origin-top-right bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-100 ring-1 ring-black ring-opacity-5 z-50 animate-in fade-in zoom-in-95 duration-100 overflow-hidden">
+                <div className="absolute right-0 mt-2 w-64 origin-top-right bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-100 dark:border-slate-800 ring-1 ring-black/5 dark:ring-white/10 z-50 animate-in fade-in zoom-in-95 duration-100 overflow-hidden">
                     <div className="py-2" role="menu">
-                        <div className="px-4 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/80 border-b border-slate-100">
+                        <div className="px-4 py-2 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-100 dark:border-slate-800">
                             {t('export.copyAsImage', 'Copy to Clipboard')}
                         </div>
                         <div className="max-h-80 overflow-y-auto p-1">

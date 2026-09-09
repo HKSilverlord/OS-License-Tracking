@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Loader2, TrendingUp, Palette } from 'lucide-react';
+import { TrendingUp, Palette } from 'lucide-react';
 import { ChartExportMenu } from './ChartExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipProps, LabelList } from 'recharts';
+import { useToast } from '../contexts/ToastContext';
+import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
+import { Skeleton } from '../src/ui/components/Skeleton';
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipContentProps, LabelList } from 'recharts';
 import { dbService } from '../services/dbService';
 
 // Long-term plan data interface
@@ -14,6 +17,15 @@ interface LongTermPlanData {
   hourlyRateActual: number | null; // 平均時給実績（千円/時）
 }
 
+/** Row shape handed to Recharts (nulls become undefined so the lines break instead of dropping to 0). */
+interface LongTermChartRow {
+  year: string;
+  salesPlan?: number;
+  salesActual?: number;
+  hourlyRatePlan?: number;
+  hourlyRateActual?: number;
+}
+
 interface ChartColors {
   salesPlan: string;
   salesActual: string;
@@ -21,41 +33,53 @@ interface ChartColors {
   hourlyRateActual: string;
 }
 
+/** Theme-safe mid-tones (U8) — legible on both bg-white and bg-slate-900. */
+const DEFAULT_CHART_COLORS: ChartColors = {
+  salesPlan: CHART_PALETTE.neutral,
+  salesActual: CHART_PALETTE.plan,
+  hourlyRatePlan: CHART_PALETTE.actual2,
+  hourlyRateActual: CHART_PALETTE.actual,
+};
+
+const isColorString = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
+
+/** Merges a previously stored preference over the defaults, dropping anything unusable. */
+const migrateChartColors = (raw: unknown): ChartColors | null => {
+  if (raw === null || typeof raw !== 'object') return null;
+  const saved = raw as Partial<Record<keyof ChartColors, unknown>>;
+  return {
+    salesPlan: isColorString(saved.salesPlan) ? saved.salesPlan : DEFAULT_CHART_COLORS.salesPlan,
+    salesActual: isColorString(saved.salesActual) ? saved.salesActual : DEFAULT_CHART_COLORS.salesActual,
+    hourlyRatePlan: isColorString(saved.hourlyRatePlan) ? saved.hourlyRatePlan : DEFAULT_CHART_COLORS.hourlyRatePlan,
+    hourlyRateActual: isColorString(saved.hourlyRateActual) ? saved.hourlyRateActual : DEFAULT_CHART_COLORS.hourlyRateActual,
+  };
+};
+
+/** recharts 3 `LabelFormatter`: the label is a RenderableText, not necessarily a number. */
+const formatLabel = (value: string | number | boolean | null | undefined): string =>
+  typeof value === 'number' ? value.toLocaleString() : String(value ?? '');
+
 export const LongTermPlanView: React.FC = () => {
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [longTermData, setLongTermData] = useState<LongTermPlanData[]>([]);
   const [showColorPicker, setShowColorPicker] = useState(false);
 
-  // Load initial colors from localStorage or default
-  const [chartColors, setChartColors] = useState<ChartColors>(() => {
-    const saved = localStorage.getItem('longTermPlan_chartColors');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Failed to parse saved chart colors', e);
-      }
-    }
-    return {
-      salesPlan: '#87CEEB',
-      salesActual: '#000080',
-      hourlyRatePlan: '#32CD32',
-      hourlyRateActual: '#006400'
-    };
-  });
-
-  // Save changes to localStorage
-  useEffect(() => {
-    localStorage.setItem('longTermPlan_chartColors', JSON.stringify(chartColors));
-  }, [chartColors]);
+  // Colours live behind the shared preference helper (U8): the localStorage key is unchanged
+  // so existing user picks survive, but the defaults are now theme-safe.
+  const [chartColors, setChartColors] = useChartPref<ChartColors>(
+    'longTermPlan_chartColors',
+    DEFAULT_CHART_COLORS,
+    migrateChartColors,
+  );
 
   // Fetch real data from Supabase
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const currentYear = new Date().getFullYear();
         const startYear = 2024;
         const endYear = 2030;
 
@@ -63,16 +87,19 @@ export const LongTermPlanView: React.FC = () => {
         setLongTermData(data);
       } catch (error) {
         console.error('Failed to load long-term plan data:', error);
+        toast.error(t('toast.loadFailed', 'Failed to load data'));
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
+    // `toast` and `t` are stable for the lifetime of their providers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Chart data preparation - convert nulls to undefined for Recharts
-  const chartData = useMemo(() => {
+  const chartData = useMemo<LongTermChartRow[]>(() => {
     return longTermData.map(d => ({
       year: d.year.toString(),
       salesPlan: d.salesPlan ?? undefined,
@@ -83,10 +110,11 @@ export const LongTermPlanView: React.FC = () => {
   }, [longTermData]);
 
   // Custom Tooltip Component
-  const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
+  const CustomTooltip = ({ active, payload }: TooltipContentProps<number, string>) => {
     if (!active || !payload || payload.length === 0) return null;
 
-    const data = payload[0].payload;
+    const data = payload[0]?.payload as LongTermChartRow | undefined;
+    if (!data) return null;
 
     return (
       <div className="bg-white dark:bg-slate-900 p-3 border border-slate-300 dark:border-slate-700 rounded-lg shadow-lg">
@@ -145,7 +173,15 @@ export const LongTermPlanView: React.FC = () => {
   };
 
   if (loading) {
-    return <div className="flex justify-center items-center h-64"><Loader2 className="animate-spin h-8 w-8 text-blue-600" /></div>;
+    return (
+      <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-4 md:p-6 overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex-1 flex flex-col gap-4">
+          <Skeleton className="h-5 w-56" />
+          <Skeleton className="flex-1 min-h-[240px] w-full" />
+          <span className="sr-only text-slate-500 dark:text-slate-400">{t('common.loading', 'Loading…')}</span>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -154,17 +190,17 @@ export const LongTermPlanView: React.FC = () => {
       <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex-1 flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
           <h3 className="text-md font-bold text-slate-700 dark:text-slate-100 flex items-center">
-            <TrendingUp className="w-4 h-4 mr-2 text-blue-600" />
+            <TrendingUp className="w-4 h-4 mr-2 text-blue-600 dark:text-blue-400" />
             {t('longTermPlan.title', 'OS事業長期計画')}
           </h3>
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => setShowColorPicker(!showColorPicker)}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-              title="Customize chart colors"
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 dark:bg-purple-700 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors"
+              title={t('chart.customizeColors', 'Customize chart colors')}
             >
               <Palette className="w-4 h-4" />
-              Colors
+              {t('chart.colors', 'Colors')}
             </button>
 
             <ChartExportMenu
@@ -182,80 +218,35 @@ export const LongTermPlanView: React.FC = () => {
             <div className="mb-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
               <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">
                 <Palette className="w-4 h-4" />
-                Customize Chart Colors
+                {t('chart.customizeColors', 'Customize chart colors')}
               </h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400">{t('longTermPlan.salesPlan', '売上計画')}</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={chartColors.salesPlan}
-                      onChange={(e) => setChartColors({ ...chartColors, salesPlan: e.target.value })}
-                      className="w-10 h-8 rounded border border-slate-300 dark:border-slate-600 cursor-pointer p-0"
-                    />
-                    <input
-                      type="text"
-                      value={chartColors.salesPlan}
-                      onChange={(e) => setChartColors({ ...chartColors, salesPlan: e.target.value })}
-                      className="flex-1 px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded"
-                    />
+                {([
+                  { key: 'salesPlan', label: t('longTermPlan.salesPlan', '売上計画') },
+                  { key: 'salesActual', label: t('longTermPlan.salesActual', '売上実績') },
+                  { key: 'hourlyRatePlan', label: t('longTermPlan.hourlyRatePlan', '平均時給計画') },
+                  { key: 'hourlyRateActual', label: t('longTermPlan.hourlyRateActual', '平均時給実績') },
+                ] as const).map(({ key, label }) => (
+                  <div key={key} className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-slate-600 dark:text-slate-400">{label}</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        aria-label={label}
+                        value={chartColors[key]}
+                        onChange={(e) => setChartColors({ ...chartColors, [key]: e.target.value })}
+                        className="w-10 h-8 rounded border border-slate-300 dark:border-slate-600 cursor-pointer p-0"
+                      />
+                      <input
+                        type="text"
+                        aria-label={label}
+                        value={chartColors[key]}
+                        onChange={(e) => setChartColors({ ...chartColors, [key]: e.target.value })}
+                        className="flex-1 px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded"
+                      />
+                    </div>
                   </div>
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400">{t('longTermPlan.salesActual', '売上実績')}</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={chartColors.salesActual}
-                      onChange={(e) => setChartColors({ ...chartColors, salesActual: e.target.value })}
-                      className="w-10 h-8 rounded border border-slate-300 dark:border-slate-600 cursor-pointer p-0"
-                    />
-                    <input
-                      type="text"
-                      value={chartColors.salesActual}
-                      onChange={(e) => setChartColors({ ...chartColors, salesActual: e.target.value })}
-                      className="flex-1 px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400">{t('longTermPlan.hourlyRatePlan', '平均時給計画')}</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={chartColors.hourlyRatePlan}
-                      onChange={(e) => setChartColors({ ...chartColors, hourlyRatePlan: e.target.value })}
-                      className="w-10 h-8 rounded border border-slate-300 dark:border-slate-600 cursor-pointer p-0"
-                    />
-                    <input
-                      type="text"
-                      value={chartColors.hourlyRatePlan}
-                      onChange={(e) => setChartColors({ ...chartColors, hourlyRatePlan: e.target.value })}
-                      className="flex-1 px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400">{t('longTermPlan.hourlyRateActual', '平均時給実績')}</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={chartColors.hourlyRateActual}
-                      onChange={(e) => setChartColors({ ...chartColors, hourlyRateActual: e.target.value })}
-                      className="w-10 h-8 rounded border border-slate-300 dark:border-slate-600 cursor-pointer p-0"
-                    />
-                    <input
-                      type="text"
-                      value={chartColors.hourlyRateActual}
-                      onChange={(e) => setChartColors({ ...chartColors, hourlyRateActual: e.target.value })}
-                      className="flex-1 px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text- slate-200 rounded"
-                    />
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           )
@@ -268,7 +259,7 @@ export const LongTermPlanView: React.FC = () => {
               data={chartData}
               margin={{ top: 20, right: 60, left: 20, bottom: 20 }}
             >
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e0e0" />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_PALETTE.grid} />
 
               {/* X-Axis: Years */}
               <XAxis
@@ -288,7 +279,7 @@ export const LongTermPlanView: React.FC = () => {
                   value: t('longTermPlan.axis.sales', '売上額（万円）'),
                   angle: -90,
                   position: 'insideLeft',
-                  style: { fill: '#000080' }
+                  style: { fill: chartColors.salesActual }
                 }}
               />
 
@@ -303,11 +294,11 @@ export const LongTermPlanView: React.FC = () => {
                   value: t('longTermPlan.axis.hourlyRate', '平均時給（千円/時）'),
                   angle: 90,
                   position: 'insideRight',
-                  style: { fill: '#32CD32' }
+                  style: { fill: chartColors.hourlyRateActual }
                 }}
               />
 
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={CustomTooltip} />
               <Legend
                 verticalAlign="top"
                 height={36}
@@ -323,7 +314,7 @@ export const LongTermPlanView: React.FC = () => {
                 radius={[4, 4, 0, 0]}
                 maxBarSize={60}
               >
-                <LabelList dataKey="salesPlan" position="top" formatter={(val: number) => val?.toLocaleString()} fontSize={10} fill={chartColors.salesPlan} />
+                <LabelList dataKey="salesPlan" position="top" formatter={formatLabel} fontSize={10} fill={chartColors.salesPlan} />
               </Bar>
 
               {/* Series 2: Sales Actual - Column (Y1) */}
@@ -335,7 +326,7 @@ export const LongTermPlanView: React.FC = () => {
                 radius={[4, 4, 0, 0]}
                 maxBarSize={60}
               >
-                <LabelList dataKey="salesActual" position="top" formatter={(val: number) => val?.toLocaleString()} fontSize={11} fill={chartColors.salesActual} fontWeight="bold" />
+                <LabelList dataKey="salesActual" position="top" formatter={formatLabel} fontSize={11} fill={chartColors.salesActual} fontWeight="bold" />
               </Bar>
 
               {/* Series 3: Hourly Rate Plan - Line (Y2) */}
@@ -349,7 +340,7 @@ export const LongTermPlanView: React.FC = () => {
                 dot={{ fill: chartColors.hourlyRatePlan, r: 5 }}
                 connectNulls={false}
               >
-                <LabelList dataKey="hourlyRatePlan" position="top" formatter={(val: number) => val?.toLocaleString()} fontSize={10} fill={chartColors.hourlyRatePlan} offset={10} />
+                <LabelList dataKey="hourlyRatePlan" position="top" formatter={formatLabel} fontSize={10} fill={chartColors.hourlyRatePlan} offset={10} />
               </Line>
 
               {/* Series 4: Hourly Rate Actual - Line (Y2) */}
@@ -363,7 +354,7 @@ export const LongTermPlanView: React.FC = () => {
                 dot={{ fill: chartColors.hourlyRateActual, r: 5 }}
                 connectNulls={false}
               >
-                <LabelList dataKey="hourlyRateActual" position="top" formatter={(val: number) => val?.toLocaleString()} fontSize={11} fill={chartColors.hourlyRateActual} fontWeight="bold" offset={10} />
+                <LabelList dataKey="hourlyRateActual" position="top" formatter={formatLabel} fontSize={11} fill={chartColors.hourlyRateActual} fontWeight="bold" offset={10} />
               </Line>
             </ComposedChart>
           </ResponsiveContainer>

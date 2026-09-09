@@ -7,7 +7,10 @@
 
 import { injectable, inject } from 'inversify';
 import { Project } from '../../entities/Project';
-import { IProjectRepository } from '../../repositories/IProjectRepository';
+// `import type` is required: the constructor below is decorated, and with
+// isolatedModules + emitDecoratorMetadata a value import of a type-only symbol
+// in a decorated signature is a TS1272 error.
+import type { IProjectRepository } from '../../repositories/IProjectRepository';
 import { TYPES } from '@ioc/types';
 
 export interface GetProjectsInput {

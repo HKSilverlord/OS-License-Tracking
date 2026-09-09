@@ -1,12 +1,63 @@
 
 import { BaseService } from './BaseService';
-import { DashboardRecord, Settings } from '../types';
+import { buildPriceIndex, lookupPrices } from './pricing';
+import type { PeriodProjectPriceRow, ProjectPriceRow } from './pricing';
+import { createLogger } from '../src/core/logger';
+import { DashboardRecord } from '../types';
+
+const log = createLogger('DashboardService');
 
 const DEFAULT_SETTINGS = {
     exchangeRate: 165,
     licenseComputers: 7,
     licensePerComputer: 2517143,
     unitPrice: 2300
+};
+
+const HOURS_PER_DAY = 8;
+
+/** Monthly record joined with the (fallback) global prices of its project. */
+interface AggregationRecordRow {
+    year: number;
+    month: number;
+    project_id: string;
+    period_label: string | null;
+    planned_hours: number | null;
+    actual_hours: number | null;
+    projects: ProjectPriceRow | null;
+}
+
+/** Pure: number of Mon–Fri days in the given month (month is 1-based). */
+export function weekdaysInMonth(year: number, month: number): number {
+    const daysInMonth = new Date(year, month, 0).getDate();
+    let weekdays = 0;
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dayOfWeek = new Date(year, month - 1, day).getDay();
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) weekdays++;
+    }
+    return weekdays;
+}
+
+/** Distinct, non-empty period labels carried by the records. */
+const collectPeriodLabels = (rows: readonly AggregationRecordRow[]): string[] => {
+    const labels = new Set<string>();
+    for (const row of rows) {
+        if (row.period_label) labels.add(row.period_label);
+    }
+    return Array.from(labels);
+};
+
+/** Distinct project rows carried by the nested join — the fallback tier of the price index. */
+const collectProjects = (rows: readonly AggregationRecordRow[]): ProjectPriceRow[] => {
+    const projects = new Map<string, ProjectPriceRow>();
+    for (const row of rows) {
+        const project = row.projects;
+        if (!project) continue;
+        const id = project.id || row.project_id;
+        if (!id || projects.has(id)) continue;
+        projects.set(id, { ...project, id });
+    }
+    return Array.from(projects.values());
 };
 
 export class DashboardService extends BaseService {
@@ -60,25 +111,28 @@ export class DashboardService extends BaseService {
 
     // --- Statistics and Aggregation ---
 
-    async getDashboardStats(year: number) {
-        // Fetch records and join with projects to get prices
+    /**
+     * Every `monthly_records` row for the year, unpriced.
+     *
+     * Callers price each row themselves via `lookupPrices(index, period_label, project_id)`
+     * against the index from `getYearProjectPrices(year)` — the price lives on the
+     * `period_projects` junction, so a project can cost different amounts in H1 and H2 and
+     * cannot be priced from the `projects` row alone. This used to embed
+     * `projects(unit_price, plan_price, actual_price)` and flatten it with its own
+     * `||` fallback chain; that was a second copy of the rule frozen in
+     * `services/pricing.ts`, so it is gone. The query is otherwise identical to
+     * `RecordService.getAllRecords(year)`, which is what keeps the Excel TOTAL row equal
+     * to the Dashboard gross KPI.
+     */
+    async getDashboardStats(year: number): Promise<DashboardRecord[]> {
         const { data, error } = await this.supabase
             .from('monthly_records')
-            .select('*, projects(unit_price, plan_price, actual_price)')
+            .select('*')
             .eq('year', year);
 
         if (error) throw error;
 
-        // Transform to match the expected shape:
-        // { ...record, projects: { unit_price: x } }
-        return (data || []).map((r: DashboardRecord) => ({
-            ...r,
-            projects: {
-                unit_price: r.projects?.unit_price || 0,
-                plan_price: (r.projects as any)?.plan_price || r.projects?.unit_price || 0,
-                actual_price: (r.projects as any)?.actual_price || r.projects?.unit_price || 0
-            }
-        }));
+        return (data || []) as DashboardRecord[];
     }
 
     async getRecordYears() {
@@ -93,6 +147,32 @@ export class DashboardService extends BaseService {
         return years as number[];
     }
 
+    /**
+     * Loads the `period_projects` rows for the periods the given records belong to and
+     * builds the (period_label, project_id) -> price index used to value every record.
+     * The nested `projects(...)` join on the records supplies the global fallback tier.
+     */
+    private async buildIndexForRecords(rows: readonly AggregationRecordRow[]) {
+        const labels = collectPeriodLabels(rows);
+        const projects = collectProjects(rows);
+
+        if (labels.length === 0) return buildPriceIndex([], projects);
+
+        const { data, error } = await this.supabase
+            .from('period_projects')
+            .select('period_label, project_id, plan_price, actual_price')
+            .in('period_label', labels);
+
+        if (error) {
+            // Pricing must not take the whole dashboard down: fall back to global project prices.
+            log.error('Failed to load period_projects prices, falling back to project prices:', error);
+            return buildPriceIndex([], projects);
+        }
+
+        const periodRows: PeriodProjectPriceRow[] = data || [];
+        return buildPriceIndex(periodRows, projects);
+    }
+
     async getYearlyAggregatedData(startYear: number, endYear: number) {
         // Fetch all monthly records and projects for the year range
         const { data: records, error } = await this.supabase
@@ -100,6 +180,7 @@ export class DashboardService extends BaseService {
             .select(`
         *,
         projects (
+          id,
           plan_price,
           actual_price,
           unit_price
@@ -109,6 +190,10 @@ export class DashboardService extends BaseService {
             .lte('year', endYear);
 
         if (error) throw error;
+
+        const rows: AggregationRecordRow[] = records || [];
+        // Price per (period_label, project_id) — a project may cost differently in H1 and H2 (A1).
+        const index = await this.buildIndexForRecords(rows);
 
         // Aggregate by year
         const yearlyData: Record<number, {
@@ -133,13 +218,12 @@ export class DashboardService extends BaseService {
         }
 
         // Aggregate data
-        (records || []).forEach((record: any) => {
+        rows.forEach((record) => {
             const year = record.year;
             if (!yearlyData[year]) return;
 
-            const project = record.projects;
-            const planPrice = project?.plan_price || project?.unit_price || 0;
-            const actualPrice = project?.actual_price || project?.unit_price || 0;
+            const { plan: planPrice, actual: actualPrice } =
+                lookupPrices(index, record.period_label || '', record.project_id);
 
             yearlyData[year].salesPlan += (record.planned_hours || 0) * planPrice;
             yearlyData[year].salesActual += (record.actual_hours || 0) * actualPrice;
@@ -168,6 +252,7 @@ export class DashboardService extends BaseService {
             .select(`
         *,
         projects (
+          id,
           plan_price,
           actual_price,
           unit_price
@@ -176,6 +261,10 @@ export class DashboardService extends BaseService {
             .eq('year', year);
 
         if (error) throw error;
+
+        const rows: AggregationRecordRow[] = records || [];
+        // Price per (period_label, project_id) — H1 and H2 prices must not be mixed up (A1).
+        const index = await this.buildIndexForRecords(rows);
 
         // Initialize 12 months
         const monthlyData: Record<number, {
@@ -195,13 +284,12 @@ export class DashboardService extends BaseService {
         }
 
         // Aggregate data by month
-        (records || []).forEach((record: any) => {
+        rows.forEach((record) => {
             const month = record.month;
             if (!monthlyData[month]) return;
 
-            const project = record.projects;
-            const planPrice = project?.plan_price || project?.unit_price || 0;
-            const actualPrice = project?.actual_price || project?.unit_price || 0;
+            const { plan: planPrice, actual: actualPrice } =
+                lookupPrices(index, record.period_label || '', record.project_id);
 
             monthlyData[month].workingHoursPlan += record.planned_hours || 0;
             monthlyData[month].workingHoursActual += record.actual_hours || 0;
@@ -223,15 +311,14 @@ export class DashboardService extends BaseService {
         // Get license settings to calculate capacity
         const settings = await this.getSettings();
 
-        // Typical working days per month (can be customized)
-        const workingDaysPerMonth = [20, 19, 21, 21, 20, 21, 21, 22, 21, 22, 20, 20]; // 2024-ish average
-        const hoursPerDay = 8; // Standard work day
-
-        // Capacity = license_computers × working_days × hours_per_day
-        return workingDaysPerMonth.map((days, index) => ({
-            month: index + 1,
-            capacity: settings.licenseComputers * days * hoursPerDay
-        }));
+        // Capacity = license_computers × Mon–Fri days of that month × hours_per_day
+        return Array.from({ length: 12 }, (_, index) => {
+            const month = index + 1;
+            return {
+                month,
+                capacity: settings.licenseComputers * weekdaysInMonth(year, month) * HOURS_PER_DAY
+            };
+        });
     }
 }
 

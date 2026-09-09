@@ -20,6 +20,9 @@ import { Project } from '@domain/entities/Project';
 import { ProjectDTO } from '../dto/ProjectDTO';
 import { ProjectMapper } from '@domain/mappers/ProjectMapper';
 import { TYPES } from '@ioc/types';
+import { createLogger } from '../../core/logger';
+
+const log = createLogger('SupabaseProjectRepository');
 
 @injectable()
 export class SupabaseProjectRepository implements IProjectRepository {
@@ -30,7 +33,7 @@ export class SupabaseProjectRepository implements IProjectRepository {
   // --- Queries ---
 
   async getAll(): Promise<Project[]> {
-    console.log('[SupabaseProjectRepository] Fetching all projects (no period filter)');
+    log.debug('Fetching all projects (no period filter)');
 
     // EXACT SAME query as ProjectService.getProjects() without period
     const { data, error } = await this.supabase
@@ -39,11 +42,11 @@ export class SupabaseProjectRepository implements IProjectRepository {
       .order('display_order', { ascending: true });
 
     if (error) {
-      console.error('[SupabaseProjectRepository] Error fetching projects:', error);
+      log.error('Error fetching projects:', error);
       throw error;
     }
 
-    console.log('[SupabaseProjectRepository] Returning', data?.length || 0, 'projects');
+    log.debug('Returning', data?.length || 0, 'projects');
     return ProjectMapper.toDomainArray(data as ProjectDTO[]);
   }
 
@@ -63,7 +66,7 @@ export class SupabaseProjectRepository implements IProjectRepository {
   }
 
   async getByPeriod(periodLabel: string): Promise<Project[]> {
-    console.log('[SupabaseProjectRepository] Fetching projects for period:', periodLabel);
+    log.debug('Fetching projects for period:', periodLabel);
 
     // EXACT SAME query as ProjectService.getProjects(period)
     const { data, error } = await this.supabase
@@ -72,17 +75,17 @@ export class SupabaseProjectRepository implements IProjectRepository {
       .eq('period_label', periodLabel);
 
     if (error) {
-      console.error('[SupabaseProjectRepository] Error fetching projects:', error);
+      log.error('Error fetching projects:', error);
       throw error;
     }
 
-    console.log('[SupabaseProjectRepository] Raw data from period_projects:', data?.length || 0, 'items');
+    log.debug('Raw data from period_projects:', data?.length || 0, 'items');
 
     // EXACT SAME logic as ProjectService
     const projects = (data || []).map((pp: any) => {
       const project = pp.projects;
       if (!project) {
-        console.warn('[SupabaseProjectRepository] Found period_project without nested project data:', pp);
+        log.warn('Found period_project without nested project data:', pp);
         return null;
       }
 
@@ -97,12 +100,12 @@ export class SupabaseProjectRepository implements IProjectRepository {
     // Sort by display_order (EXACT SAME sorting)
     projects.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
 
-    console.log('[SupabaseProjectRepository] Returning', projects.length, 'projects');
+    log.debug('Returning', projects.length, 'projects');
     return projects;
   }
 
   async getForCarryOver(): Promise<Project[]> {
-    console.log('[SupabaseProjectRepository] Starting getForCarryOver');
+    log.debug('Starting getForCarryOver');
 
     // EXACT SAME query as ProjectService.getProjectsForCarryOver()
     const { data, error } = await this.supabase
@@ -113,7 +116,7 @@ export class SupabaseProjectRepository implements IProjectRepository {
     if (error) throw error;
 
     if (!data) {
-      console.log('[SupabaseProjectRepository] No data returned');
+      log.debug('No data returned');
       return [];
     }
 
@@ -137,7 +140,7 @@ export class SupabaseProjectRepository implements IProjectRepository {
       .single();
 
     if (error) {
-      console.error('[SupabaseProjectRepository] Error creating project:', error);
+      log.error('Error creating project:', error);
       throw error;
     }
 
@@ -189,7 +192,7 @@ export class SupabaseProjectRepository implements IProjectRepository {
 
   // --- Business Operations ---
 
-  async generateNextCode(period?: string): Promise<string> {
+  async generateNextCode(_period?: string): Promise<string> {
     // EXACT SAME algorithm as ProjectService.getNextProjectCode()
     let query = this.supabase
       .from('projects')
@@ -198,7 +201,7 @@ export class SupabaseProjectRepository implements IProjectRepository {
     const { data, error } = await query;
 
     if (error) {
-      console.error('Error generating next project code:', error);
+      log.error('Error generating next project code:', error);
       throw error;
     }
 
@@ -236,7 +239,7 @@ export class SupabaseProjectRepository implements IProjectRepository {
       });
 
     if (error) {
-      console.error('[SupabaseProjectRepository] ERROR linking project to period:', error);
+      log.error('ERROR linking project to period:', error);
       // Don't throw - project was created successfully
     }
   }
@@ -271,7 +274,7 @@ export class SupabaseProjectRepository implements IProjectRepository {
 
   // --- Reordering ---
 
-  async moveUp(projectId: string, periodLabel: string): Promise<void> {
+  async moveUp(projectId: string, _periodLabel: string): Promise<void> {
     // EXACT SAME logic as ProjectService.moveProjectUp()
     const { data: allProjects, error: fetchError } = await this.supabase
       .from('projects')
@@ -292,7 +295,7 @@ export class SupabaseProjectRepository implements IProjectRepository {
     await this.supabase.from('projects').update({ display_order: currentProject.display_order }).eq('id', aboveProject.id);
   }
 
-  async moveDown(projectId: string, periodLabel: string): Promise<void> {
+  async moveDown(projectId: string, _periodLabel: string): Promise<void> {
     // EXACT SAME logic as ProjectService.moveProjectDown()
     const { data: allProjects, error: fetchError } = await this.supabase
       .from('projects')
