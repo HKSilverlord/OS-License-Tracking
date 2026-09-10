@@ -256,7 +256,7 @@ const KpiSkeletonCard: React.FC = () => (
 
 export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
   const { t, language } = useLanguage();
-  const { isAdmin } = useUserRole();
+  const { isAdmin, role } = useUserRole();
 
   const [loading, setLoading] = useState(true);
   const [rawRecords, setRawRecords] = useState<DashboardRecord[]>([]);
@@ -285,10 +285,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
   const licenseTotal = useCatiaStore(s => computeYearlyCost(s.licenseCosts, currentYear));
   const catiaSyncStatus = useCatiaStore(s => s.syncStatus);
 
-  // A4: the CATIA numbers now live in Supabase — pull them once on mount.
+  // A4: the CATIA numbers now live in Supabase — pull them once the role is
+  // known. `role` is null until get_my_role() answers, and hydrate() may only
+  // publish an empty document for a confirmed admin, so waiting is required.
   useEffect(() => {
-    void useCatiaStore.getState().hydrate();
-  }, []);
+    if (role === null) return;
+    void useCatiaStore.getState().hydrate({ canSeed: role === 'admin' });
+  }, [role]);
 
   // `t` is memoised per language; keeping it in a ref keeps `loadDashboard`
   // stable across language switches so the year is the only refetch trigger.

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { catiaLicenseService } from '../services/CatiaLicenseService';
+import { supabase } from '../lib/supabase';
 
 export type CatiaSyncStatus = 'idle' | 'loading' | 'saving' | 'error';
 
@@ -16,8 +17,14 @@ export interface CatiaState {
   updateRevenue: (licenseId: number, year: number, value: number | null) => void;
   resetToDefaults: () => void;
 
-  /** Loads the document from Supabase. DB wins over the persisted local copy. */
-  hydrate: (force?: boolean) => Promise<void>;
+  /**
+   * Loads the document from Supabase. DB wins over the persisted local copy.
+   *
+   * `canSeed` must be true only for an admin whose role has actually resolved:
+   * an empty document is published from the caller's local values, so seeding
+   * on a guess overwrites the shared sheet with this browser's copy.
+   */
+  hydrate: (options?: { force?: boolean; canSeed?: boolean }) => Promise<void>;
   /** Awaits any pending debounced save (call from a component unmount cleanup). */
   flush: () => Promise<void>;
 
@@ -209,13 +216,24 @@ export const useCatiaStore = create<CatiaState>()(
         void runSave();
       },
 
-      hydrate: async (force) => {
+      hydrate: async (options) => {
+        const { force = false, canSeed = false } = options ?? {};
         const state = get();
         if (state.hydrated && !force) return;
         if (state.syncStatus === 'loading') return;
 
         set({ syncStatus: 'loading', syncError: null });
         try {
+          // The read below is RLS-scoped. Running it before Supabase has restored
+          // the session returns "no row", which the seed branch would misread as
+          // "never published" and answer by overwriting the shared document.
+          // Stay unhydrated so the next mount retries once auth has settled.
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            set({ syncStatus: 'idle', syncError: null });
+            return;
+          }
+
           const doc = await catiaLicenseService.load();
           if (doc) {
             // The database is authoritative — it replaces the persisted local copy.
@@ -226,11 +244,23 @@ export const useCatiaStore = create<CatiaState>()(
               syncStatus: 'idle',
               syncError: null,
             });
-          } else {
-            // Nothing stored yet: seed the DB from this client's current values.
-            set({ hydrated: true });
-            await runSave();
+            return;
           }
+
+          // migration_catia_license.sql seeds the row empty, so load() reports
+          // "no document" until someone publishes one. Publishing writes THIS
+          // browser's values to a sheet everybody shares, so only an admin may do
+          // it: RLS rejects everyone else, and a viewer that tried would sit on a
+          // permanent sync-error banner over a write they were never allowed.
+          if (!canSeed) {
+            // Deliberately not `hydrated` — retry on the next mount so a viewer
+            // picks up the real sheet as soon as an admin publishes it.
+            set({ syncStatus: 'idle', syncError: null });
+            return;
+          }
+
+          set({ hydrated: true });
+          await runSave();
         } catch (error) {
           // Keep the local values; just report that we are out of sync.
           set({ syncStatus: 'error', syncError: toErrorMessage(error) });

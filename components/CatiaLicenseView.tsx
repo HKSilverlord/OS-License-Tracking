@@ -19,7 +19,7 @@ const years = [
 
 export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear }) => {
   const { t } = useLanguage();
-  const { isAdmin } = useUserRole();
+  const { isAdmin, role } = useUserRole();
 
   // Value-derived selectors (never select the stable `getYearlyCost` function —
   // that is what stops consumers re-rendering when CATIA data changes).
@@ -33,12 +33,16 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
 
   const totalCostForYear = computeYearlyCost(licenseCosts, currentYear);
 
-  // Pull the server copy on mount; make sure a debounced edit is not lost on unmount.
+  // Pull the server copy once the role is known — hydrate() may only publish an
+  // empty document for a confirmed admin. The flush stays on its own unmount-only
+  // effect so a role change never fires a save mid-session.
   useEffect(() => {
-    void useCatiaStore.getState().hydrate();
-    return () => {
-      void useCatiaStore.getState().flush();
-    };
+    if (role === null) return;
+    void useCatiaStore.getState().hydrate({ canSeed: role === 'admin' });
+  }, [role]);
+
+  useEffect(() => () => {
+    void useCatiaStore.getState().flush();
   }, []);
 
   const viewOnlyTitle = t('common.viewOnly', 'View only');
