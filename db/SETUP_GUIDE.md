@@ -28,9 +28,15 @@ to the next one.
 | 2 | `db/migration_rbac.sql` | Legacy databases only | Adds `user_roles`, `get_my_role()` and the read/admin-write policies to a database created **before** `schema.sql` existed. A fresh database already has all of this from step 1 — running it again fails with `policy ... already exists`, which is harmless but aborts the script. |
 | 3 | `db/migration_fix_rbac_recursion.sql` | Legacy databases only | Drops the recursive `user_roles: admin full` policy. `schema.sql` never creates it, so on a fresh database this is a no-op. |
 | 4 | `db/migration_catia_license.sql` | **Yes** | Creates `catia_license_data`, the server-side store for CATIA licence costs and revenues. |
-| 5 | `db/import_2025_data.sql` | Optional | Seeds the demo/handover project and monthly-record data. Skip it if you are starting from scratch. |
+| 5 | `db/migration_catia_license_seed.sql` | **Yes** | Publishes the canonical CATIA sheet into the row step 4 created. Step 4 leaves `license_costs` empty, which the app reads as "never published" and answers by uploading whichever admin opens it first from their own browser. Run this and no client ever makes that decision. Safe to re-run: it will not overwrite a sheet that has already been published. |
+| 6 | `db/import_2025_data.sql` | Optional | Seeds the demo/handover project and monthly-record data. Skip it if you are starting from scratch. |
 
-**Fresh project, short version:** run `db/schema.sql`, then `db/migration_catia_license.sql`.
+**Fresh project, short version:** run `db/schema.sql`, then `db/migration_catia_license.sql`,
+then `db/migration_catia_license_seed.sql`.
+
+**Order matters for the CATIA pair:** run both before deploying the app, and step 5 straight
+after step 4. Between them the sheet is unpublished, and the first admin to open the app
+fills it from their browser's local copy.
 
 ## 3. Create the users
 

@@ -35,7 +35,6 @@ Access is role based: every signed-in user can read everything, only users with 
 - **Zustand 5** for the CATIA licence store, **@dnd-kit** for drag-and-drop ordering
 - **Supabase** (`@supabase/supabase-js`) — PostgreSQL, Auth and Row Level Security
 - **xlsx** + **html2canvas** for Excel and chart export
-- **inversify** — a Clean-Architecture container under `src/` used by part of the codebase
 
 ## Getting started
 
@@ -138,15 +137,17 @@ Sign-up is disabled in the app: users are created manually in the Supabase dashb
 ```
 App.tsx                 shell: routing, top bar, year selector, sidebar
 components/             one file per view, plus modals/
+components/ui/          shared presentational pieces (Button, Card, KpiCard, Skeleton)
 contexts/               LanguageContext (ja/en/vn), UserRoleContext
 services/               *Service.ts (extend BaseService) behind the dbService facade
 lib/supabase.ts         the single Supabase client
 stores/                 Zustand stores (CATIA licence data)
-utils/                  export helpers, chart export, diagnostics
+utils/                  logger, export helpers, chart export, diagnostics
 db/                     schema.sql, migrations, setup guide, data import
-src/                    Clean-Architecture layer (domain / data / ioc / ui)
+docs/                   design specification
 ```
 
-`src/` contains an in-progress Clean-Architecture skeleton (inversify container, use cases,
-repositories). Only the shared presentational components in `src/ui/components/` are wired
-into the live views today; the rest is not on the main code path.
+There is no `src/` tree. It used to hold an unfinished Clean-Architecture skeleton
+(inversify container, use cases, repositories) that nothing on the main code path ever
+called, and which kept a second copy of the PRJ-XXX code-generation rule. It was deleted;
+the two parts that were actually wired in moved to `utils/logger.ts` and `components/ui/`.
