@@ -3,6 +3,9 @@ import React, { useState } from 'react';
 import { Lock, Mail, AlertCircle } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('Auth');
 import { Button } from './ui/Button';
 
 export const Auth: React.FC = () => {
@@ -29,7 +32,7 @@ export const Auth: React.FC = () => {
       // Auth state change in App.tsx will handle the redirect/view switch
     } catch (err) {
       const error = err as Error;
-      console.error('Login error:', error);
+      log.error('Login error:', error);
       setError(error.message || 'Failed to login');
     } finally {
       setLoading(false);

@@ -3,6 +3,10 @@ import { BaseService } from './BaseService';
 import type { Project } from '../types';
 
 export class PeriodService extends BaseService {
+    constructor() {
+        super('PeriodService');
+    }
+
 
     async getPeriods() {
         const { data, error } = await this.supabase
@@ -50,7 +54,7 @@ export class PeriodService extends BaseService {
                     .select('*', { count: 'exact', head: true })
                     .eq('period_label', period.label);
 
-                if (countError) console.error('Error counting projects:', countError);
+                if (countError) this.log.error('Error counting projects:', countError);
 
                 return {
                     ...period,

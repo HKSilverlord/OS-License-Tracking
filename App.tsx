@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { Variants } from 'framer-motion';
 import { Auth } from './components/Auth';
@@ -275,12 +275,17 @@ function App() {
               </nav>
             </div>
 
-            <div>
-              {!sidebarCollapsed && <p className="px-3 text-xs font-semibold text-slate-500 dark:text-slate-500 uppercase tracking-wider mb-2">Tools</p>}
-              <nav className="space-y-1">
-                <NavLink to="/diagnostic" icon={Wrench} label="Database Fix" collapsed={sidebarCollapsed} />
-              </nav>
-            </div>
+            {/* The diagnostic page writes to period_projects and dumps table samples.
+                RLS already rejects a non-admin's write, but the tool has no business
+                being in a viewer's navigation at all. */}
+            {isAdmin && (
+              <div>
+                {!sidebarCollapsed && <p className="px-3 text-xs font-semibold text-slate-500 dark:text-slate-500 uppercase tracking-wider mb-2">{t('nav.tools', 'Tools')}</p>}
+                <nav className="space-y-1">
+                  <NavLink to="/diagnostic" icon={Wrench} label={t('nav.diagnostic', 'Database Fix')} collapsed={sidebarCollapsed} />
+                </nav>
+              </div>
+            )}
           </div>
 
           <div className="p-4 border-t border-slate-800 dark:border-slate-800 bg-slate-900/50 dark:bg-slate-900/50">
@@ -347,8 +352,12 @@ function App() {
               <MobileNavLink to="/long-term-plan" icon={TrendingUp} label={t('nav.longTermPlan')} onClick={() => setMobileMenuOpen(false)} />
               <MobileNavLink to="/monthly-plan-actual" icon={BarChart3} label={t('nav.monthlyPlanActual')} onClick={() => setMobileMenuOpen(false)} />
               <MobileNavLink to="/period-management" icon={CalendarIcon} label={t('nav.periodManagement')} onClick={() => setMobileMenuOpen(false)} />
-              <div className="my-4 border-t border-slate-200 dark:border-slate-800"></div>
-              <MobileNavLink to="/diagnostic" icon={Wrench} label="Database Fix" onClick={() => setMobileMenuOpen(false)} />
+              {isAdmin && (
+                <>
+                  <div className="my-4 border-t border-slate-200 dark:border-slate-800"></div>
+                  <MobileNavLink to="/diagnostic" icon={Wrench} label={t('nav.diagnostic', 'Database Fix')} onClick={() => setMobileMenuOpen(false)} />
+                </>
+              )}
             </nav>
             <div className="p-6 border-t border-slate-200 dark:border-slate-800">
               <button onClick={handleSignOut} className="flex items-center justify-center w-full py-3 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl font-medium">
@@ -569,7 +578,7 @@ const RouteName = () => {
     '/long-term-plan': t('nav.longTermPlan'),
     '/monthly-plan-actual': t('nav.monthlyPlanActual'),
     '/period-management': t('nav.periodManagement'),
-    '/diagnostic': 'Database Diagnostic'
+    '/diagnostic': t('nav.diagnostic', 'Database Fix'),
   };
 
   return <>{map[location.pathname] || ''}</>;
@@ -617,6 +626,7 @@ const PageWrapper = ({ children }: { children: React.ReactNode }) => (
 // Main Routes with Page Transitions
 const MainRoutes = ({ currentYear, searchQuery, projectCreatedTrigger }: { currentYear: number, searchQuery: string, projectCreatedTrigger: number }) => {
   const location = useLocation();
+  const { isAdmin } = useUserRole();
 
   return (
     <AnimatePresence mode="wait">
@@ -629,7 +639,11 @@ const MainRoutes = ({ currentYear, searchQuery, projectCreatedTrigger }: { curre
         <Route path="/long-term-plan" element={<PageWrapper><LongTermPlanView /></PageWrapper>} />
         <Route path="/monthly-plan-actual" element={<PageWrapper><MonthlyPlanActualView currentYear={currentYear} /></PageWrapper>} />
         <Route path="/period-management" element={<PageWrapper><PeriodManagement /></PageWrapper>} />
-        <Route path="/diagnostic" element={<PageWrapper><DatabaseDiagnostic /></PageWrapper>} />
+        {/* Kept as a route so a bookmarked URL redirects instead of dead-ending. */}
+        <Route
+          path="/diagnostic"
+          element={isAdmin ? <PageWrapper><DatabaseDiagnostic /></PageWrapper> : <Navigate to="/" replace />}
+        />
       </Routes>
     </AnimatePresence>
   );

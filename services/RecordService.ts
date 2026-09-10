@@ -3,6 +3,10 @@ import { BaseService } from './BaseService';
 import { MonthlyRecord } from '../types';
 
 export class RecordService extends BaseService {
+    constructor() {
+        super('RecordService');
+    }
+
 
     async getRecords(periodLabel: string) {
         const { data, error } = await this.supabase

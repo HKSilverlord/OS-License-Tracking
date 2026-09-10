@@ -76,6 +76,10 @@ const normalizeRevenues = (raw: unknown): Record<number, Record<number, number |
 };
 
 export class CatiaLicenseService extends BaseService {
+    constructor() {
+        super('CatiaLicenseService');
+    }
+
   /**
    * Reads the single document row.
    * Returns `null` when the row does not exist yet or has never been written

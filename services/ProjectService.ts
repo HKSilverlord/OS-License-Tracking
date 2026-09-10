@@ -3,10 +3,7 @@ import { BaseService } from './BaseService';
 import { periodService } from './PeriodService';
 import { buildPriceIndex, resolvePrices } from './pricing';
 import type { PeriodProjectPriceRow, PriceIndex } from './pricing';
-import { createLogger } from '../utils/logger';
 import type { CreateProjectInput, Project } from '../types';
-
-const log = createLogger('ProjectService');
 
 /** Everything the year-scoped views need, fetched in at most two Supabase round-trips. */
 export interface YearProjectPrices {
@@ -47,6 +44,10 @@ const mergePeriodPrices = (project: Project, row: PeriodProjectPriceRow): Projec
 });
 
 export class ProjectService extends BaseService {
+    constructor() {
+        super('ProjectService');
+    }
+
 
     // --- Project Code Generation ---
 
@@ -88,7 +89,7 @@ export class ProjectService extends BaseService {
 
             return code;
         } catch (error) {
-            log.error('Error generating next project code:', error);
+            this.log.error('Error generating next project code:', error);
             throw error;
         }
     }
@@ -106,7 +107,7 @@ export class ProjectService extends BaseService {
 
     async getProjects(period?: string) {
         if (period) {
-            log.debug('Fetching projects for period:', period);
+            this.log.debug('Fetching projects for period:', period);
 
             // Query projects through the period_projects junction table
             const { data, error } = await this.supabase
@@ -115,19 +116,19 @@ export class ProjectService extends BaseService {
                 .eq('period_label', period);
 
             if (error) {
-                log.error('Error fetching projects:', error);
+                this.log.error('Error fetching projects:', error);
                 throw error;
             }
 
             const rows: PeriodProjectJoinRow[] = data || [];
-            log.debug('Raw data from period_projects:', rows.length, 'items');
+            this.log.debug('Raw data from period_projects:', rows.length, 'items');
 
             // Extract projects from the junction table result and sort by display_order
             const projects: Project[] = [];
             for (const pp of rows) {
                 const project = embeddedOne(pp.projects);
                 if (!project) {
-                    log.warn('Found period_project without nested project data:', pp);
+                    this.log.warn('Found period_project without nested project data:', pp);
                     continue;
                 }
 
@@ -139,10 +140,10 @@ export class ProjectService extends BaseService {
             // Sort by display_order in JavaScript since Supabase does not support nested ordering
             projects.sort(byDisplayOrder);
 
-            log.debug('Returning', projects.length, 'projects');
+            this.log.debug('Returning', projects.length, 'projects');
             return projects;
         } else {
-            log.debug('Fetching all projects (no period filter)');
+            this.log.debug('Fetching all projects (no period filter)');
 
             // If no period specified, return all projects sorted by display_order
             const { data, error } = await this.supabase
@@ -151,11 +152,11 @@ export class ProjectService extends BaseService {
                 .order('display_order', { ascending: true });
 
             if (error) {
-                log.error('Error fetching projects:', error);
+                this.log.error('Error fetching projects:', error);
                 throw error;
             }
 
-            log.debug('Returning', data?.length || 0, 'projects');
+            this.log.debug('Returning', data?.length || 0, 'projects');
             return data as Project[];
         }
     }
@@ -173,7 +174,7 @@ export class ProjectService extends BaseService {
             .sort((a, b) => a.localeCompare(b));
 
         if (periodLabels.length === 0) {
-            log.debug('No periods found for year', year);
+            this.log.debug('No periods found for year', year);
             return {
                 year,
                 periodLabels,
@@ -190,7 +191,7 @@ export class ProjectService extends BaseService {
             .in('period_label', periodLabels);
 
         if (error) {
-            log.error('Error fetching period_projects for year:', year, error);
+            this.log.error('Error fetching period_projects for year:', year, error);
             throw error;
         }
 
@@ -213,7 +214,7 @@ export class ProjectService extends BaseService {
 
             const project = embeddedOne(row.projects);
             if (!project) {
-                log.warn('Found period_project without nested project data:', row.period_label, row.project_id);
+                this.log.warn('Found period_project without nested project data:', row.period_label, row.project_id);
                 continue;
             }
 
@@ -229,7 +230,7 @@ export class ProjectService extends BaseService {
 
         const projects = Array.from(projectsById.values()).sort(byDisplayOrder);
 
-        log.debug('getYearProjectPrices', year, '->', periodLabels.length, 'periods,', projects.length, 'projects');
+        this.log.debug('getYearProjectPrices', year, '->', periodLabels.length, 'periods,', projects.length, 'projects');
 
         return {
             year,
@@ -243,7 +244,7 @@ export class ProjectService extends BaseService {
 
     async getProjectsForCarryOver() {
         try {
-            log.debug('Starting getProjectsForCarryOver');
+            this.log.debug('Starting getProjectsForCarryOver');
 
             // Fetch ALL projects without any period filtering
             const { data, error } = await this.supabase
@@ -254,7 +255,7 @@ export class ProjectService extends BaseService {
             if (error) throw error; // Will be caught by catch block
 
             if (!data) {
-                log.debug('No data returned (null/undefined)');
+                this.log.debug('No data returned (null/undefined)');
                 return [];
             }
 
@@ -266,7 +267,7 @@ export class ProjectService extends BaseService {
             return uniqueProjects as Project[];
 
         } catch (err) {
-            log.error('getProjectsForCarryOver failed:', err);
+            this.log.error('getProjectsForCarryOver failed:', err);
             throw err;
         }
     }
@@ -282,7 +283,7 @@ export class ProjectService extends BaseService {
             .eq('period_label', period);
 
         if (error) {
-            log.warn('Could not determine display_order for period', period, error);
+            this.log.warn('Could not determine display_order for period', period, error);
             return 1;
         }
 
@@ -305,7 +306,7 @@ export class ProjectService extends BaseService {
      * error is rethrown — a project without a period link is invisible everywhere.
      */
     async createProject(input: CreateProjectInput): Promise<Project> {
-        log.debug('Creating project with period:', input.period);
+        this.log.debug('Creating project with period:', input.period);
 
         // Auto-generate code if not provided or invalid
         let finalCode = input.code;
@@ -336,14 +337,14 @@ export class ProjectService extends BaseService {
             .single();
 
         if (error) {
-            log.error('Error creating project:', error);
+            this.log.error('Error creating project:', error);
             throw error;
         }
 
         const project = createdProject as Project;
 
         // Link project to period in the period_projects table
-        log.debug('Linking to period:', input.period);
+        this.log.debug('Linking to period:', input.period);
 
         const { error: linkError } = await this.supabase
             .from('period_projects')
@@ -355,7 +356,7 @@ export class ProjectService extends BaseService {
             });
 
         if (linkError) {
-            log.error('ERROR linking project to period, rolling back:', linkError);
+            this.log.error('ERROR linking project to period, rolling back:', linkError);
 
             const { error: rollbackError } = await this.supabase
                 .from('projects')
@@ -363,7 +364,7 @@ export class ProjectService extends BaseService {
                 .eq('id', project.id);
 
             if (rollbackError) {
-                log.error('Failed to roll back orphan project', project.id, rollbackError);
+                this.log.error('Failed to roll back orphan project', project.id, rollbackError);
             }
 
             throw linkError;
@@ -537,7 +538,7 @@ export class ProjectService extends BaseService {
     async updateProjectDisplayOrders(items: { id: string, display_order: number }[]) {
         if (!items || items.length === 0) return;
 
-        log.debug(`Updating display_order for ${items.length} items`);
+        this.log.debug(`Updating display_order for ${items.length} items`);
 
         // Perform parallel updates
         const updates = items.map(item =>
@@ -547,14 +548,14 @@ export class ProjectService extends BaseService {
                 .eq('id', item.id)
                 .then(({ error }) => {
                     if (error) {
-                        log.error(`Failed to update project ${item.id}:`, error);
+                        this.log.error(`Failed to update project ${item.id}:`, error);
                         throw error;
                     }
                 })
         );
 
         await Promise.all(updates);
-        log.debug(`Successfully updated ${items.length} items`);
+        this.log.debug(`Successfully updated ${items.length} items`);
     }
 }
 

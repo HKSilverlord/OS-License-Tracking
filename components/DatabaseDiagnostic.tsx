@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { AlertCircle, CheckCircle, Loader2, Wrench, Database, Search } from 'lucide-react';
 import { diagnoseDatabaseLinks, checkDatabaseHasData } from '../utils/databaseDiagnostic';
 import { runDetailedDiagnostic, testTrackingViewQuery, testYearlyDataViewQuery, type DetailedDiagnosticResult } from '../utils/detailedDiagnostic';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('DatabaseDiagnostic');
 
 export const DatabaseDiagnostic: React.FC = () => {
   const [running, setRunning] = useState(false);
@@ -18,7 +21,7 @@ export const DatabaseDiagnostic: React.FC = () => {
       const check = await checkDatabaseHasData();
       setQuickCheck(check);
     } catch (error) {
-      console.error('Quick check failed:', error);
+      log.error('Quick check failed:', error);
     } finally {
       setRunning(false);
     }
@@ -35,7 +38,7 @@ export const DatabaseDiagnostic: React.FC = () => {
       const check = await checkDatabaseHasData();
       setQuickCheck(check);
     } catch (error) {
-      console.error('Diagnostic failed:', error);
+      log.error('Diagnostic failed:', error);
       setResult({ errors: ['Diagnostic failed: ' + (error as any).message] });
     } finally {
       setRunning(false);
@@ -54,7 +57,7 @@ export const DatabaseDiagnostic: React.FC = () => {
         setTestPeriod(detailed.periods.list[0].label);
       }
     } catch (error) {
-      console.error('Detailed diagnostic failed:', error);
+      log.error('Detailed diagnostic failed:', error);
     } finally {
       setRunning(false);
     }
@@ -72,7 +75,7 @@ export const DatabaseDiagnostic: React.FC = () => {
         yearly: yearlyTest
       });
     } catch (error) {
-      console.error('Query test failed:', error);
+      log.error('Query test failed:', error);
     } finally {
       setRunning(false);
     }

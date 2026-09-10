@@ -2,10 +2,7 @@
 import { BaseService } from './BaseService';
 import { buildPriceIndex, lookupPrices } from './pricing';
 import type { PeriodProjectPriceRow, ProjectPriceRow } from './pricing';
-import { createLogger } from '../utils/logger';
 import { DashboardRecord, AppSettings } from '../types';
-
-const log = createLogger('DashboardService');
 
 const DEFAULT_SETTINGS = {
     exchangeRate: 165,
@@ -61,6 +58,10 @@ const collectProjects = (rows: readonly AggregationRecordRow[]): ProjectPriceRow
 };
 
 export class DashboardService extends BaseService {
+    constructor() {
+        super('DashboardService');
+    }
+
 
     // --- Settings (Often used in dashboard contexts) ---
 
@@ -165,7 +166,7 @@ export class DashboardService extends BaseService {
 
         if (error) {
             // Pricing must not take the whole dashboard down: fall back to global project prices.
-            log.error('Failed to load period_projects prices, falling back to project prices:', error);
+            this.log.error('Failed to load period_projects prices, falling back to project prices:', error);
             return buildPriceIndex([], projects);
         }
 
