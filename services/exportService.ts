@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import type { MonthlyRecord, Project } from '../types';
 import { dbService } from './dbService';
 import { lookupPrices, priceKey } from './pricing';
@@ -167,6 +166,10 @@ export async function exportYearToExcel(year: number): Promise<void> {
         actual * prices.actual
       ];
     });
+
+  // xlsx is the single heaviest dependency in the app and is only reachable
+  // through this one export button, so it is fetched on demand.
+  const XLSX = await import('xlsx');
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(

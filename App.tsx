@@ -1,18 +1,24 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { HashRouter as Router, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { Variants } from 'framer-motion';
 import { Auth } from './components/Auth';
-import { Dashboard } from './components/Dashboard';
-import { TrackingView } from './components/TrackingView';
-import { TotalView } from './components/TotalView';
-import { YearlyDataView } from './components/YearlyDataView';
-import { PeriodManagement } from './components/PeriodManagement';
-import { LongTermPlanView } from './components/LongTermPlanView';
-import { MonthlyPlanActualView } from './components/MonthlyPlanActualView';
-import { CatiaLicenseView } from './components/CatiaLicenseView';
-import { DatabaseDiagnostic } from './components/DatabaseDiagnostic';
+
+// Route views are code-split: each one is a separate chunk fetched when the user
+// first navigates to it. Recharts alone is ~7 MB installed and only four views
+// use it, so shipping every view in the initial bundle made the first paint pay
+// for pages most sessions never open.
+const Dashboard = lazy(() => import('./components/Dashboard').then(m => ({ default: m.Dashboard })));
+const TrackingView = lazy(() => import('./components/TrackingView').then(m => ({ default: m.TrackingView })));
+const TotalView = lazy(() => import('./components/TotalView').then(m => ({ default: m.TotalView })));
+const YearlyDataView = lazy(() => import('./components/YearlyDataView').then(m => ({ default: m.YearlyDataView })));
+const PeriodManagement = lazy(() => import('./components/PeriodManagement').then(m => ({ default: m.PeriodManagement })));
+const LongTermPlanView = lazy(() => import('./components/LongTermPlanView').then(m => ({ default: m.LongTermPlanView })));
+const MonthlyPlanActualView = lazy(() => import('./components/MonthlyPlanActualView').then(m => ({ default: m.MonthlyPlanActualView })));
+const CatiaLicenseView = lazy(() => import('./components/CatiaLicenseView').then(m => ({ default: m.CatiaLicenseView })));
+const DatabaseDiagnostic = lazy(() => import('./components/DatabaseDiagnostic').then(m => ({ default: m.DatabaseDiagnostic })));
+import { Skeleton } from './components/ui/Skeleton';
 import { NewProjectModal } from './components/modals/NewProjectModal';
 import { NewPeriodModal } from './components/modals/NewPeriodModal';
 import { dbService } from './services/dbService';
@@ -611,6 +617,16 @@ const pageVariants: Variants = {
   }
 };
 
+/** Placeholder shown while a route chunk is still downloading. */
+const RouteFallback = () => (
+  <div className="flex-1 p-6 space-y-4">
+    <Skeleton className="h-8 w-64" />
+    <Skeleton className="h-4 w-full" />
+    <Skeleton className="h-4 w-5/6" />
+    <Skeleton className="h-64 w-full" />
+  </div>
+);
+
 const PageWrapper = ({ children }: { children: React.ReactNode }) => (
   <motion.div
     initial="initial"
@@ -619,7 +635,9 @@ const PageWrapper = ({ children }: { children: React.ReactNode }) => (
     variants={pageVariants}
     className="flex-1 flex flex-col h-full w-full absolute inset-0"
   >
-    {children}
+    {/* Inside the animated wrapper, so a chunk still loading does not stall the
+        page transition and leave the previous route frozen on screen. */}
+    <Suspense fallback={<RouteFallback />}>{children}</Suspense>
   </motion.div>
 );
 

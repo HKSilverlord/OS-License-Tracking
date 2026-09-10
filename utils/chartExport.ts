@@ -8,7 +8,6 @@
  * reads the same active language without subscribing to re-renders — correct
  * for one-shot toasts raised from an event handler.
  */
-import html2canvas from 'html2canvas';
 import { toast } from '../contexts/ToastContext';
 import { createLogger } from './logger';
 import { translate } from '../contexts/LanguageContext';
@@ -179,8 +178,11 @@ export const captureBackgroundColor = (): string =>
 export const captureElement = async (
   element: HTMLElement,
   options: { scale?: number } = {}
-): Promise<HTMLCanvasElement> =>
-  html2canvas(element, {
+): Promise<HTMLCanvasElement> => {
+  // Only image export needs html2canvas, and most sessions never trigger one.
+  const { default: html2canvas } = await import('html2canvas');
+
+  return html2canvas(element, {
     scale: options.scale ?? 3,
     backgroundColor: captureBackgroundColor(),
     logging: false,
@@ -197,6 +199,7 @@ export const captureElement = async (
       await resolveOklchColors(clonedDoc);
     }
   });
+};
 
 /**
  * PRIMARY: Export chart as SVG (vector format)
