@@ -4,6 +4,7 @@ import { dbService } from '../services/dbService';
 import { exportChartToSVG, exportChartToPNG, exportChartDataToCSV, generateChartFilename, copyChartToClipboard } from '../utils/chartExport';
 import { TrendingUp, Download, Palette, Copy, Image } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import type { TranslateFn } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
 import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
 import { Skeleton } from './ui/Skeleton';
@@ -82,6 +83,161 @@ const migrateChartColors = (raw: unknown): ChartColors | null => {
 /** Referentially stable so hooks that map over it can list it as a dependency. */
 const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
+/* --------------------------------------------------------------------------
+ * Chart renderers
+ *
+ * These live at module scope on purpose. Declared inside TotalView they would be
+ * a NEW component type on every render, so React would throw away the subtree —
+ * and with it the pinned-card position and the bars' animation state. Recharts
+ * injects its own props (x/y/value, payload) into the element passed to
+ * `content=` / `shape=`, so everything from the view is threaded in explicitly.
+ * ------------------------------------------------------------------------ */
+
+/** Outlined label renderer for a <LabelList content=…>. */
+const OutlinedLabel = ({ x, y, value, dataKey, width = 0, chartColors }: {
+  x?: number;
+  y?: number;
+  value?: number | string;
+  dataKey: keyof ChartColors;
+  width?: number;
+  chartColors: ChartColors;
+}) => {
+  if (!value || value === 0) return null;
+  const style = chartColors[dataKey];
+  if (!style) return null;
+  const tx = typeof x === 'number' && typeof width === 'number' ? x + width / 2 : x;
+  const ty = typeof y === 'number' ? y - 4 : y;
+  const formatted = typeof value === 'number' && value > 999 ? value.toLocaleString() : value;
+  return (
+    <g>
+      {style.stroke && (
+        <text x={tx} y={ty} textAnchor="middle" fontSize={style.fontSize} fontWeight="bold" stroke="white" strokeWidth={3} strokeLinejoin="round" paintOrder="stroke">
+          {formatted}
+        </text>
+      )}
+      <text x={tx} y={ty} textAnchor="middle" fontSize={style.fontSize} fontWeight={style.bold ? 'bold' : 'normal'} fill={style.labelColor}>
+        {formatted}
+      </text>
+    </g>
+  );
+};
+
+/** The month breakdown, shown both in the tooltip and in the pinned card. */
+const MonthDetailCard = ({ data, chartColors, t, hideShadow = false }: {
+  data: TotalChartRow;
+  chartColors: ChartColors;
+  t: TranslateFn;
+  hideShadow?: boolean;
+}) => {
+  const plan = data.plan || 0;
+  const actual = data.actual || 0;
+  const accPlan = data.accPlan || 0;
+  const accActual = data.accActual || 0;
+
+  const timeGap = accActual - accPlan;
+  const percentGap = accPlan !== 0 ? ((timeGap / accPlan) * 100) : 0;
+
+  return (
+    <div className={`bg-white dark:bg-slate-900 p-3 border border-slate-300 dark:border-slate-700 rounded-lg min-w-[200px] ${hideShadow ? '' : 'shadow-lg'}`}>
+      <p className="font-semibold text-slate-800 dark:text-slate-100 mb-2 border-b border-slate-200 dark:border-slate-800 pb-1">
+        {data.name}
+      </p>
+      <div className="space-y-1.5 text-sm">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.plan.color }}></div>
+            <span className="text-slate-700 dark:text-slate-400">{t('tracker.planShort')}:</span>
+          </div>
+          <span className="font-medium text-slate-900 dark:text-slate-100">{plan.toLocaleString()}</span>
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.actual.color }}></div>
+            <span className="text-slate-700 dark:text-slate-400">{t('tracker.actualShort')}:</span>
+          </div>
+          <span className="font-medium text-slate-900 dark:text-slate-100">{actual.toLocaleString()}</span>
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded border-2" style={{ borderColor: chartColors.accPlan.color }}></div>
+            <span className="text-slate-700 dark:text-slate-400">{t('dashboard.chart.accPlan')}:</span>
+          </div>
+          <span className="font-medium text-slate-900 dark:text-slate-100">{accPlan.toLocaleString()}</span>
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded border-2" style={{ borderColor: chartColors.accActual.color }}></div>
+            <span className="text-slate-700 dark:text-slate-400">{t('dashboard.chart.accActual')}:</span>
+          </div>
+          <span className="font-medium text-slate-900 dark:text-slate-100">{accActual.toLocaleString()}</span>
+        </div>
+
+        <div className="border-t border-slate-200 dark:border-slate-800 pt-2 mt-2">
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-slate-700 dark:text-slate-400 font-medium">{t('totalView.timeGap', '時間 GAP')}:</span>
+            <span className={`font-semibold ${timeGap >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+              {timeGap >= 0 ? '+' : ''}{timeGap.toLocaleString()}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-slate-700 dark:text-slate-400 font-medium">{t('totalView.percentGap', '% GAP')}:</span>
+            <span className={`font-semibold ${percentGap >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+              {percentGap >= 0 ? '+' : ''}{percentGap.toFixed(1)}%
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Tooltip body. Recharts 3 fills in `active` / `payload` when it clones the
+ * element, which is why they are optional here.
+ */
+const CustomTooltip = ({ active, payload, chartColors, t }: Partial<TooltipContentProps<number, string>> & {
+  chartColors: ChartColors;
+  t: TranslateFn;
+}) => {
+  if (!active || !payload || payload.length === 0) return null;
+  const data = payload[0]?.payload as TotalChartRow | undefined;
+  if (!data) return null;
+  return <MonthDetailCard data={data} chartColors={chartColors} t={t} />;
+};
+
+/**
+  * Rounded bar that also reports each column's centre x, so the pinned card can
+  * be positioned under the right month.
+  *
+  * It reports through a callback rather than taking the ref: Recharts 3 keeps
+  * chart props in an immer-backed store that DEEP-FREEZES what it is handed, so
+  * a ref passed as a prop arrives with a frozen `.current` and the first write
+  * throws. A callback closes over the ref instead — only the function object is
+  * frozen, which is harmless.
+  */
+const TrackingBar = (props: {
+  fill?: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  fillOpacity?: number;
+  payload?: TotalChartRow;
+  onColumnCoord: (month: number, centerX: number) => void;
+}) => {
+  const { fill, x = 0, y = 0, width = 0, height = 0, payload, fillOpacity, onColumnCoord } = props;
+  if (payload?.month) {
+    onColumnCoord(payload.month, x + width / 2);
+  }
+  const r = 4;
+  const path = `M${x},${y + height} L${x},${y + r} A${r},${r} 0 0,1 ${x + r},${y} L${x + width - r},${y} A${r},${r} 0 0,1 ${x + width},${y + r} L${x + width},${y + height} Z`;
+  const d = height < r ? `M${x},${y} L${x + width},${y} L${x + width},${y + height} L${x},${y + height} Z` : path;
+  return <path d={d} stroke="none" fill={fill} fillOpacity={fillOpacity} />;
+};
+
 export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   const { t, language } = useLanguage();
   const toast = useToast();
@@ -108,37 +264,14 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     });
   };
 
+  // See TrackingBar: the ref cannot cross into Recharts, a callback can.
+  const recordColumnCoord = useCallback((month: number, centerX: number) => {
+    columnCoordsRef.current[month] = centerX;
+  }, []);
+
   // Current month highlight
   const currentMonth = new Date().getFullYear() === currentYear ? new Date().getMonth() + 1 : null;
   const [showCurrentMonth, setShowCurrentMonth] = useState(true);
-
-  // Custom outlined label renderer
-  const OutlinedLabel = ({ x, y, value, dataKey, width = 0 }: {
-    x?: number;
-    y?: number;
-    value?: number | string;
-    dataKey: keyof ChartColors;
-    width?: number;
-  }) => {
-    if (!value || value === 0) return null;
-    const style = chartColors[dataKey];
-    if (!style) return null;
-    const tx = typeof x === 'number' && typeof width === 'number' ? x + width / 2 : x;
-    const ty = typeof y === 'number' ? y - 4 : y;
-    const formatted = typeof value === 'number' && value > 999 ? value.toLocaleString() : value;
-    return (
-      <g>
-        {style.stroke && (
-          <text x={tx} y={ty} textAnchor="middle" fontSize={style.fontSize} fontWeight="bold" stroke="white" strokeWidth={3} strokeLinejoin="round" paintOrder="stroke">
-            {formatted}
-          </text>
-        )}
-        <text x={tx} y={ty} textAnchor="middle" fontSize={style.fontSize} fontWeight={style.bold ? 'bold' : 'normal'} fill={style.labelColor}>
-          {formatted}
-        </text>
-      </g>
-    );
-  };
 
   // U1 routed every view's year through one shell control, so a user can change
   // year faster than a request completes. Without this guard an older response
@@ -228,101 +361,6 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     }
     return { yAxisMax: maxLimit, yAxisTicks: ticks };
   }, [chartData]);
-
-  // Reusable Detail Card Component
-  const MonthDetailCard = ({ data, hideShadow = false }: { data: TotalChartRow; hideShadow?: boolean }) => {
-    const plan = data.plan || 0;
-    const actual = data.actual || 0;
-    const accPlan = data.accPlan || 0;
-    const accActual = data.accActual || 0;
-
-    const timeGap = accActual - accPlan;
-    const percentGap = accPlan !== 0 ? ((timeGap / accPlan) * 100) : 0;
-
-    return (
-      <div className={`bg-white dark:bg-slate-900 p-3 border border-slate-300 dark:border-slate-700 rounded-lg min-w-[200px] ${hideShadow ? '' : 'shadow-lg'}`}>
-        <p className="font-semibold text-slate-800 dark:text-slate-100 mb-2 border-b border-slate-200 dark:border-slate-800 pb-1">
-          {data.name}
-        </p>
-        <div className="space-y-1.5 text-sm">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.plan.color }}></div>
-              <span className="text-slate-700 dark:text-slate-400">{t('tracker.planShort')}:</span>
-            </div>
-            <span className="font-medium text-slate-900 dark:text-slate-100">{plan.toLocaleString()}</span>
-          </div>
-
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.actual.color }}></div>
-              <span className="text-slate-700 dark:text-slate-400">{t('tracker.actualShort')}:</span>
-            </div>
-            <span className="font-medium text-slate-900 dark:text-slate-100">{actual.toLocaleString()}</span>
-          </div>
-
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded border-2" style={{ borderColor: chartColors.accPlan.color }}></div>
-              <span className="text-slate-700 dark:text-slate-400">{t('dashboard.chart.accPlan')}:</span>
-            </div>
-            <span className="font-medium text-slate-900 dark:text-slate-100">{accPlan.toLocaleString()}</span>
-          </div>
-
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded border-2" style={{ borderColor: chartColors.accActual.color }}></div>
-              <span className="text-slate-700 dark:text-slate-400">{t('dashboard.chart.accActual')}:</span>
-            </div>
-            <span className="font-medium text-slate-900 dark:text-slate-100">{accActual.toLocaleString()}</span>
-          </div>
-
-          <div className="border-t border-slate-200 dark:border-slate-800 pt-2 mt-2">
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-slate-700 dark:text-slate-400 font-medium">{t('totalView.timeGap', '時間 GAP')}:</span>
-              <span className={`font-semibold ${timeGap >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                {timeGap >= 0 ? '+' : ''}{timeGap.toLocaleString()}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-slate-700 dark:text-slate-400 font-medium">{t('totalView.percentGap', '% GAP')}:</span>
-              <span className={`font-semibold ${percentGap >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                {percentGap >= 0 ? '+' : ''}{percentGap.toFixed(1)}%
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Custom Tooltip Wrapper — recharts 3 hands the content component `TooltipContentProps`
-  const CustomTooltip = ({ active, payload }: TooltipContentProps<number, string>) => {
-    if (!active || !payload || payload.length === 0) return null;
-    const data = payload[0]?.payload as TotalChartRow | undefined;
-    if (!data) return null;
-    return <MonthDetailCard data={data} />;
-  };
-
-  // Custom bar to capture coordinates
-  const TrackingBar = (props: {
-    fill?: string;
-    x?: number;
-    y?: number;
-    width?: number;
-    height?: number;
-    fillOpacity?: number;
-    payload?: TotalChartRow;
-  }) => {
-    const { fill, x = 0, y = 0, width = 0, height = 0, payload, fillOpacity } = props;
-    if (payload?.month) {
-      columnCoordsRef.current[payload.month] = x + width / 2;
-    }
-    const r = 4;
-    const path = `M${x},${y + height} L${x},${y + r} A${r},${r} 0 0,1 ${x + r},${y} L${x + width - r},${y} A${r},${r} 0 0,1 ${x + width},${y + r} L${x + width},${y + height} Z`;
-    const d = height < r ? `M${x},${y} L${x + width},${y} L${x + width},${y + height} L${x},${y + height} Z` : path;
-    return <path d={d} stroke="none" fill={fill} fillOpacity={fillOpacity} />;
-  };
 
   if (loading) {
     return (
@@ -516,7 +554,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                   style={{ zIndex: 0 }}
                 />
                 <div className="relative z-10">
-                  <MonthDetailCard data={pinnedData} hideShadow={true} />
+                  <MonthDetailCard data={pinnedData} chartColors={chartColors} t={t} hideShadow={true} />
                 </div>
               </div>
             );
@@ -541,7 +579,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_PALETTE.grid} />
               <XAxis dataKey="name" fontSize={12} />
               <YAxis yAxisId="left" orientation="left" fontSize={11} domain={[0, yAxisMax]} ticks={yAxisTicks} label={{ value: t('totalView.axis.accumulated'), angle: -90, position: 'insideLeft' }} />
-              <Tooltip content={CustomTooltip} />
+              <Tooltip content={<CustomTooltip chartColors={chartColors} t={t} />} />
               <Legend />
               {/* Current Month Highlight */}
               {showCurrentMonth && currentMonth !== null && (() => {
@@ -553,11 +591,11 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                   </>
                 ) : null;
               })()}
-              <Bar yAxisId="left" dataKey="accPlan" name={t('dashboard.chart.accPlan')} fill={chartColors.accPlan.color} fillOpacity={chartColors.accPlan.opacity} shape={<TrackingBar />}>
-                <LabelList dataKey="accPlan" position="top" content={<OutlinedLabel dataKey="accPlan" />} />
+              <Bar yAxisId="left" dataKey="accPlan" name={t('dashboard.chart.accPlan')} fill={chartColors.accPlan.color} fillOpacity={chartColors.accPlan.opacity} shape={<TrackingBar onColumnCoord={recordColumnCoord} />}>
+                <LabelList dataKey="accPlan" position="top" content={<OutlinedLabel dataKey="accPlan" chartColors={chartColors} />} />
               </Bar>
               <Bar yAxisId="left" dataKey="accActual" name={t('dashboard.chart.accActual')} fill={chartColors.accActual.color} fillOpacity={chartColors.accActual.opacity} radius={[4, 4, 0, 0]}>
-                <LabelList dataKey="accActual" position="top" content={<OutlinedLabel dataKey="accActual" />} />
+                <LabelList dataKey="accActual" position="top" content={<OutlinedLabel dataKey="accActual" chartColors={chartColors} />} />
               </Bar>
             </ComposedChart>
           </ResponsiveContainer>

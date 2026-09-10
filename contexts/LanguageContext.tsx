@@ -3,11 +3,14 @@ import { translations } from '../locales';
 
 export type SupportedLanguage = 'ja' | 'en' | 'vn';
 
+/** Exported so components hoisted out of a view can take `t` as a prop. */
+export type TranslateFn = (key: string, fallback?: string) => string;
+
 export interface LanguageContextValue {
   language: SupportedLanguage;
   setLanguage: (lang: SupportedLanguage) => void;
   toggleLanguage: () => void;
-  t: (key: string, fallback?: string) => string;
+  t: TranslateFn;
 }
 
 const LanguageContext = createContext<LanguageContextValue | undefined>(undefined);

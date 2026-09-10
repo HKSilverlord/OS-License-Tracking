@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import { TrendingUp, Palette } from 'lucide-react';
 import { ChartExportMenu } from './ChartExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
+import type { TranslateFn } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
 import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
 import { Skeleton } from './ui/Skeleton';
@@ -86,6 +87,237 @@ interface MonthlyPlanActualViewProps {
   currentYear: number;
 }
 
+/* --------------------------------------------------------------------------
+ * Chart renderers
+ *
+ * Module scope on purpose: a component declared inside the view is a new type
+ * on every render, so React discards the subtree — the pinned card and the bar
+ * animations reset. Recharts injects x/y/value/payload into the element given
+ * to content= / shape=, so view state is threaded in as explicit props.
+ * ------------------------------------------------------------------------ */
+
+// Reusable Detail Card Component
+const MonthDetailCard = ({ data, chartColors, t, hideShadow = false }: {
+  data: MonthlyPlanActualData;
+  chartColors: MonthlyChartColors;
+  t: TranslateFn;
+  hideShadow?: boolean;
+}) => {
+  return (
+    <div className={`bg-white dark:bg-slate-900 p-3 border border-slate-300 dark:border-slate-700 rounded-lg min-w-[200px] ${hideShadow ? '' : 'shadow-lg'}`}>
+      <p className="font-semibold text-slate-800 dark:text-slate-100 mb-2 border-b border-slate-200 dark:border-slate-800 pb-1">
+        {data.monthLabel}
+      </p>
+      <div className="space-y-1.5 text-sm">
+        {/* Working Hours Section */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.capacityLine.color, opacity: chartColors.capacityLine.opacity, borderStyle: 'dashed' }}></div>
+            <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.capacityLine', '能力線')}:</span>
+          </div>
+          <span className="font-medium text-slate-900 dark:text-slate-100">{data.capacityLine.toLocaleString()} {t('monthlyPlanActual.unit.hours', '時間')}</span>
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.workingHoursPlan.color, opacity: chartColors.workingHoursPlan.opacity }}></div>
+            <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.workingPlan', '稼働計画')}:</span>
+          </div>
+          <span className="font-medium text-slate-900 dark:text-slate-100">{data.workingHoursPlan.toLocaleString()} {t('monthlyPlanActual.unit.hours', '時間')}</span>
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.workingHoursActual.color, opacity: chartColors.workingHoursActual.opacity }}></div>
+            <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.workingActual', '稼働実績')}:</span>
+          </div>
+          <span className="font-medium text-slate-900 dark:text-slate-100">{data.workingHoursActual.toLocaleString()} {t('monthlyPlanActual.unit.hours', '時間')}</span>
+        </div>
+
+        {/* Sales Section */}
+        <div className="border-t border-slate-200 dark:border-slate-800 pt-2 mt-2"></div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesPlan.color, opacity: chartColors.salesPlan.opacity }}></div>
+            <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.salesPlan', '売上計画')}:</span>
+          </div>
+          <span className="font-medium text-slate-900 dark:text-slate-100">{data.salesPlan.toLocaleString()} {t('monthlyPlanActual.unit.sales', '万円')}</span>
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesActual.color, opacity: chartColors.salesActual.opacity }}></div>
+            <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.salesActual', '売上実績')}:</span>
+          </div>
+          <span className="font-medium text-slate-900 dark:text-slate-100">{data.salesActual.toLocaleString()} {t('monthlyPlanActual.unit.sales', '万円')}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Custom Tooltip Component (wraps Detail Card) — recharts 3 passes `TooltipContentProps`
+const CustomTooltip = ({ active, payload, chartColors, t }: Partial<TooltipContentProps<number, string>> & {
+  chartColors: MonthlyChartColors;
+  t: TranslateFn;
+}) => {
+  if (!active || !payload || payload.length === 0) return null;
+  const data = payload[0]?.payload as MonthlyPlanActualData | undefined;
+  if (!data) return null;
+  return <MonthDetailCard data={data} chartColors={chartColors} t={t} />;
+};
+
+// Custom zero label renderer for the Actual Sales bar
+const ZeroLabel = ({ x = 0, y = 0, width = 0, value, chartColors }: {
+  x?: number;
+  y?: number;
+  width?: number;
+  value?: number | string;
+  chartColors: MonthlyChartColors;
+}) => {
+  if (value !== 0) return null;
+  return (
+    <g>
+      <rect x={x + width / 2 - 8} y={y - 22} width={16} height={20} fill="rgba(255,255,255,0.7)" rx={4} />
+      <text x={x + width / 2} y={y - 8} fill={chartColors.workingHoursActual.labelColor} fontSize={14} fontWeight="bold" textAnchor="middle">0</text>
+    </g>
+  );
+};
+
+// Generic custom label with semi-transparent background pill + optional outline
+const CustomLabel = ({ x = 0, y = 0, value, width = 0, dataKey, chartColors, offset = 10, position = 'top' }: {
+  x?: number;
+  y?: number;
+  value?: number | string;
+  width?: number;
+  dataKey: keyof MonthlyChartColors;
+  chartColors: MonthlyChartColors;
+  offset?: number;
+  position?: 'top' | 'insideTop' | 'left';
+}) => {
+  if (value === 0 || !value) return null;
+
+  const formatted = typeof value === 'number' && value > 1000 ? value.toLocaleString() : value;
+  const style = chartColors[dataKey];
+  const color = style?.labelColor || CHART_PALETTE.labelNeutral;
+  const fSize = style?.fontSize || 10;
+  const isBold = style?.bold !== false;
+  const hasStroke = style?.stroke === true;
+
+  let textX = x;
+  let textY = y;
+  if (position === 'insideTop') {
+    textX = x + width / 2;
+    textY = y + 15;
+  } else if (position === 'top') {
+    textX = x + width / 2;
+    textY = y - offset;
+  } else if (position === 'left') {
+    textX = x - offset;
+    textY = y;
+  }
+
+  return (
+    <g>
+      {/* Background pill */}
+      <rect
+        x={textX - 16}
+        y={textY - 12}
+        width={32}
+        height={16}
+        fill="rgba(255,255,255,0.7)"
+        rx={3}
+      />
+      {/* Stroke (outline) layer */}
+      {hasStroke && (
+        <text
+          x={textX}
+          y={textY}
+          stroke="white"
+          strokeWidth={3}
+          strokeLinejoin="round"
+          paintOrder="stroke"
+          fontSize={fSize}
+          fontWeight="bold"
+          textAnchor="middle"
+          alignmentBaseline="middle"
+        >
+          {formatted}{dataKey === 'capacityLine' ? 'h' : ''}
+        </text>
+      )}
+      {/* Actual label */}
+      <text
+        x={textX}
+        y={textY}
+        fill={color}
+        fontSize={fSize}
+        fontWeight={isBold ? 'bold' : 'normal'}
+        textAnchor="middle"
+        alignmentBaseline="middle"
+      >
+        {formatted}{dataKey === 'capacityLine' ? 'h' : ''}
+      </text>
+    </g>
+  );
+};
+
+/**
+ * Custom Bar for Working Hours Actual with Gap Connector (Idea E).
+ *
+ * The column centre is reported through a callback, not by taking the ref:
+ * Recharts 3 keeps chart props in an immer-backed store that DEEP-FREEZES what
+ * it is handed, so a ref passed as a prop arrives with a frozen `.current` and
+ * the first write throws.
+ */
+const WorkingHoursActualBar = ({ fill, x = 0, y = 0, width = 0, height = 0, payload, chartColors, onColumnCoord }: {
+  fill?: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  payload?: MonthlyPlanActualData;
+  chartColors: MonthlyChartColors;
+  onColumnCoord: (month: number, centerX: number) => void;
+}) => {
+  const planValue = payload?.workingHoursPlan || 0;
+  const actualValue = payload?.workingHoursActual || 0;
+
+  // Track the center X coordinate of the column for correct tooltip pinning
+  if (payload?.month) {
+    onColumnCoord(payload.month, x + width / 2);
+  }
+
+  // Estimate where the Plan bar top is physically (y-coordinate)
+  const containerHeight = y + height;
+  const zeroY = containerHeight;
+  const pixelsPerUnit = height / actualValue;
+  const planY = zeroY - (planValue * pixelsPerUnit);
+
+  return (
+    <g>
+      {/* The actual red bar */}
+      <path d={`M${x},${y} L${x + width},${y} L${x + width},${y + height} L${x},${y + height} Z`} stroke="none" fill={fill} fillOpacity={chartColors.workingHoursActual.opacity} />
+
+      {/* Draw gap connector if plan > 0 */}
+      {planValue > 0 && actualValue > 0 && (
+        <g>
+          {/* The dashed line connecting Actual top to Plan top */}
+          <line
+            x1={x + width / 2}
+            y1={y}
+            x2={x + width / 2}
+            y2={planY}
+            stroke={chartColors.workingHoursActual.color}
+            strokeWidth={1}
+            strokeDasharray="3 3"
+          />
+        </g>
+      )}
+    </g>
+  );
+};
+
 export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ currentYear }) => {
   const { t, language } = useLanguage();
   const toast = useToast();
@@ -110,6 +342,11 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
       return { ...prev, [seriesKey]: updated };
     });
   };
+
+  // See WorkingHoursActualBar: the ref cannot cross into Recharts, a callback can.
+  const recordColumnCoord = useCallback((month: number, centerX: number) => {
+    columnCoordsRef.current[month] = centerX;
+  }, []);
 
   // Current month highlight
   const currentMonth = new Date().getFullYear() === currentYear ? new Date().getMonth() + 1 : null;
@@ -176,209 +413,6 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
     const max = Math.max(...monthlyData.map(d => Math.max(d.capacityLine, d.workingHoursPlan, d.workingHoursActual)));
     return Math.ceil(max * 1.1); // +10%
   }, [monthlyData]);
-
-  // Reusable Detail Card Component
-  const MonthDetailCard = ({ data, hideShadow = false }: { data: MonthlyPlanActualData; hideShadow?: boolean }) => {
-    return (
-      <div className={`bg-white dark:bg-slate-900 p-3 border border-slate-300 dark:border-slate-700 rounded-lg min-w-[200px] ${hideShadow ? '' : 'shadow-lg'}`}>
-        <p className="font-semibold text-slate-800 dark:text-slate-100 mb-2 border-b border-slate-200 dark:border-slate-800 pb-1">
-          {data.monthLabel}
-        </p>
-        <div className="space-y-1.5 text-sm">
-          {/* Working Hours Section */}
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.capacityLine.color, opacity: chartColors.capacityLine.opacity, borderStyle: 'dashed' }}></div>
-              <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.capacityLine', '能力線')}:</span>
-            </div>
-            <span className="font-medium text-slate-900 dark:text-slate-100">{data.capacityLine.toLocaleString()} {t('monthlyPlanActual.unit.hours', '時間')}</span>
-          </div>
-
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.workingHoursPlan.color, opacity: chartColors.workingHoursPlan.opacity }}></div>
-              <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.workingPlan', '稼働計画')}:</span>
-            </div>
-            <span className="font-medium text-slate-900 dark:text-slate-100">{data.workingHoursPlan.toLocaleString()} {t('monthlyPlanActual.unit.hours', '時間')}</span>
-          </div>
-
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.workingHoursActual.color, opacity: chartColors.workingHoursActual.opacity }}></div>
-              <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.workingActual', '稼働実績')}:</span>
-            </div>
-            <span className="font-medium text-slate-900 dark:text-slate-100">{data.workingHoursActual.toLocaleString()} {t('monthlyPlanActual.unit.hours', '時間')}</span>
-          </div>
-
-          {/* Sales Section */}
-          <div className="border-t border-slate-200 dark:border-slate-800 pt-2 mt-2"></div>
-
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesPlan.color, opacity: chartColors.salesPlan.opacity }}></div>
-              <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.salesPlan', '売上計画')}:</span>
-            </div>
-            <span className="font-medium text-slate-900 dark:text-slate-100">{data.salesPlan.toLocaleString()} {t('monthlyPlanActual.unit.sales', '万円')}</span>
-          </div>
-
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesActual.color, opacity: chartColors.salesActual.opacity }}></div>
-              <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.salesActual', '売上実績')}:</span>
-            </div>
-            <span className="font-medium text-slate-900 dark:text-slate-100">{data.salesActual.toLocaleString()} {t('monthlyPlanActual.unit.sales', '万円')}</span>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Custom Tooltip Component (wraps Detail Card) — recharts 3 passes `TooltipContentProps`
-  const CustomTooltip = ({ active, payload }: TooltipContentProps<number, string>) => {
-    if (!active || !payload || payload.length === 0) return null;
-    const data = payload[0]?.payload as MonthlyPlanActualData | undefined;
-    if (!data) return null;
-    return <MonthDetailCard data={data} />;
-  };
-
-  // Custom zero label renderer for the Actual Sales bar
-  const ZeroLabel = ({ x = 0, y = 0, width = 0, value }: {
-    x?: number;
-    y?: number;
-    width?: number;
-    value?: number | string;
-  }) => {
-    if (value !== 0) return null;
-    return (
-      <g>
-        <rect x={x + width / 2 - 8} y={y - 22} width={16} height={20} fill="rgba(255,255,255,0.7)" rx={4} />
-        <text x={x + width / 2} y={y - 8} fill={chartColors.workingHoursActual.labelColor} fontSize={14} fontWeight="bold" textAnchor="middle">0</text>
-      </g>
-    );
-  };
-
-  // Generic custom label with semi-transparent background pill + optional outline
-  const CustomLabel = ({ x = 0, y = 0, value, width = 0, dataKey, offset = 10, position = 'top' }: {
-    x?: number;
-    y?: number;
-    value?: number | string;
-    width?: number;
-    dataKey: keyof MonthlyChartColors;
-    offset?: number;
-    position?: 'top' | 'insideTop' | 'left';
-  }) => {
-    if (value === 0 || !value) return null;
-
-    const formatted = typeof value === 'number' && value > 1000 ? value.toLocaleString() : value;
-    const style = chartColors[dataKey];
-    const color = style?.labelColor || CHART_PALETTE.labelNeutral;
-    const fSize = style?.fontSize || 10;
-    const isBold = style?.bold !== false;
-    const hasStroke = style?.stroke === true;
-
-    let textX = x;
-    let textY = y;
-    if (position === 'insideTop') {
-      textX = x + width / 2;
-      textY = y + 15;
-    } else if (position === 'top') {
-      textX = x + width / 2;
-      textY = y - offset;
-    } else if (position === 'left') {
-      textX = x - offset;
-      textY = y;
-    }
-
-    return (
-      <g>
-        {/* Background pill */}
-        <rect
-          x={textX - 16}
-          y={textY - 12}
-          width={32}
-          height={16}
-          fill="rgba(255,255,255,0.7)"
-          rx={3}
-        />
-        {/* Stroke (outline) layer */}
-        {hasStroke && (
-          <text
-            x={textX}
-            y={textY}
-            stroke="white"
-            strokeWidth={3}
-            strokeLinejoin="round"
-            paintOrder="stroke"
-            fontSize={fSize}
-            fontWeight="bold"
-            textAnchor="middle"
-            alignmentBaseline="middle"
-          >
-            {formatted}{dataKey === 'capacityLine' ? 'h' : ''}
-          </text>
-        )}
-        {/* Actual label */}
-        <text
-          x={textX}
-          y={textY}
-          fill={color}
-          fontSize={fSize}
-          fontWeight={isBold ? 'bold' : 'normal'}
-          textAnchor="middle"
-          alignmentBaseline="middle"
-        >
-          {formatted}{dataKey === 'capacityLine' ? 'h' : ''}
-        </text>
-      </g>
-    );
-  };
-
-  // Custom Bar for Working Hours Actual with Gap Connector (Idea E)
-  const WorkingHoursActualBar = ({ fill, x = 0, y = 0, width = 0, height = 0, payload }: {
-    fill?: string;
-    x?: number;
-    y?: number;
-    width?: number;
-    height?: number;
-    payload?: MonthlyPlanActualData;
-  }) => {
-    const planValue = payload?.workingHoursPlan || 0;
-    const actualValue = payload?.workingHoursActual || 0;
-
-    // Track the center X coordinate of the column for correct tooltip pinning
-    if (payload?.month) {
-      columnCoordsRef.current[payload.month] = x + width / 2;
-    }
-
-    // Estimate where the Plan bar top is physically (y-coordinate)
-    const containerHeight = y + height;
-    const zeroY = containerHeight;
-    const pixelsPerUnit = height / actualValue;
-    const planY = zeroY - (planValue * pixelsPerUnit);
-
-    return (
-      <g>
-        {/* The actual red bar */}
-        <path d={`M${x},${y} L${x + width},${y} L${x + width},${y + height} L${x},${y + height} Z`} stroke="none" fill={fill} fillOpacity={chartColors.workingHoursActual.opacity} />
-
-        {/* Draw gap connector if plan > 0 */}
-        {planValue > 0 && actualValue > 0 && (
-          <g>
-            {/* The dashed line connecting Actual top to Plan top */}
-            <line
-              x1={x + width / 2}
-              y1={y}
-              x2={x + width / 2}
-              y2={planY}
-              stroke={chartColors.workingHoursActual.color}
-              strokeWidth={1}
-              strokeDasharray="3 3"
-            />
-          </g>
-        )}
-      </g>
-    );
-  };
 
   if (loading) {
     return (
@@ -565,7 +599,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                   style={{ zIndex: 0 }}
                 />
                 <div className="relative z-10">
-                  <MonthDetailCard data={pinnedData} hideShadow={true} />
+                  <MonthDetailCard data={pinnedData} chartColors={chartColors} t={t} hideShadow={true} />
                 </div>
               </div>
             );
@@ -651,7 +685,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 }}
               />
 
-              <Tooltip content={CustomTooltip} />
+              <Tooltip content={<CustomTooltip chartColors={chartColors} t={t} />} />
               <Legend
                 verticalAlign="top"
                 height={36}
@@ -701,7 +735,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 strokeDasharray="5 5"
                 dot={false}
               >
-                <LabelList dataKey="capacityLine" position="left" content={<CustomLabel position="left" dataKey="capacityLine" />} />
+                <LabelList dataKey="capacityLine" position="left" content={<CustomLabel position="left" dataKey="capacityLine" chartColors={chartColors} />} />
               </Line>
 
               {/* Series 2: Working Hours Plan - Stacked Column (Y2) */}
@@ -714,7 +748,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 fillOpacity={chartColors.workingHoursPlan.opacity}
                 maxBarSize={chartColors.workingHoursPlan.barSize ?? 60}
               >
-                <LabelList dataKey="workingHoursPlan" position="insideTop" content={<CustomLabel position="insideTop" dataKey="workingHoursPlan" />} />
+                <LabelList dataKey="workingHoursPlan" position="insideTop" content={<CustomLabel position="insideTop" dataKey="workingHoursPlan" chartColors={chartColors} />} />
               </Bar>
 
               {/* Series 4: Sales Plan - Line with Markers and Data Labels (Y1) */}
@@ -729,7 +763,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 strokeWidth={3}
                 dot={{ fill: chartColors.salesPlan.color, r: 5 }}
               >
-                <LabelList dataKey="salesPlan" position="top" content={<CustomLabel position="top" dataKey="salesPlan" />} />
+                <LabelList dataKey="salesPlan" position="top" content={<CustomLabel position="top" dataKey="salesPlan" chartColors={chartColors} />} />
               </Line>
 
               {/* Series 5: Sales Actual - Column (Y1) */}
@@ -743,8 +777,8 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 radius={[4, 4, 0, 0]}
                 maxBarSize={chartColors.salesActual.barSize ?? 40}
               >
-                <LabelList dataKey="salesActual" position="top" content={<CustomLabel position="top" dataKey="salesActual" />} />
-                <LabelList content={<ZeroLabel />} />
+                <LabelList dataKey="salesActual" position="top" content={<CustomLabel position="top" dataKey="salesActual" chartColors={chartColors} />} />
+                <LabelList content={<ZeroLabel chartColors={chartColors} />} />
               </Bar>
 
               {/* === BULLET CHART ACTUAL LAYER === */}
@@ -757,9 +791,9 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 fill={chartColors.workingHoursActual.color}
                 fillOpacity={chartColors.workingHoursActual.opacity}
                 maxBarSize={chartColors.workingHoursActual.barSize ?? 30}
-                shape={<WorkingHoursActualBar />}
+                shape={<WorkingHoursActualBar chartColors={chartColors} onColumnCoord={recordColumnCoord} />}
               >
-                <LabelList dataKey="workingHoursActual" position="insideTop" content={<CustomLabel position="insideTop" dataKey="workingHoursActual" />} />
+                <LabelList dataKey="workingHoursActual" position="insideTop" content={<CustomLabel position="insideTop" dataKey="workingHoursActual" chartColors={chartColors} />} />
               </Bar>
 
               {/* Invisible spacer to maintain layout mapping for actualLayer */}

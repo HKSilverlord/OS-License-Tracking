@@ -1,6 +1,7 @@
 import js from '@eslint/js';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 
@@ -14,9 +15,13 @@ export default tseslint.config(
       globals: globals.browser,
     },
     plugins: {
+      react,
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
     },
+    // Read from the installed react package, so the version never drifts from
+    // package.json. Without it eslint-plugin-react warns on every run.
+    settings: { react: { version: 'detect' } },
     rules: {
       ...reactHooks.configs.recommended.rules,
 
@@ -26,6 +31,13 @@ export default tseslint.config(
       'react-hooks/exhaustive-deps': 'error',
 
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+
+      // A component declared inside another component is a NEW type on every
+      // render, so React unmounts and remounts its whole subtree — state, focus
+      // and animations all reset. `allowAsProps` keeps the legitimate case:
+      // Recharts takes components through props (content=, shape=, label=) and
+      // clones them itself.
+      'react/no-unstable-nested-components': ['error', { allowAsProps: true }],
 
       // `catch {}` and deliberate no-op handlers are used in a few places where
       // the failure genuinely does not matter (best-effort localStorage writes).

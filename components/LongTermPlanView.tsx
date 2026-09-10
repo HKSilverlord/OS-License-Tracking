@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { TrendingUp, Palette } from 'lucide-react';
 import { ChartExportMenu } from './ChartExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
+import type { TranslateFn } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
 import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
 import { Skeleton } from './ui/Skeleton';
@@ -63,6 +64,76 @@ const migrateChartColors = (raw: unknown): ChartColors | null => {
 const formatLabel = (value: string | number | boolean | null | undefined): string =>
   typeof value === 'number' ? value.toLocaleString() : String(value ?? '');
 
+/**
+ * Tooltip body. Module scope on purpose: declared inside the view it would be a
+ * new component type on every render and React would remount it. Recharts fills
+ * in `active` / `payload` when it clones the element, so they are optional here.
+ */
+const CustomTooltip = ({ active, payload, chartColors, t }: Partial<TooltipContentProps<number, string>> & {
+  chartColors: ChartColors;
+  t: TranslateFn;
+}) => {
+  if (!active || !payload || payload.length === 0) return null;
+
+  const data = payload[0]?.payload as LongTermChartRow | undefined;
+  if (!data) return null;
+
+  return (
+    <div className="bg-white dark:bg-slate-900 p-3 border border-slate-300 dark:border-slate-700 rounded-lg shadow-lg">
+      <p className="font-semibold text-slate-800 dark:text-slate-100 mb-2 border-b border-slate-200 dark:border-slate-800 pb-1">
+        {t('longTermPlan.year', '年度')}: {data.year}
+      </p>
+      <div className="space-y-1.5 text-sm">
+        {/* Sales Data */}
+        {data.salesPlan !== undefined && (
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesPlan }}></div>
+              <span className="text-slate-700 dark:text-slate-400">{t('longTermPlan.salesPlan', '売上計画')}:</span>
+            </div>
+            <span className="font-medium text-slate-900 dark:text-slate-100">{data.salesPlan.toLocaleString()} {t('longTermPlan.unit.sales', '万円')}</span>
+          </div>
+        )}
+
+        {data.salesActual !== undefined && (
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesActual }}></div>
+              <span className="text-slate-700 dark:text-slate-400">{t('longTermPlan.salesActual', '売上実績')}:</span>
+            </div>
+            <span className="font-medium text-slate-900 dark:text-slate-100">{data.salesActual.toLocaleString()} {t('longTermPlan.unit.sales', '万円')}</span>
+          </div>
+        )}
+
+        {/* Hourly Rate Data */}
+        {(data.hourlyRatePlan !== undefined || data.hourlyRateActual !== undefined) && (
+          <div className="border-t border-slate-200 dark:border-slate-800 pt-2 mt-2"></div>
+        )}
+
+        {data.hourlyRatePlan !== undefined && (
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.hourlyRatePlan }}></div>
+              <span className="text-slate-700 dark:text-slate-400">{t('longTermPlan.hourlyRatePlan', '平均時給計画')}:</span>
+            </div>
+            <span className="font-medium text-slate-900 dark:text-slate-100">{data.hourlyRatePlan.toLocaleString()} {t('longTermPlan.unit.hourlyRate', '千円/時')}</span>
+          </div>
+        )}
+
+        {data.hourlyRateActual !== undefined && (
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.hourlyRateActual }}></div>
+              <span className="text-slate-700 dark:text-slate-400">{t('longTermPlan.hourlyRateActual', '平均時給実績')}:</span>
+            </div>
+            <span className="font-medium text-slate-900 dark:text-slate-100">{data.hourlyRateActual.toLocaleString()} {t('longTermPlan.unit.hourlyRate', '千円/時')}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export const LongTermPlanView: React.FC = () => {
   const { t } = useLanguage();
   const toast = useToast();
@@ -120,69 +191,6 @@ export const LongTermPlanView: React.FC = () => {
       hourlyRateActual: d.hourlyRateActual ?? undefined,
     }));
   }, [longTermData]);
-
-  // Custom Tooltip Component
-  const CustomTooltip = ({ active, payload }: TooltipContentProps<number, string>) => {
-    if (!active || !payload || payload.length === 0) return null;
-
-    const data = payload[0]?.payload as LongTermChartRow | undefined;
-    if (!data) return null;
-
-    return (
-      <div className="bg-white dark:bg-slate-900 p-3 border border-slate-300 dark:border-slate-700 rounded-lg shadow-lg">
-        <p className="font-semibold text-slate-800 dark:text-slate-100 mb-2 border-b border-slate-200 dark:border-slate-800 pb-1">
-          {t('longTermPlan.year', '年度')}: {data.year}
-        </p>
-        <div className="space-y-1.5 text-sm">
-          {/* Sales Data */}
-          {data.salesPlan !== undefined && (
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesPlan }}></div>
-                <span className="text-slate-700 dark:text-slate-400">{t('longTermPlan.salesPlan', '売上計画')}:</span>
-              </div>
-              <span className="font-medium text-slate-900 dark:text-slate-100">{data.salesPlan.toLocaleString()} {t('longTermPlan.unit.sales', '万円')}</span>
-            </div>
-          )}
-
-          {data.salesActual !== undefined && (
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesActual }}></div>
-                <span className="text-slate-700 dark:text-slate-400">{t('longTermPlan.salesActual', '売上実績')}:</span>
-              </div>
-              <span className="font-medium text-slate-900 dark:text-slate-100">{data.salesActual.toLocaleString()} {t('longTermPlan.unit.sales', '万円')}</span>
-            </div>
-          )}
-
-          {/* Hourly Rate Data */}
-          {(data.hourlyRatePlan !== undefined || data.hourlyRateActual !== undefined) && (
-            <div className="border-t border-slate-200 dark:border-slate-800 pt-2 mt-2"></div>
-          )}
-
-          {data.hourlyRatePlan !== undefined && (
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.hourlyRatePlan }}></div>
-                <span className="text-slate-700 dark:text-slate-400">{t('longTermPlan.hourlyRatePlan', '平均時給計画')}:</span>
-              </div>
-              <span className="font-medium text-slate-900 dark:text-slate-100">{data.hourlyRatePlan.toLocaleString()} {t('longTermPlan.unit.hourlyRate', '千円/時')}</span>
-            </div>
-          )}
-
-          {data.hourlyRateActual !== undefined && (
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.hourlyRateActual }}></div>
-                <span className="text-slate-700 dark:text-slate-400">{t('longTermPlan.hourlyRateActual', '平均時給実績')}:</span>
-              </div>
-              <span className="font-medium text-slate-900 dark:text-slate-100">{data.hourlyRateActual.toLocaleString()} {t('longTermPlan.unit.hourlyRate', '千円/時')}</span>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
 
   if (loading) {
     return (
@@ -310,7 +318,7 @@ export const LongTermPlanView: React.FC = () => {
                 }}
               />
 
-              <Tooltip content={CustomTooltip} />
+              <Tooltip content={<CustomTooltip chartColors={chartColors} t={t} />} />
               <Legend
                 verticalAlign="top"
                 height={36}
