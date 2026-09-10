@@ -5,7 +5,7 @@ import { dbService } from '../../services/dbService';
 import { Project } from '../../types';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../../contexts/ToastContext';
-import { createLogger } from '../../src/core/logger';
+import { createLogger } from '../../utils/logger';
 
 const log = createLogger('NewPeriodModal');
 

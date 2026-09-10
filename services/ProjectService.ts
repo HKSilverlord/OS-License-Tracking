@@ -3,7 +3,7 @@ import { BaseService } from './BaseService';
 import { periodService } from './PeriodService';
 import { buildPriceIndex, resolvePrices } from './pricing';
 import type { PeriodProjectPriceRow, PriceIndex } from './pricing';
-import { createLogger } from '../src/core/logger';
+import { createLogger } from '../utils/logger';
 import type { CreateProjectInput, Project } from '../types';
 
 const log = createLogger('ProjectService');

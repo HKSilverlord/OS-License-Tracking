@@ -14,12 +14,12 @@ import { computeYearlyCost, useCatiaStore } from '../stores/useCatiaStore';
 import { buildPriceIndex, lookupPrices } from '../services/pricing';
 import type { PriceIndex } from '../services/pricing';
 import { CHART_PALETTE, useChartPref } from '../utils/chartColorPrefs';
-import { Card } from '../src/ui/components/Card';
-import { KpiCard } from '../src/ui/components/KpiCard';
-import { Skeleton } from '../src/ui/components/Skeleton';
+import { Card } from './ui/Card';
+import { KpiCard } from './ui/KpiCard';
+import { Skeleton } from './ui/Skeleton';
 import { motion } from 'framer-motion';
 import type { Variants } from 'framer-motion';
-import { createLogger } from '../src/core/logger';
+import { createLogger } from '../utils/logger';
 
 const log = createLogger('Dashboard');
 

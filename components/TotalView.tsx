@@ -6,9 +6,9 @@ import { TrendingUp, Download, Palette, Copy, Image } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
 import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
-import { Skeleton } from '../src/ui/components/Skeleton';
+import { Skeleton } from './ui/Skeleton';
 import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, TooltipContentProps, ReferenceArea, ReferenceLine } from 'recharts';
-import { createLogger } from '../src/core/logger';
+import { createLogger } from '../utils/logger';
 
 const log = createLogger('TotalView');
 

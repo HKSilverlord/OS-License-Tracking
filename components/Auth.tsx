@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Lock, Mail, AlertCircle } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
-import { Button } from '../src/ui/components/Button';
+import { Button } from './ui/Button';
 
 export const Auth: React.FC = () => {
   const [loading, setLoading] = useState(false);

@@ -3,7 +3,7 @@ import { X, Save, Loader2 } from 'lucide-react';
 import { Project } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
-import { createLogger } from '../src/core/logger';
+import { createLogger } from '../utils/logger';
 import { resolvePrices } from '../services/pricing';
 
 const log = createLogger('EditProjectModal');

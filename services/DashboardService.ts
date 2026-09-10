@@ -2,7 +2,7 @@
 import { BaseService } from './BaseService';
 import { buildPriceIndex, lookupPrices } from './pricing';
 import type { PeriodProjectPriceRow, ProjectPriceRow } from './pricing';
-import { createLogger } from '../src/core/logger';
+import { createLogger } from '../utils/logger';
 import { DashboardRecord } from '../types';
 
 const log = createLogger('DashboardService');

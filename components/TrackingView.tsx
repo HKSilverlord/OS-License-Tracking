@@ -16,8 +16,8 @@ import { DropdownMenu } from './DropdownMenu';
 import { useToast, useConfirm } from '../contexts/ToastContext';
 import { setNavigationBlocker } from '../utils/navigationGuard';
 import { resolvePrices } from '../services/pricing';
-import { createLogger } from '../src/core/logger';
-import { Skeleton } from '../src/ui/components/Skeleton';
+import { createLogger } from '../utils/logger';
+import { Skeleton } from './ui/Skeleton';
 
 const log = createLogger('TrackingView');
 

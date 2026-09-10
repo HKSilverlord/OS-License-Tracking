@@ -26,7 +26,7 @@ import { useToast } from './contexts/ToastContext';
 import { confirmNavigation } from './utils/navigationGuard';
 import { supabase } from './lib/supabase';
 import type { Session } from '@supabase/supabase-js';
-import { createLogger } from './src/core/logger';
+import { createLogger } from './utils/logger';
 
 const log = createLogger('App');
 

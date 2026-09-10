@@ -8,10 +8,10 @@ import { TABLE_COLUMN_WIDTHS, STICKY_CLASSES } from '../utils/tableStyles';
 import { exportTableToCSV, generateCSVFilename } from '../utils/csvExport';
 import { Loader2, FileDown, Copy, Check, GripVertical, ListChecks } from 'lucide-react';
 import { captureElement } from '../utils/chartExport';
-import { createLogger } from '../src/core/logger';
+import { createLogger } from '../utils/logger';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
-import { Skeleton } from '../src/ui/components/Skeleton';
+import { Skeleton } from './ui/Skeleton';
 import {
   DndContext,
   closestCenter,

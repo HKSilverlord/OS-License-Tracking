@@ -6,7 +6,7 @@ import { ProjectStatus } from '../../types';
 import { DEFAULT_UNIT_PRICE } from '../../constants';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../../contexts/ToastContext';
-import { createLogger } from '../../src/core/logger';
+import { createLogger } from '../../utils/logger';
 
 const log = createLogger('NewProjectModal');
 

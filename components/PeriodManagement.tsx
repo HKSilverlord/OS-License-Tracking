@@ -15,8 +15,8 @@ import { useToast, useConfirm } from '../contexts/ToastContext';
 import { useUserRole } from '../contexts/UserRoleContext';
 import { motion } from 'framer-motion';
 import type { Variants } from 'framer-motion';
-import { Skeleton } from '../src/ui/components/Skeleton';
-import { createLogger } from '../src/core/logger';
+import { Skeleton } from './ui/Skeleton';
+import { createLogger } from '../utils/logger';
 
 const log = createLogger('PeriodManagement');
 

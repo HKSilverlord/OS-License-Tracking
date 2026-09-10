@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx';
 import type { MonthlyRecord, Project } from '../types';
 import { dbService } from './dbService';
 import { lookupPrices, priceKey } from './pricing';
-import { createLogger } from '../src/core/logger';
+import { createLogger } from '../utils/logger';
 
 const log = createLogger('exportService');
 

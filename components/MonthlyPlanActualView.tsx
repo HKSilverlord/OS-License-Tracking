@@ -4,10 +4,10 @@ import { ChartExportMenu } from './ChartExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
 import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
-import { Skeleton } from '../src/ui/components/Skeleton';
+import { Skeleton } from './ui/Skeleton';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipContentProps, LabelList, ReferenceLine, ReferenceArea } from 'recharts';
 import { dbService } from '../services/dbService';
-import { createLogger } from '../src/core/logger';
+import { createLogger } from '../utils/logger';
 
 const log = createLogger('MonthlyPlanActualView');
 

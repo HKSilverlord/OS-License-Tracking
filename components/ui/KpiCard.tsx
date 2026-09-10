@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card } from './Card';
 import { LucideIcon, TrendingUp } from 'lucide-react';
-import { formatCurrency } from '../../../utils/helpers';
+import { formatCurrency } from '../../utils/helpers';
 
 export interface KpiCardProps {
   label: string;

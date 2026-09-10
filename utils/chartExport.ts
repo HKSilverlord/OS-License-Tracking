@@ -10,7 +10,7 @@
  */
 import html2canvas from 'html2canvas';
 import { toast } from '../contexts/ToastContext';
-import { createLogger } from '../src/core/logger';
+import { createLogger } from './logger';
 import { translate } from '../contexts/LanguageContext';
 
 const log = createLogger('chartExport');
