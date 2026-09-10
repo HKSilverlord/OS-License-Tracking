@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUserRole } from '../contexts/UserRoleContext';
+import { useCatiaHydration } from '../hooks/useCatiaHydration';
 import { useCatiaStore, computeYearlyCost } from '../stores/useCatiaStore';
 import { Monitor, Info, RotateCcw, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 
@@ -19,7 +20,7 @@ const years = [
 
 export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear }) => {
   const { t } = useLanguage();
-  const { isAdmin, role } = useUserRole();
+  const { isAdmin } = useUserRole();
 
   // Value-derived selectors (never select the stable `getYearlyCost` function —
   // that is what stops consumers re-rendering when CATIA data changes).
@@ -33,14 +34,10 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
 
   const totalCostForYear = computeYearlyCost(licenseCosts, currentYear);
 
-  // Pull the server copy once the role is known — hydrate() may only publish an
-  // empty document for a confirmed admin. The flush stays on its own unmount-only
-  // effect so a role change never fires a save mid-session.
-  useEffect(() => {
-    if (role === null) return;
-    void useCatiaStore.getState().hydrate({ canSeed: role === 'admin' });
-  }, [role]);
+  useCatiaHydration();
 
+  // The flush lives on its own unmount-only effect so a role change never fires
+  // a save mid-session.
   useEffect(() => () => {
     void useCatiaStore.getState().flush();
   }, []);

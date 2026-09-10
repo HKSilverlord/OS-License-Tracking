@@ -1,27 +1,20 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { dbService } from '../services/dbService';
+import React, { useState } from 'react';
 import { formatCurrency } from '../utils/helpers';
-import type { AccumulatedStats, DashboardRecord, MonthlyStats } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Area, Line, LabelList } from 'recharts';
 import { TrendingUp, JapaneseYen, Clock, Calculator, Palette } from 'lucide-react';
 import { ChartExportMenu } from './ChartExportMenu';
 import { SectionExportMenu } from './SectionExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUserRole } from '../contexts/UserRoleContext';
-import { toast } from '../contexts/ToastContext';
-import { DEFAULT_UNIT_PRICE } from '../constants';
 import { computeYearlyCost, useCatiaStore } from '../stores/useCatiaStore';
-import { buildPriceIndex, lookupPrices } from '../services/pricing';
-import type { PriceIndex } from '../services/pricing';
 import { CHART_PALETTE, useChartPref } from '../utils/chartColorPrefs';
 import { Card } from './ui/Card';
 import { KpiCard } from './ui/KpiCard';
 import { Skeleton } from './ui/Skeleton';
 import { motion } from 'framer-motion';
 import type { Variants } from 'framer-motion';
-import { createLogger } from '../utils/logger';
-
-const log = createLogger('Dashboard');
+import { useDashboardData } from '../hooks/useDashboardData';
+import { useCatiaHydration } from '../hooks/useCatiaHydration';
 
 export interface DashboardProps {
   /** Single source of truth for the year — owned by the App shell top bar (U1 / C10). */
@@ -152,45 +145,6 @@ const itemVariants: Variants = {
 };
 
 /* ------------------------------------------------------------------ *
- * Money maths — ONE code path (A2 / A5)
- * ------------------------------------------------------------------ */
-
-const EMPTY_PRICE_INDEX: PriceIndex = buildPriceIndex([], []);
-
-interface PricedRecord {
-  plannedHours: number;
-  actualHours: number;
-  plannedRevenue: number;
-  actualRevenue: number;
-}
-
-/**
- * THE single pricing code path for this view.
- *
- * A2: the price is resolved per (period_label, project_id) — a project whose H1
- * price differs from its H2 price is now priced correctly in each half — using
- * the frozen resolution rule in services/pricing.ts.
- *
- * INVARIANT: every revenue number rendered by this component is built by
- * summing `priceRecord()` over `rawRecords`. The monthly buckets are the only
- * accumulator; the gross KPI is the sum of those buckets (see `stats` /
- * `grossRevenuePlan` below), so `Σ monthly plannedRevenue === grossRevenuePlan`
- * and `Σ monthly actualRevenue === grossRevenueActual` hold by construction —
- * they are literally the same additions.
- */
-const priceRecord = (record: DashboardRecord, index: PriceIndex): PricedRecord => {
-  const plannedHours = Number(record.planned_hours) || 0;
-  const actualHours = Number(record.actual_hours) || 0;
-  const prices = lookupPrices(index, record.period_label, record.project_id);
-  return {
-    plannedHours,
-    actualHours,
-    plannedRevenue: plannedHours * prices.plan,
-    actualRevenue: actualHours * prices.actual,
-  };
-};
-
-/* ------------------------------------------------------------------ *
  * Small presentational helpers
  * ------------------------------------------------------------------ */
 
@@ -255,17 +209,23 @@ const KpiSkeletonCard: React.FC = () => (
 /* ------------------------------------------------------------------ */
 
 export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
-  const { t, language } = useLanguage();
-  const { isAdmin, role } = useUserRole();
+  const { t } = useLanguage();
+  const { isAdmin } = useUserRole();
 
-  const [loading, setLoading] = useState(true);
-  const [rawRecords, setRawRecords] = useState<DashboardRecord[]>([]);
-  const [priceIndex, setPriceIndex] = useState<PriceIndex>(EMPTY_PRICE_INDEX);
-
-  const [exchangeRate, setExchangeRate] = useState(172);
-  const [unitPrice, setUnitPrice] = useState(DEFAULT_UNIT_PRICE);
-  const [licenseComputers, setLicenseComputers] = useState(7);
-  const [licensePerComputer, setLicensePerComputer] = useState(2517143);
+  const {
+    loading,
+    rawRecords,
+    stats,
+    accumulatedStats,
+    exchangeRate,
+    unitPrice,
+    licenseComputers,
+    licensePerComputer,
+    handleRateChange,
+    handleUnitPriceChange,
+    handleLicenseComputersChange,
+    handleLicensePerComputerChange,
+  } = useDashboardData(currentYear);
 
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showKpiColorPicker, setShowKpiColorPicker] = useState(false);
@@ -285,137 +245,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
   const licenseTotal = useCatiaStore(s => computeYearlyCost(s.licenseCosts, currentYear));
   const catiaSyncStatus = useCatiaStore(s => s.syncStatus);
 
-  // A4: the CATIA numbers now live in Supabase — pull them once the role is
-  // known. `role` is null until get_my_role() answers, and hydrate() may only
-  // publish an empty document for a confirmed admin, so waiting is required.
-  useEffect(() => {
-    if (role === null) return;
-    void useCatiaStore.getState().hydrate({ canSeed: role === 'admin' });
-  }, [role]);
-
-  // `t` is memoised per language; keeping it in a ref keeps `loadDashboard`
-  // stable across language switches so the year is the only refetch trigger.
-  const tRef = useRef(t);
-  useEffect(() => {
-    tRef.current = t;
-  }, [t]);
+  useCatiaHydration();
 
   const planShort = t('tracker.planShort', 'Plan');
   const actualShort = t('tracker.actualShort', 'Actual');
-
-  /**
-   * A5: one settings call + one records call + ONE `getYearProjectPrices` call
-   * (≤ 2 Supabase requests) replaces the previous getPeriods() + getProjects(period)
-   * per-period request storm.
-   */
-  // U1 routed every view's year through one shell control, so a user can change
-  // year faster than a request completes. Without this guard an older response
-  // lands after a newer one and the view shows the wrong year's numbers.
-  const loadSeqRef = useRef(0);
-
-  const loadDashboard = useCallback(async (options?: { silent?: boolean }) => {
-    const seq = ++loadSeqRef.current;
-    if (!options?.silent) setLoading(true);
-    try {
-      const [settings, records, yearPrices] = await Promise.all([
-        dbService.getSettings(),
-        dbService.getDashboardStats(currentYear),
-        dbService.getYearProjectPrices(currentYear),
-      ]);
-
-      if (seq !== loadSeqRef.current) return; // superseded by a newer year
-      if (typeof settings.exchangeRate === 'number') setExchangeRate(settings.exchangeRate);
-      if (typeof settings.licenseComputers === 'number') setLicenseComputers(settings.licenseComputers);
-      if (typeof settings.licensePerComputer === 'number') setLicensePerComputer(settings.licensePerComputer);
-      if (typeof settings.unitPrice === 'number') setUnitPrice(settings.unitPrice);
-
-      setRawRecords(records);
-      setPriceIndex(yearPrices.index);
-    } catch (error) {
-      if (seq !== loadSeqRef.current) return;
-      log.error('Failed to load dashboard data', error);
-      toast.error(tRef.current('toast.loadFailed', 'Failed to load data'));
-    } finally {
-      if (seq === loadSeqRef.current) setLoading(false);
-    }
-  }, [currentYear]);
-
-  // U1: the load re-runs whenever the shell's year changes.
-  useEffect(() => {
-    void loadDashboard();
-  }, [loadDashboard]);
-
-  // U2: hours saved in /tracking (and newly created periods) refresh the KPIs.
-  useEffect(() => {
-    // Refresh in place — no skeleton flash for an event-driven update.
-    const handleRefresh = () => {
-      void loadDashboard({ silent: true });
-    };
-    window.addEventListener('dataUpdated', handleRefresh);
-    window.addEventListener('periodCreated', handleRefresh);
-    return () => {
-      window.removeEventListener('dataUpdated', handleRefresh);
-      window.removeEventListener('periodCreated', handleRefresh);
-    };
-  }, [loadDashboard]);
-
-  const stats = useMemo<MonthlyStats[]>(() => {
-    const locale = language === 'ja' ? 'ja-JP' : language === 'vn' ? 'vi-VN' : 'en-US';
-    const monthly: MonthlyStats[] = Array.from({ length: 12 }, (_, i) => ({
-      month: i + 1,
-      name: new Date(currentYear, i).toLocaleString(locale, { month: 'short' }),
-      plannedHours: 0,
-      actualHours: 0,
-      plannedRevenue: 0,
-      actualRevenue: 0,
-    }));
-
-    for (const record of rawRecords) {
-      if (record.month < 1 || record.month > 12) continue;
-      const priced = priceRecord(record, priceIndex);
-      const target = monthly[record.month - 1];
-      target.plannedHours += priced.plannedHours;
-      target.actualHours += priced.actualHours;
-      target.plannedRevenue += priced.plannedRevenue;
-      target.actualRevenue += priced.actualRevenue;
-    }
-
-    return monthly;
-  }, [rawRecords, priceIndex, language, currentYear]);
-
-  const accumulatedStats = useMemo<AccumulatedStats[]>(() => {
-    let accPlan = 0;
-    let accActual = 0;
-    return stats.map(d => {
-      accPlan += d.plannedRevenue;
-      accActual += d.actualRevenue;
-      return { month: d.name, accPlannedRevenue: accPlan, accActualRevenue: accActual };
-    });
-  }, [stats]);
-
-  const handleRateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseInt(e.target.value) || 0;
-    setExchangeRate(val);
-    dbService.saveSettings({ exchangeRate: val });
-  };
-
-  const handleUnitPriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseInt(e.target.value) || 0;
-    setUnitPrice(val);
-    dbService.saveSettings({ unitPrice: val });
-  };
-
-  const handleLicenseComputersChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseInt(e.target.value) || 0;
-    setLicenseComputers(val);
-    dbService.saveSettings({ licenseComputers: val });
-  };
-
-  const handleLicensePerComputerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseInt(e.target.value) || 0;
-    setLicensePerComputer(val);
-    dbService.saveSettings({ licensePerComputer: val });
-  };
 
   // U6: a Skeleton shell instead of a bare centred spinner.
   if (loading) {
