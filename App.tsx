@@ -26,12 +26,12 @@ import { exportYearToExcel } from './services/exportService';
 import { LayoutDashboard, Table, Plus, LogOut, Download, Menu, X, Search, Languages, BarChart3, Calendar as CalendarIcon, TrendingUp, Wrench, ChevronLeft, ChevronRight, Monitor, Moon, Sun, Loader2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useLanguage, SUPPORTED_LANGUAGES } from './contexts/LanguageContext';
+import { useAuthSession } from './hooks/useAuthSession';
+import { usePeriodCatalog } from './hooks/usePeriodCatalog';
+import { useDarkMode } from './hooks/useDarkMode';
 import { useUserRole } from './contexts/UserRoleContext';
-import type { UserRole } from './contexts/UserRoleContext';
 import { useToast } from './contexts/ToastContext';
 import { confirmNavigation } from './utils/navigationGuard';
-import { supabase } from './lib/supabase';
-import type { Session } from '@supabase/supabase-js';
 import { createLogger } from './utils/logger';
 
 const log = createLogger('App');
@@ -41,35 +41,22 @@ const SEARCHABLE_PATH = '/tracking';
 
 function App() {
   const { t, language, setLanguage } = useLanguage();
-  const { setRole, setIsLoading, isAdmin } = useUserRole();
+  const { isAdmin } = useUserRole();
   const toast = useToast();
 
-  const [session, setSession] = useState<Session | null>(null);
+  const { session, userId, signOut } = useAuthSession();
+  const {
+    availablePeriods,
+    availableYears,
+    currentYear,
+    setCurrentYear,
+    refreshFor: refreshPeriodsFor,
+  } = usePeriodCatalog(userId);
+  const [darkMode, setDarkMode] = useDarkMode();
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
-  // Period State - Now Year based
-  const [currentYear, setCurrentYear] = useState<number>(new Date().getFullYear());
-  const [availableYears, setAvailableYears] = useState<number[]>([]);
-  const [availablePeriods, setAvailablePeriods] = useState<string[]>([]); // Keep full list for modals/logic
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Theme State
-  const [darkMode, setDarkMode] = useState<boolean>(() => {
-    const saved = localStorage.getItem('theme');
-    if (saved) return saved === 'dark';
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
-
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    }
-  }, [darkMode]);
 
   // Modals
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
@@ -79,93 +66,10 @@ function App() {
   const [nextProjectCode, setNextProjectCode] = useState('');
   const [projectCreatedTrigger, setProjectCreatedTrigger] = useState(0);
 
-  // Auth & Init Data
-  useEffect(() => {
-    const fetchRole = async () => {
-      setIsLoading(true);
-      try {
-        const { data, error } = await supabase.rpc('get_my_role');
-
-        if (error) {
-          log.warn('Error fetching role via RPC, defaulting to viewer', error);
-          setRole('user');
-        } else {
-          const resolved: UserRole = data === 'admin' || data === 'user' ? data : 'user';
-          setRole(resolved);
-        }
-      } catch (e) {
-        log.error('Error fetching role:', e);
-        setRole('user');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session?.user?.id) fetchRole();
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (session?.user?.id) {
-        fetchRole();
-      } else {
-        setRole(null);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [setRole, setIsLoading]);
-
-  useEffect(() => {
-    const init = async () => {
-      const periods = await dbService.getPeriods();
-      setAvailablePeriods(periods);
-
-      // Extract unique years
-      const years = Array.from(new Set(periods.map(p => parseInt(p.split('-')[0])))).sort((a, b) => b - a);
-      setAvailableYears(years);
-
-      if (years.length > 0) {
-        const realYear = new Date().getFullYear();
-        // Default to current real-time year if available, otherwise latest DB year
-        setCurrentYear(years.includes(realYear) ? realYear : years[0]);
-      }
-    };
-    if (session) {
-      init();
-    }
-  }, [session]);
-
-  // Listen for period created events to refresh the period list
-  useEffect(() => {
-    const handlePeriodCreated = async (event: Event) => {
-      const periods = await dbService.getPeriods();
-      setAvailablePeriods(periods);
-
-      const years = Array.from(new Set(periods.map(p => parseInt(p.split('-')[0])))).sort((a, b) => b - a);
-      setAvailableYears(years);
-
-      // Set current period to the newly created one's year
-      const detail = (event as CustomEvent<{ periodLabel?: string }>).detail;
-      if (detail?.periodLabel) {
-        const year = parseInt(detail.periodLabel.split('-')[0]);
-        if (!isNaN(year)) setCurrentYear(year);
-      }
-    };
-
-    window.addEventListener('periodCreated', handlePeriodCreated);
-    return () => window.removeEventListener('periodCreated', handlePeriodCreated);
-  }, []);
-
   const handleSignOut = async () => {
     // Signing out unmounts every view; treat it as navigation so unsaved edits prompt (U3).
     if (!confirmNavigation()) return;
-    await supabase.auth.signOut();
-    setSession(null);
+    await signOut();
   };
 
   const handleOpenProjectModal = async () => {
@@ -189,16 +93,7 @@ function App() {
     setProjectCreatedTrigger(prev => prev + 1);
   };
 
-  const handlePeriodSuccess = async (newPeriodLabel: string) => {
-    const periods = await dbService.getPeriods();
-    setAvailablePeriods(periods);
-
-    const years = Array.from(new Set(periods.map(p => parseInt(p.split('-')[0])))).sort((a, b) => b - a);
-    setAvailableYears(years);
-
-    const year = parseInt(newPeriodLabel.split('-')[0]);
-    if (!isNaN(year)) setCurrentYear(year);
-  };
+  const handlePeriodSuccess = (newPeriodLabel: string) => refreshPeriodsFor(newPeriodLabel);
 
   const [isExporting, setIsExporting] = useState(false);
 
