@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Download, Copy, Image as ImageIcon, FileSpreadsheet, MoreVertical, Check } from 'lucide-react';
 import { exportChartToSVG, exportChartToPNG, exportChartDataToCSV, generateChartFilename, copyChartToClipboard } from '../utils/chartExport';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -23,6 +23,7 @@ export const ChartExportMenu: React.FC<ChartExportMenuProps> = ({
     const { t } = useLanguage();
     const [isOpen, setIsOpen] = useState(false);
     const [copied, setCopied] = useState(false);
+    const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Close menu when clicking outside - simple implementation
     React.useEffect(() => {
@@ -37,10 +38,23 @@ export const ChartExportMenu: React.FC<ChartExportMenuProps> = ({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [isOpen]);
 
+
+    // The 2s "Copied!" reset must not fire into an unmounted component: the menu
+    // lives on views the user can navigate away from mid-countdown.
+    React.useEffect(() => () => {
+        if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    }, []);
+
     const handleCopy = async () => {
-        await copyChartToClipboard(chartId);
+        const ok = await copyChartToClipboard(chartId);
+        if (!ok) {
+            // copyChartToClipboard already raised the error toast; just close.
+            setIsOpen(false);
+            return;
+        }
         setCopied(true);
-        setTimeout(() => {
+        if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+        resetTimerRef.current = setTimeout(() => {
             setCopied(false);
             setIsOpen(false);
         }, 2000);

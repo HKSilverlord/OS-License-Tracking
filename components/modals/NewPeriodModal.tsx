@@ -126,7 +126,11 @@ export const NewPeriodModal: React.FC<NewPeriodModalProps> = ({
                                 required
                                 className="block w-full border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 rounded-lg p-3 text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 value={newPeriodInput.year}
-                                onChange={e => setNewPeriodInput({ ...newPeriodInput, year: parseInt(e.target.value) })}
+                                onChange={e => {
+                                    // Clearing the field yields NaN, which would build a "NaN-H1" period label.
+                                    const parsed = parseInt(e.target.value, 10);
+                                    setNewPeriodInput({ ...newPeriodInput, year: Number.isNaN(parsed) ? new Date().getFullYear() : parsed });
+                                }}
                                 placeholder="2025"
                             />
                         </div>

@@ -7,6 +7,9 @@ import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
 import { Skeleton } from '../src/ui/components/Skeleton';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipContentProps, LabelList, ReferenceLine, ReferenceArea } from 'recharts';
 import { dbService } from '../services/dbService';
+import { createLogger } from '../src/core/logger';
+
+const log = createLogger('MonthlyPlanActualView');
 
 // Monthly plan-actual data interface
 interface MonthlyPlanActualData {
@@ -114,6 +117,11 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
 
   // Fetch real data from Supabase
   useEffect(() => {
+    // U1 routed every view's year through one shell control, so a user can change
+    // year faster than a request completes. Without this guard an older response
+    // lands after a newer one and the view shows the wrong year's numbers.
+    let cancelled = false;
+
     const fetchData = async () => {
       setLoading(true);
       try {
@@ -141,16 +149,19 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
           };
         });
 
+        if (cancelled) return; // superseded by a newer year/language
         setMonthlyData(combined);
       } catch (error) {
-        console.error('Failed to load monthly plan-actual data:', error);
+        if (cancelled) return;
+        log.error('Failed to load monthly plan-actual data:', error);
         toast.error(t('toast.loadFailed', 'Failed to load data'));
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchData();
+    return () => { cancelled = true; };
     // `toast`/`t` are stable for the lifetime of their providers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentYear, language]);

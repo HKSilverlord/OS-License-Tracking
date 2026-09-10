@@ -17,7 +17,7 @@ import { NewProjectModal } from './components/modals/NewProjectModal';
 import { NewPeriodModal } from './components/modals/NewPeriodModal';
 import { dbService } from './services/dbService';
 import { exportYearToExcel } from './services/exportService';
-import { LayoutDashboard, Table, Plus, LogOut, Download, Menu, X, Search, Languages, BarChart3, Calendar as CalendarIcon, TrendingUp, Wrench, ChevronLeft, ChevronRight, Monitor, Moon, Sun } from 'lucide-react';
+import { LayoutDashboard, Table, Plus, LogOut, Download, Menu, X, Search, Languages, BarChart3, Calendar as CalendarIcon, TrendingUp, Wrench, ChevronLeft, ChevronRight, Monitor, Moon, Sun, Loader2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useLanguage, SUPPORTED_LANGUAGES } from './contexts/LanguageContext';
 import { useUserRole } from './contexts/UserRoleContext';
@@ -26,6 +26,9 @@ import { useToast } from './contexts/ToastContext';
 import { confirmNavigation } from './utils/navigationGuard';
 import { supabase } from './lib/supabase';
 import type { Session } from '@supabase/supabase-js';
+import { createLogger } from './src/core/logger';
+
+const log = createLogger('App');
 
 /** The only route that consumes the top-bar search query (U5). */
 const SEARCHABLE_PATH = '/tracking';
@@ -78,14 +81,14 @@ function App() {
         const { data, error } = await supabase.rpc('get_my_role');
 
         if (error) {
-          console.warn('Error fetching role via RPC, defaulting to viewer', error);
+          log.warn('Error fetching role via RPC, defaulting to viewer', error);
           setRole('user');
         } else {
           const resolved: UserRole = data === 'admin' || data === 'user' ? data : 'user';
           setRole(resolved);
         }
       } catch (e) {
-        console.error('Error fetching role:', e);
+        log.error('Error fetching role:', e);
         setRole('user');
       } finally {
         setIsLoading(false);
@@ -168,7 +171,7 @@ function App() {
       setNextProjectCode(nextCode);
     } catch (error) {
       // A8: never swallow this — the modal still opens, but with an empty code the user can type.
-      console.error('Failed to generate project code', error);
+      log.error('Failed to generate project code', error);
       setNextProjectCode('');
       toast.error(t('toast.codeFailed', 'Could not generate a project code'));
     } finally {
@@ -191,13 +194,21 @@ function App() {
     if (!isNaN(year)) setCurrentYear(year);
   };
 
+  const [isExporting, setIsExporting] = useState(false);
+
   const handleExport = async () => {
+    // A year's export is two DB round-trips plus a file write; without this guard a
+    // double-click runs the whole thing twice and downloads two identical workbooks.
+    if (isExporting) return;
+    setIsExporting(true);
     try {
       await exportYearToExcel(currentYear);
       toast.success(t('toast.exportDone', 'Export complete'));
     } catch (e) {
-      console.error('Export failed', e);
+      log.error('Export failed', e);
       toast.error(t('toast.exportFailed', 'Export failed'));
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -431,9 +442,13 @@ function App() {
 
               <button
                 onClick={handleExport}
-                className="flex items-center px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-sm font-medium rounded-lg transition-colors shadow-sm"
+                disabled={isExporting}
+                aria-busy={isExporting}
+                className="flex items-center px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-sm font-medium rounded-lg transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <Download className="w-4 h-4 md:mr-2" />
+                {isExporting
+                  ? <Loader2 className="w-4 h-4 md:mr-2 animate-spin" />
+                  : <Download className="w-4 h-4 md:mr-2" />}
                 <span className="hidden md:inline">{t('buttons.export')}</span>
               </button>
 

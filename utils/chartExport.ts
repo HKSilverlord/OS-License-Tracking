@@ -3,13 +3,10 @@
  * Multiple export formats: SVG (primary), PNG, PDF, CSV
  * Library: Recharts
  *
- * i18n limitation: this module is a plain utility, so the `t()` hook from
- * LanguageContext is not available here. Its public function signatures are
- * fixed by read-only call sites (ChartExportMenu / SectionExportMenu), so
- * user-facing feedback is raised through the imperative `toast` API with
- * English text. Translating these messages requires either passing a
- * translator into every export function or moving the messaging up into the
- * two menu components — both are call-site changes outside this workstream.
+ * i18n: this module is a plain utility, so the `t()` hook from LanguageContext
+ * is not available here. It uses the module-level `translate()` instead, which
+ * reads the same active language without subscribing to re-renders — correct
+ * for one-shot toasts raised from an event handler.
  */
 import html2canvas from 'html2canvas';
 import { toast } from '../contexts/ToastContext';
@@ -160,6 +157,48 @@ const downloadFile = (content: string | Blob, filename: string, mimeType: string
 };
 
 /**
+ * The colour html2canvas paints behind a capture.
+ *
+ * It used to be hardcoded `#ffffff`. In dark mode the chart's own text, axes and
+ * legends are light (slate-100/300/400), so a white plate rendered them as
+ * near-invisible — every PNG and every clipboard copy taken in dark mode came out
+ * unreadable. Follow the theme instead; `index.css` drives dark mode from the
+ * `dark` class on <html>, so that is what we read.
+ */
+export const captureBackgroundColor = (): string =>
+  document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff';
+
+/**
+ * Shared html2canvas capture for every image export in the app.
+ *
+ * Centralised because two things must be true at EVERY call site and are easy to
+ * forget at one of them: the background has to follow the theme (above), and
+ * Tailwind v4's `oklch()` colours have to be resolved to rgb() first, since
+ * html2canvas cannot parse them and silently drops the styles that use them.
+ */
+export const captureElement = async (
+  element: HTMLElement,
+  options: { scale?: number } = {}
+): Promise<HTMLCanvasElement> =>
+  html2canvas(element, {
+    scale: options.scale ?? 3,
+    backgroundColor: captureBackgroundColor(),
+    logging: false,
+    useCORS: true,
+    width: element.scrollWidth,
+    height: element.scrollHeight,
+    onclone: async (clonedDoc: Document, clonedEl: HTMLElement) => {
+      clonedEl.style.overflow = 'visible';
+      let parent = clonedEl.parentElement;
+      while (parent) {
+        parent.style.overflow = 'visible';
+        parent = parent.parentElement;
+      }
+      await resolveOklchColors(clonedDoc);
+    }
+  });
+
+/**
  * PRIMARY: Export chart as SVG (vector format)
  * ✅ Perfect quality at any size
  * ✅ Transparent background
@@ -242,23 +281,7 @@ export const exportChartToPNG = async (elementId: string, filename: string = 'ch
   try {
     log.debug('Exporting chart as PNG using html2canvas...');
 
-    const canvas = await html2canvas(chartContainer, {
-      scale: 3, // High quality
-      backgroundColor: '#ffffff', // Ensure white background
-      logging: false,
-      useCORS: true, // Handle cross-origin images if any
-      width: chartContainer.scrollWidth,
-      height: chartContainer.scrollHeight,
-      onclone: async (clonedDoc: Document, clonedEl: HTMLElement) => {
-        clonedEl.style.overflow = 'visible';
-        let parent = clonedEl.parentElement;
-        while (parent) {
-          parent.style.overflow = 'visible';
-          parent = parent.parentElement;
-        }
-        await resolveOklchColors(clonedDoc);
-      }
-    });
+    const canvas = await captureElement(chartContainer);
 
     canvas.toBlob((blob) => {
       if (!blob) {
@@ -299,7 +322,9 @@ export const exportChartDataToCSV = (data: readonly unknown[], filename: string 
       ...rows.map(row =>
         headers.map(header => {
           const value = row[header];
-          if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+          // Quote on newline as well as comma/quote — an unquoted newline splits
+          // the record and shifts every later column.
+          if (typeof value === 'string' && /[",\n\r]/.test(value)) {
             return `"${value.replace(/"/g, '""')}"`;
           }
           return value;
@@ -320,37 +345,25 @@ export const exportChartDataToCSV = (data: readonly unknown[], filename: string 
 };
 
 /**
- * Copy chart as PNG image to clipboard using html2canvas
+ * Copy chart as PNG image to clipboard using html2canvas.
+ *
+ * Returns whether the copy actually landed. Callers show a "Copied!" confirmation,
+ * and this function reports its own failures through a toast — so without a return
+ * value they showed a success tick and an error toast at the same time.
  */
-export const copyChartToClipboard = async (elementId: string): Promise<void> => {
+export const copyChartToClipboard = async (elementId: string): Promise<boolean> => {
   const chartContainer = document.getElementById(elementId);
 
   if (!chartContainer) {
     toast.error(translate('chartExport.notFoundCopy', 'Chart not found, nothing was copied'));
     log.error('Clipboard copy: element not found', elementId);
-    return;
+    return false;
   }
 
   try {
     log.debug('Copying chart to clipboard...');
 
-    const canvas = await html2canvas(chartContainer, {
-      scale: 3, // High quality
-      backgroundColor: '#ffffff', // Ensure white background
-      logging: false,
-      useCORS: true,
-      width: chartContainer.scrollWidth,
-      height: chartContainer.scrollHeight,
-      onclone: async (clonedDoc: Document, clonedEl: HTMLElement) => {
-        clonedEl.style.overflow = 'visible';
-        let parent = clonedEl.parentElement;
-        while (parent) {
-          parent.style.overflow = 'visible';
-          parent = parent.parentElement;
-        }
-        await resolveOklchColors(clonedDoc);
-      }
-    });
+    const canvas = await captureElement(chartContainer);
 
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob((blob) => {
@@ -373,9 +386,11 @@ export const copyChartToClipboard = async (elementId: string): Promise<void> => 
     // The hand-rolled floating <div> that used to live here is replaced by the
     // shared toast stack so success and failure look the same everywhere.
     toast.success(translate('chartExport.copied', 'Copied to clipboard'));
+    return true;
   } catch (error) {
     log.error('Copy to clipboard error:', error);
     toast.error(`${translate('chartExport.copyFailed', 'Copy failed')}: ${(error as Error).message}`);
+    return false;
   }
 };
 

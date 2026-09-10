@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Download, Check, Copy } from 'lucide-react';
 import { copyChartToClipboard } from '../utils/chartExport';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -21,6 +21,7 @@ export const SectionExportMenu: React.FC<SectionExportMenuProps> = ({
     const { t } = useLanguage();
     const [isOpen, setIsOpen] = useState(false);
     const [copiedId, setCopiedId] = useState<string | null>(null);
+    const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     React.useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -34,10 +35,23 @@ export const SectionExportMenu: React.FC<SectionExportMenuProps> = ({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [isOpen]);
 
+
+    // The 2s "Copied!" reset must not fire into an unmounted component: the menu
+    // lives on views the user can navigate away from mid-countdown.
+    React.useEffect(() => () => {
+        if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    }, []);
+
     const handleCopy = async (sectionId: string) => {
-        await copyChartToClipboard(sectionId);
+        const ok = await copyChartToClipboard(sectionId);
+        if (!ok) {
+            // copyChartToClipboard already raised the error toast; just close.
+            setIsOpen(false);
+            return;
+        }
         setCopiedId(sectionId);
-        setTimeout(() => {
+        if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+        resetTimerRef.current = setTimeout(() => {
             setCopiedId(null);
             setIsOpen(false);
         }, 2000);

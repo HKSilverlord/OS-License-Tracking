@@ -455,7 +455,10 @@ const PeriodFormModal: React.FC<PeriodFormModalProps> = ({
                   min="2000"
                   max="2099"
                   value={year}
-                  onChange={(e) => onYearChange?.(parseInt(e.target.value))}
+                  onChange={(e) => {
+                    const parsed = parseInt(e.target.value, 10);
+                    if (!Number.isNaN(parsed)) onYearChange?.(parsed);
+                  }}
                   className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 />
               </div>

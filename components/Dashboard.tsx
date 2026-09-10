@@ -19,6 +19,9 @@ import { KpiCard } from '../src/ui/components/KpiCard';
 import { Skeleton } from '../src/ui/components/Skeleton';
 import { motion } from 'framer-motion';
 import type { Variants } from 'framer-motion';
+import { createLogger } from '../src/core/logger';
+
+const log = createLogger('Dashboard');
 
 export interface DashboardProps {
   /** Single source of truth for the year — owned by the App shell top bar (U1 / C10). */
@@ -302,7 +305,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
    * (≤ 2 Supabase requests) replaces the previous getPeriods() + getProjects(period)
    * per-period request storm.
    */
+  // U1 routed every view's year through one shell control, so a user can change
+  // year faster than a request completes. Without this guard an older response
+  // lands after a newer one and the view shows the wrong year's numbers.
+  const loadSeqRef = useRef(0);
+
   const loadDashboard = useCallback(async (options?: { silent?: boolean }) => {
+    const seq = ++loadSeqRef.current;
     if (!options?.silent) setLoading(true);
     try {
       const [settings, records, yearPrices] = await Promise.all([
@@ -311,6 +320,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
         dbService.getYearProjectPrices(currentYear),
       ]);
 
+      if (seq !== loadSeqRef.current) return; // superseded by a newer year
       if (typeof settings.exchangeRate === 'number') setExchangeRate(settings.exchangeRate);
       if (typeof settings.licenseComputers === 'number') setLicenseComputers(settings.licenseComputers);
       if (typeof settings.licensePerComputer === 'number') setLicensePerComputer(settings.licensePerComputer);
@@ -319,10 +329,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
       setRawRecords(records);
       setPriceIndex(yearPrices.index);
     } catch (error) {
-      console.error('Failed to load dashboard data', error);
+      if (seq !== loadSeqRef.current) return;
+      log.error('Failed to load dashboard data', error);
       toast.error(tRef.current('toast.loadFailed', 'Failed to load data'));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [currentYear]);
 

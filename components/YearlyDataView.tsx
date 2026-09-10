@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Project, MonthlyRecord } from '../types';
 import { dbService } from '../services/dbService';
 import { buildPriceIndex, lookupPrices } from '../services/pricing';
@@ -7,7 +7,8 @@ import { formatCurrency } from '../utils/helpers';
 import { TABLE_COLUMN_WIDTHS, STICKY_CLASSES } from '../utils/tableStyles';
 import { exportTableToCSV, generateCSVFilename } from '../utils/csvExport';
 import { Loader2, FileDown, Copy, Check, GripVertical, ListChecks } from 'lucide-react';
-import html2canvas from 'html2canvas';
+import { captureElement } from '../utils/chartExport';
+import { createLogger } from '../src/core/logger';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
 import { Skeleton } from '../src/ui/components/Skeleton';
@@ -26,6 +27,8 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+
+const log = createLogger('YearlyDataView');
 
 interface YearlyDataViewProps {
   currentYear: number;
@@ -108,7 +111,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
     try {
       await dbService.updateProjectDisplayOrders(updates);
     } catch (e) {
-      console.error('Failed to save order:', e);
+      log.error('Failed to save order:', e);
       toast.error(t('toast.saveFailed', 'Save failed'));
     }
   };
@@ -120,7 +123,14 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
   const { no: LEFT_NO_WIDTH, nameReadOnly: LEFT_NAME_WIDTH } = TABLE_COLUMN_WIDTHS;
   const { leftCell: stickyLeftClass, leftHeader: stickyLeftHeaderClass, header: stickyHeaderZ, corner: stickyCornerZ } = STICKY_CLASSES;
 
+  // U1 routed every view's year through one shell control, so a user can change
+  // year faster than a request completes. Without this guard an older response
+  // lands after a newer one and the view shows the wrong year's numbers.
+  const loadSeqRef = useRef(0);
+  const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const fetchData = async () => {
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     try {
       // A5: one year-scoped call replaces getPeriods() + getProjects(period) per period.
@@ -150,17 +160,24 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
         return (a.display_order ?? 999) - (b.display_order ?? 999);
       });
 
+      if (seq !== loadSeqRef.current) return; // superseded by a newer year
       setProjects(relevantProjects);
       setRecords(groupedRecords);
       setPriceIndex(yearPrices.index);
       setPeriodLabels(yearPrices.periodLabels);
     } catch (error) {
-      console.error("Failed to load data for Yearly Data View", error);
+      if (seq !== loadSeqRef.current) return;
+      log.error('Failed to load data for Yearly Data View', error);
       toast.error(t('toast.loadFailed', 'Failed to load data'));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   };
+
+  // Don't let the 2s "Copied!" reset fire after the view unmounts.
+  useEffect(() => () => {
+    if (copyResetRef.current) clearTimeout(copyResetRef.current);
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -300,51 +317,47 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
     const tableElement = document.getElementById('yearly-data-table');
     if (!tableElement) return;
 
+    // The table scrolls inside its container; un-clip it for the capture and put
+    // it back in `finally`, so a failed capture cannot leave the layout expanded.
+    const container = tableElement.parentElement;
+    const originalOverflow = container?.style.overflow;
+    const originalMaxHeight = container?.style.maxHeight;
+
     setIsCopying(true);
     setCopySuccess(false);
 
     try {
-      // Temporarily stash container styles that might cause clipping
-      const container = tableElement.parentElement;
-      const originalOverflow = container?.style.overflow;
-      const originalMaxHeight = container?.style.maxHeight;
       if (container) {
         container.style.overflow = 'visible';
         container.style.maxHeight = 'none';
       }
 
-      const canvas = await html2canvas(tableElement, {
-        scale: 2, // High resolution
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        windowWidth: tableElement.scrollWidth,
-        windowHeight: tableElement.scrollHeight,
-      });
+      // Shared helper: follows the light/dark theme and resolves Tailwind v4's
+      // oklch() colours, which html2canvas cannot parse on its own.
+      const canvas = await captureElement(tableElement, { scale: 2 });
 
-      // Restore container styles
+      const blob = await new Promise<Blob | null>(resolve =>
+        canvas.toBlob(resolve, 'image/png', 1.0)
+      );
+
+      if (!blob) {
+        toast.error(t('toast.copyFailed', 'Copy failed'));
+        return;
+      }
+
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      setCopySuccess(true);
+      toast.success(t('toast.copied', 'Copied to clipboard'));
+      if (copyResetRef.current) clearTimeout(copyResetRef.current);
+      copyResetRef.current = setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      log.error('Failed to copy the table as an image:', err);
+      toast.error(t('toast.copyFailed', 'Copy failed'));
+    } finally {
       if (container) {
         container.style.overflow = originalOverflow || '';
         container.style.maxHeight = originalMaxHeight || '';
       }
-
-      canvas.toBlob(async (blob) => {
-        if (blob) {
-          try {
-            const item = new ClipboardItem({ 'image/png': blob });
-            await navigator.clipboard.write([item]);
-            setCopySuccess(true);
-            toast.success(t('toast.copied', 'Copied to clipboard'));
-            setTimeout(() => setCopySuccess(false), 2000);
-          } catch (err) {
-            console.error('Failed to write to clipboard:', err);
-            toast.error(t('toast.copyFailed', 'Copy failed'));
-          }
-        }
-      }, 'image/png', 1.0);
-    } catch (err) {
-      console.error('Failed to generate image:', err);
-      toast.error(t('toast.copyFailed', 'Copy failed'));
-    } finally {
       setIsCopying(false);
     }
   };

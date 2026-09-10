@@ -8,6 +8,9 @@ import { useToast } from '../contexts/ToastContext';
 import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
 import { Skeleton } from '../src/ui/components/Skeleton';
 import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, TooltipContentProps, ReferenceArea, ReferenceLine } from 'recharts';
+import { createLogger } from '../src/core/logger';
+
+const log = createLogger('TotalView');
 
 interface TotalViewProps {
   currentYear: number;
@@ -84,6 +87,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [pinnedMonth, setPinnedMonth] = useState<number | null>(null);
   const columnCoordsRef = useRef<Record<number, number>>({});
+  const loadSeqRef = useRef(0);
 
   // Colours live behind the shared preference helper (U8): the localStorage key is unchanged
   // so existing user picks survive (see `migrateChartColors`), and every set() persists.
@@ -136,16 +140,22 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   // Constants for layout
   const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
+  // U1 routed every view's year through one shell control, so a user can change
+  // year faster than a request completes. Without this guard an older response
+  // lands after a newer one and the view shows the wrong year's numbers.
   const fetchData = async () => {
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     try {
       const recordsData = await dbService.getAllRecords(currentYear);
+      if (seq !== loadSeqRef.current) return;
       setAllRecords(recordsData);
     } catch (error) {
-      console.error("Failed to load data for Total View", error);
+      if (seq !== loadSeqRef.current) return;
+      log.error('Failed to load data for Total View', error);
       toast.error(t('toast.loadFailed', 'Failed to load data'));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   };
 
