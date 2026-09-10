@@ -1,27 +1,13 @@
-import React, { useCallback, useState, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useState, useRef } from 'react';
 import { TrendingUp, Palette } from 'lucide-react';
 import { ChartExportMenu } from './ChartExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { TranslateFn } from '../contexts/LanguageContext';
-import { useToast } from '../contexts/ToastContext';
 import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
 import { Skeleton } from './ui/Skeleton';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipContentProps, LabelList, ReferenceLine, ReferenceArea } from 'recharts';
-import { dbService } from '../services/dbService';
-import { createLogger } from '../utils/logger';
-
-const log = createLogger('MonthlyPlanActualView');
-
-// Monthly plan-actual data interface
-interface MonthlyPlanActualData {
-  month: number;
-  monthLabel: string;
-  capacityLine: number;        // 能力線
-  workingHoursPlan: number;    // 稼働計画
-  workingHoursActual: number;  // 稼働実績
-  salesPlan: number;           // 売上計画 (万円)
-  salesActual: number;         // 売上実績 (万円)
-}
+import { useMonthlyPlanActualData } from '../hooks/useMonthlyPlanActualData';
+import type { MonthlyPlanActualData } from '../hooks/useMonthlyPlanActualData';
 
 interface SeriesStyle {
   color: string;
@@ -319,10 +305,8 @@ const WorkingHoursActualBar = ({ fill, x = 0, y = 0, width = 0, height = 0, payl
 };
 
 export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ currentYear }) => {
-  const { t, language } = useLanguage();
-  const toast = useToast();
-  const [loading, setLoading] = useState(true);
-  const [monthlyData, setMonthlyData] = useState<MonthlyPlanActualData[]>([]);
+  const { t } = useLanguage();
+  const { loading, monthlyData, maxSales, maxWorkingHours } = useMonthlyPlanActualData(currentYear);
   const [pinnedMonth, setPinnedMonth] = useState<number | null>(null);
   const columnCoordsRef = useRef<Record<number, number>>({});
 
@@ -351,68 +335,6 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
   // Current month highlight
   const currentMonth = new Date().getFullYear() === currentYear ? new Date().getMonth() + 1 : null;
   const [showCurrentMonth, setShowCurrentMonth] = useState(true);
-
-  // Fetch real data from Supabase
-  useEffect(() => {
-    // U1 routed every view's year through one shell control, so a user can change
-    // year faster than a request completes. Without this guard an older response
-    // lands after a newer one and the view shows the wrong year's numbers.
-    let cancelled = false;
-
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // getCapacityLine(year) returns the real weekday count for `year` (WS-1).
-        const [aggregatedData, capacityData] = await Promise.all([
-          dbService.getMonthlyAggregatedData(currentYear),
-          dbService.getCapacityLine(currentYear)
-        ]);
-
-        const locale = language === 'ja' ? 'ja-JP' : language === 'vn' ? 'vi-VN' : 'en-US';
-
-        // Combine data
-        const combined = aggregatedData.map(data => {
-          const capacity = capacityData.find(c => c.month === data.month)?.capacity || 0;
-          const monthLabel = new Date(currentYear, data.month - 1).toLocaleString(locale, { month: 'short' });
-
-          return {
-            month: data.month,
-            monthLabel: language === 'ja' ? `${data.month}月` : monthLabel,
-            capacityLine: capacity,
-            workingHoursPlan: data.workingHoursPlan,
-            workingHoursActual: data.workingHoursActual,
-            salesPlan: data.salesPlan,
-            salesActual: data.salesActual
-          };
-        });
-
-        if (cancelled) return; // superseded by a newer year/language
-        setMonthlyData(combined);
-      } catch (error) {
-        if (cancelled) return;
-        log.error('Failed to load monthly plan-actual data:', error);
-        toast.error(t('toast.loadFailed', 'Failed to load data'));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    fetchData();
-    return () => { cancelled = true; };
-    // `t` is memoised per language and `language` is already a dependency, so
-    // listing it adds no extra run; `toast` is stable.
-  }, [currentYear, language, t, toast]);
-
-  // Calculate Y-axis ranges
-  const maxSales = useMemo(() => {
-    const max = Math.max(...monthlyData.map(d => Math.max(d.salesPlan, d.salesActual)));
-    return Math.ceil(max * 1.1); // +10%
-  }, [monthlyData]);
-
-  const maxWorkingHours = useMemo(() => {
-    const max = Math.max(...monthlyData.map(d => Math.max(d.capacityLine, d.workingHoursPlan, d.workingHoursActual)));
-    return Math.ceil(max * 1.1); // +10%
-  }, [monthlyData]);
 
   if (loading) {
     return (
