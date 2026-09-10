@@ -407,15 +407,13 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
   }, [projects, searchQuery, localFilter, sortConfig]);
 
   // Close menu when clicking outside - Removed as DropdownMenu handles it locally
-  /*
+  // `t` is memoised per language. Making it a dependency of the fetch would
+  // refetch on every language switch, so the ref keeps the error toast localised
+  // without tying data loading to the language.
+  const tRef = useRef(t);
   useEffect(() => {
-    const handleClickOutside = () => setOpenMenuId(null);
-    if (openMenuId) {
-      document.addEventListener('click', handleClickOutside);
-      return () => document.removeEventListener('click', handleClickOutside);
-    }
-  }, [openMenuId]);
-  */
+    tRef.current = t;
+  }, [t]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -435,12 +433,11 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
       setRecords(groupedRecords);
     } catch (error) {
       log.error('Failed to load data', error);
-      toast.error(t('toast.loadFailed', 'Failed to load data'));
+      toast.error(tRef.current('toast.loadFailed', 'Failed to load data'));
     } finally {
       setLoading(false);
     }
-    // Deliberately keyed on the period only: `toast`/`t` must not trigger a refetch.
-  }, [currentPeriodLabel]);
+  }, [currentPeriodLabel, toast]);
 
   useEffect(() => {
     fetchData();

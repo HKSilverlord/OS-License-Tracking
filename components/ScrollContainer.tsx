@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback, forwardRef } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo, forwardRef } from 'react';
 
 interface ScrollContainerProps {
   children: React.ReactNode;
@@ -16,7 +16,13 @@ export const ScrollContainer = forwardRef<HTMLDivElement, ScrollContainerProps>(
   shadowColor = 'rgba(0, 0, 0, 0.15)'
 }, forwardedRef) => {
   const internalRef = useRef<HTMLDivElement>(null);
-  const containerRef = (forwardedRef as React.RefObject<HTMLDivElement>) || internalRef;
+  // forwardRef also accepts a *callback* ref, which has no `.current`. Reading
+  // `.current` off one silently yields undefined and the shadows never appear, so
+  // fall back to the internal ref unless an object ref was actually passed.
+  const containerRef = useMemo(
+    () => (forwardedRef && typeof forwardedRef === 'object' ? forwardedRef : internalRef),
+    [forwardedRef],
+  );
   const [showLeftShadow, setShowLeftShadow] = useState(false);
   const [showRightShadow, setShowRightShadow] = useState(false);
 
@@ -31,7 +37,7 @@ export const ScrollContainer = forwardRef<HTMLDivElement, ScrollContainerProps>(
 
     // Show right shadow if not scrolled to end
     setShowRightShadow(scrollLeft < scrollWidth - clientWidth - 10);
-  }, []);
+  }, [containerRef]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -51,7 +57,7 @@ export const ScrollContainer = forwardRef<HTMLDivElement, ScrollContainerProps>(
       container.removeEventListener('scroll', updateShadows);
       resizeObserver.disconnect();
     };
-  }, [updateShadows]);
+  }, [containerRef, updateShadows]);
 
   return (
     <div className="relative">

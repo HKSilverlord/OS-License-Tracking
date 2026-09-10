@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { TrendingUp, Palette } from 'lucide-react';
 import { ChartExportMenu } from './ChartExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -7,6 +7,9 @@ import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
 import { Skeleton } from './ui/Skeleton';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipContentProps, LabelList } from 'recharts';
 import { dbService } from '../services/dbService';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('LongTermPlanView');
 
 // Long-term plan data interface
 interface LongTermPlanData {
@@ -75,6 +78,14 @@ export const LongTermPlanView: React.FC = () => {
     migrateChartColors,
   );
 
+  // `t` is memoised per language. Making it a dependency of the fetch would
+  // refetch on every language switch, so the ref keeps the error toast localised
+  // without tying data loading to the language.
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
+
   // Fetch real data from Supabase
   useEffect(() => {
     const fetchData = async () => {
@@ -86,17 +97,18 @@ export const LongTermPlanView: React.FC = () => {
         const data = await dbService.getYearlyAggregatedData(startYear, endYear);
         setLongTermData(data);
       } catch (error) {
-        console.error('Failed to load long-term plan data:', error);
-        toast.error(t('toast.loadFailed', 'Failed to load data'));
+        log.error('Failed to load long-term plan data:', error);
+        toast.error(tRef.current('toast.loadFailed', 'Failed to load data'));
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-    // `toast` and `t` are stable for the lifetime of their providers.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // `toast` is stable (the provider memoises it), so this still runs once.
+    // `t` is read through tRef instead: it changes on every language switch and
+    // must not retrigger a fetch of 2020-2030 aggregates.
+  }, [toast]);
 
   // Chart data preparation - convert nulls to undefined for Recharts
   const chartData = useMemo<LongTermChartRow[]>(() => {

@@ -6,7 +6,8 @@ import { useLanguage } from '../contexts/LanguageContext';
 interface ChartExportMenuProps {
     chartId: string;
     filenameRequest: string; // Base filename without extension
-    data?: any[]; // Data for CSV export
+    /** Rows for the CSV export; shaped by the caller, keyed to the chart. */
+    data?: readonly unknown[];
     onExport?: () => void;
     className?: string;
     hideLabel?: boolean; // If true, only shows icon

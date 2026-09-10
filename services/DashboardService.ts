@@ -3,7 +3,7 @@ import { BaseService } from './BaseService';
 import { buildPriceIndex, lookupPrices } from './pricing';
 import type { PeriodProjectPriceRow, ProjectPriceRow } from './pricing';
 import { createLogger } from '../utils/logger';
-import { DashboardRecord } from '../types';
+import { DashboardRecord, AppSettings } from '../types';
 
 const log = createLogger('DashboardService');
 
@@ -64,7 +64,7 @@ export class DashboardService extends BaseService {
 
     // --- Settings (Often used in dashboard contexts) ---
 
-    async getSettings() {
+    async getSettings(): Promise<AppSettings> {
         const { data, error } = await this.supabase
             .from('settings')
             .select('*')
@@ -82,7 +82,7 @@ export class DashboardService extends BaseService {
         };
     }
 
-    async saveSettings(settings: any) {
+    async saveSettings(settings: Partial<AppSettings>): Promise<AppSettings> {
         // First get current to merge
         const current = await this.getSettings();
         const merged = { ...current, ...settings };

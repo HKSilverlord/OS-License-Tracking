@@ -1,5 +1,6 @@
 
 import { BaseService } from './BaseService';
+import type { Project } from '../types';
 
 export class PeriodService extends BaseService {
 
@@ -10,7 +11,7 @@ export class PeriodService extends BaseService {
             .order('label', { ascending: false });
 
         if (error) return [];
-        return data.map((p: any) => p.label);
+        return data.map((p: { label: string }) => p.label);
     }
 
     async addPeriod(label: string) {
@@ -129,14 +130,22 @@ export class PeriodService extends BaseService {
         if (error) throw error;
     }
 
-    async getProjectsForPeriod(periodLabel: string) {
+    async getProjectsForPeriod(periodLabel: string): Promise<Project[]> {
         const { data, error } = await this.supabase
             .from('period_projects')
             .select('project_id, projects(*)')
             .eq('period_label', periodLabel);
 
         if (error) throw error;
-        return (data || []).map((pp: any) => pp.projects);
+
+        // PostgREST types an embedded relation as an array even when the foreign key
+        // is many-to-one and a single object comes back. The previous `any` hid that,
+        // so handle both shapes rather than betting on one.
+        return (data || []).flatMap((pp): Project[] => {
+            const embedded = (pp as { projects: Project | Project[] | null }).projects;
+            if (!embedded) return [];
+            return Array.isArray(embedded) ? embedded : [embedded];
+        });
     }
 }
 

@@ -196,7 +196,7 @@ export async function testYearlyDataViewQuery(year: number) {
     const yearPeriods = periodsData?.map(p => p.label) || [];
 
     // 2. Get projects for these periods
-    let allProjects: any[] = [];
+    const allProjects: any[] = [];
     for (const period of yearPeriods) {
       const { data: projectsData, error: projectsError } = await supabase
         .from('period_projects')

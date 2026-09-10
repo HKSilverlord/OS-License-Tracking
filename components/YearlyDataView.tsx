@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Project, MonthlyRecord } from '../types';
 import { dbService } from '../services/dbService';
 import { buildPriceIndex, lookupPrices } from '../services/pricing';
@@ -80,6 +80,9 @@ interface ProjectRevenue {
 
 const EMPTY_PRICE_INDEX: PriceIndex = buildPriceIndex([], []);
 
+/** Referentially stable so hooks that map over it can list it as a dependency. */
+const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
 export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) => {
   const { t, language } = useLanguage();
   const toast = useToast();
@@ -116,9 +119,6 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
     }
   };
 
-  // Constants for layout
-  const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-
   // Use shared table styling constants
   const { no: LEFT_NO_WIDTH, nameReadOnly: LEFT_NAME_WIDTH } = TABLE_COLUMN_WIDTHS;
   const { leftCell: stickyLeftClass, leftHeader: stickyLeftHeaderClass, header: stickyHeaderZ, corner: stickyCornerZ } = STICKY_CLASSES;
@@ -129,7 +129,15 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
   const loadSeqRef = useRef(0);
   const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchData = async () => {
+  // `t` is memoised per language, so making it a dependency of the fetch would
+  // refetch the year's data on every language switch. The ref keeps the error
+  // toast localised without tying data loading to the language.
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
+
+  const fetchData = useCallback(async () => {
     const seq = ++loadSeqRef.current;
     setLoading(true);
     try {
@@ -168,11 +176,11 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
     } catch (error) {
       if (seq !== loadSeqRef.current) return;
       log.error('Failed to load data for Yearly Data View', error);
-      toast.error(t('toast.loadFailed', 'Failed to load data'));
+      toast.error(tRef.current('toast.loadFailed', 'Failed to load data'));
     } finally {
       if (seq === loadSeqRef.current) setLoading(false);
     }
-  };
+  }, [currentYear, toast]);
 
   // Don't let the 2s "Copied!" reset fire after the view unmounts.
   useEffect(() => () => {
@@ -181,8 +189,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
 
   useEffect(() => {
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentYear]);
+  }, [fetchData]);
 
   /**
    * A1/A2 — revenue is summed PER RECORD, priced with the (period_label, project_id) price.
@@ -236,7 +243,6 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
       return { month: m, plan: planSum, actual: actualSum };
     });
     return totals;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projects, records]);
 
   // Compute accumulated (running) totals from monthlyTotals
@@ -258,8 +264,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
 
     window.addEventListener('dataUpdated', handleDataUpdated);
     return () => window.removeEventListener('dataUpdated', handleDataUpdated);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentYear]);
+  }, [fetchData]);
 
   // CSV Export Function
   const handleExportCSV = () => {

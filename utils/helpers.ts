@@ -28,13 +28,3 @@ export const getCurrentPeriod = (): { year: number; type: PeriodType; label: str
 export const getMonthsForPeriod = (type: PeriodType): number[] => {
   return type === PeriodType.H1 ? [1, 2, 3, 4, 5, 6] : [7, 8, 9, 10, 11, 12];
 };
-
-export const calculateProjectStats = (records: any[], unitPrice: number) => {
-  const actualHours = records.reduce((acc, r) => acc + (r.actual_hours || 0), 0);
-  const plannedHours = records.reduce((acc, r) => acc + (r.planned_hours || 0), 0);
-  return {
-    actualHours,
-    plannedHours,
-    revenue: actualHours * unitPrice
-  };
-};

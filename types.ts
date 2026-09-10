@@ -103,3 +103,14 @@ export interface Settings {
   license_per_computer: number;
   unit_price: number;
 }
+
+/**
+ * Settings as the app uses them. `Settings` above mirrors the DB columns
+ * (snake_case); DashboardService maps between the two.
+ */
+export interface AppSettings {
+  exchangeRate: number;
+  licenseComputers: number;
+  licensePerComputer: number;
+  unitPrice: number;
+}

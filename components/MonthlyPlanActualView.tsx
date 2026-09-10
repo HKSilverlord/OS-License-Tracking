@@ -162,9 +162,9 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
 
     fetchData();
     return () => { cancelled = true; };
-    // `toast`/`t` are stable for the lifetime of their providers.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentYear, language]);
+    // `t` is memoised per language and `language` is already a dependency, so
+    // listing it adds no extra run; `toast` is stable.
+  }, [currentYear, language, t, toast]);
 
   // Calculate Y-axis ranges
   const maxSales = useMemo(() => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Calendar,
   Plus,
@@ -56,12 +56,15 @@ export const PeriodManagement: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Load data
+  // `t` is memoised per language. Making it a dependency of the fetch would
+  // refetch on every language switch, so the ref keeps the error toast localised
+  // without tying data loading to the language.
+  const tRef = useRef(t);
   useEffect(() => {
-    loadData();
-  }, []);
+    tRef.current = t;
+  }, [t]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const [periodsData, projectsData] = await Promise.all([
@@ -72,11 +75,16 @@ export const PeriodManagement: React.FC = () => {
       setAllProjects(projectsData);
     } catch (error) {
       log.error('Error loading data:', error);
-      toast.error(t('toast.loadFailed', 'Failed to load data'));
+      toast.error(tRef.current('toast.loadFailed', 'Failed to load data'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  // Load data
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Filter projects by search query
   const filteredProjects = allProjects.filter(project =>

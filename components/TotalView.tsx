@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { MonthlyRecord } from '../types';
 import { dbService } from '../services/dbService';
 import { exportChartToSVG, exportChartToPNG, exportChartDataToCSV, generateChartFilename, copyChartToClipboard } from '../utils/chartExport';
@@ -79,6 +79,9 @@ const migrateChartColors = (raw: unknown): ChartColors | null => {
   };
 };
 
+/** Referentially stable so hooks that map over it can list it as a dependency. */
+const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
 export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   const { t, language } = useLanguage();
   const toast = useToast();
@@ -137,13 +140,18 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     );
   };
 
-  // Constants for layout
-  const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-
   // U1 routed every view's year through one shell control, so a user can change
   // year faster than a request completes. Without this guard an older response
   // lands after a newer one and the view shows the wrong year's numbers.
-  const fetchData = async () => {
+  // `t` is memoised per language, so making it a dependency of the fetch would
+  // refetch the year's data on every language switch. The ref keeps the error
+  // toast localised without tying data loading to the language.
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
+
+  const fetchData = useCallback(async () => {
     const seq = ++loadSeqRef.current;
     setLoading(true);
     try {
@@ -153,16 +161,15 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     } catch (error) {
       if (seq !== loadSeqRef.current) return;
       log.error('Failed to load data for Total View', error);
-      toast.error(t('toast.loadFailed', 'Failed to load data'));
+      toast.error(tRef.current('toast.loadFailed', 'Failed to load data'));
     } finally {
       if (seq === loadSeqRef.current) setLoading(false);
     }
-  };
+  }, [currentYear, toast]);
 
   useEffect(() => {
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentYear]);
+  }, [fetchData]);
 
   // Listen for data updates from other tabs
   useEffect(() => {
@@ -172,8 +179,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
 
     window.addEventListener('dataUpdated', handleDataUpdated);
     return () => window.removeEventListener('dataUpdated', handleDataUpdated);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentYear]);
+  }, [fetchData]);
 
   // Chart Data Preparation
   const chartData = useMemo<TotalChartRow[]>(() => {
@@ -206,7 +212,6 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     });
 
     return data;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allRecords, currentYear, language]);
 
   // Dynamic Y-axis max based on max accumulated values

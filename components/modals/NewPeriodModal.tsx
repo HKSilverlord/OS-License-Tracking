@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Plus } from 'lucide-react';
 import { dbService } from '../../services/dbService';
 import { Project } from '../../types';
@@ -31,6 +31,29 @@ export const NewPeriodModal: React.FC<NewPeriodModalProps> = ({
     const [selectedCarryOverIds, setSelectedCarryOverIds] = useState<string[]>([]);
     const [loading, setLoading] = useState(false);
 
+    // `t` is memoised per language; reading it through a ref keeps the error
+    // toast localised without making the fetch depend on the current language.
+    const tRef = useRef(t);
+    useEffect(() => {
+        tRef.current = t;
+    }, [t]);
+
+    const fetchProjects = useCallback(async () => {
+        setLoading(true);
+        try {
+            log.debug('Fetching all projects for carryover...');
+            const allProjects = await dbService.getProjectsForCarryOver();
+            setCurrentPeriodProjects(allProjects);
+            setSelectedCarryOverIds([]); // Reset selection
+        } catch (e) {
+            log.error('Failed to fetch projects', e);
+            toast.error(tRef.current('alerts.projectsLoadFailed', 'Failed to load projects'));
+            setCurrentPeriodProjects([]);
+        } finally {
+            setLoading(false);
+        }
+    }, [toast]);
+
     useEffect(() => {
         if (isOpen) {
             // Initialize Default Values
@@ -49,23 +72,7 @@ export const NewPeriodModal: React.FC<NewPeriodModalProps> = ({
             // Fetch Projects
             fetchProjects();
         }
-    }, [isOpen, currentPeriod]);
-
-    const fetchProjects = async () => {
-        setLoading(true);
-        try {
-            log.debug('Fetching all projects for carryover...');
-            const allProjects = await dbService.getProjectsForCarryOver();
-            setCurrentPeriodProjects(allProjects);
-            setSelectedCarryOverIds([]); // Reset selection
-        } catch (e) {
-            log.error('Failed to fetch projects', e);
-            toast.error(t('alerts.projectsLoadFailed', 'Failed to load projects'));
-            setCurrentPeriodProjects([]);
-        } finally {
-            setLoading(false);
-        }
-    };
+    }, [isOpen, currentPeriod, fetchProjects]);
 
     const handleCreatePeriod = async (e: React.FormEvent) => {
         e.preventDefault();
