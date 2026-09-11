@@ -42,6 +42,7 @@ export const ja: Record<string, string> = {
   'chartExport.copied': 'クリップボードにコピーしました',
   'chartExport.failed': '出力に失敗しました',
   'chartExport.copyFailed': 'コピーに失敗しました',
+  'chartExport.clipboardFallback': 'クリップボードを利用できないため、画像をダウンロードしました',
   'export.copyImage': '画像をコピー',
   'export.copied': 'コピーしました！',
   'export.savePNG': 'PNGとして保存',

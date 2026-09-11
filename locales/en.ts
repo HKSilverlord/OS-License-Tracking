@@ -42,6 +42,7 @@ export const en: Record<string, string> = {
   'chartExport.copied': 'Copied to clipboard',
   'chartExport.failed': 'Export failed',
   'chartExport.copyFailed': 'Copy failed',
+  'chartExport.clipboardFallback': 'Clipboard unavailable — the image was downloaded instead',
   'export.copyImage': 'Copy Image',
   'export.copied': 'Copied!',
   'export.savePNG': 'Save as PNG',

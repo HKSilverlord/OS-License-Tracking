@@ -7,7 +7,7 @@ import { formatCurrency } from '../utils/helpers';
 import { TABLE_COLUMN_WIDTHS, STICKY_CLASSES } from '../utils/tableStyles';
 import { exportTableToCSV, generateCSVFilename } from '../utils/csvExport';
 import { Loader2, FileDown, Copy, Check, GripVertical, ListChecks } from 'lucide-react';
-import { captureElement } from '../utils/chartExport';
+import { copyElementToClipboard, generateChartFilename } from '../utils/chartExport';
 import { createLogger } from '../utils/logger';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
@@ -318,53 +318,36 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
     exportTableToCSV(headers, rows, generateCSVFilename(`yearly_data_${currentYear}`));
   };
 
-  const handleCopyImage = async () => {
+  // Deliberately NOT async: the shared helper has to issue the clipboard write
+  // inside this click, so nothing may be awaited before it. The button state
+  // rides on the returned promise instead.
+  const handleCopyImage = () => {
     const tableElement = document.getElementById('yearly-data-table');
-    if (!tableElement) return;
-
-    // The table scrolls inside its container; un-clip it for the capture and put
-    // it back in `finally`, so a failed capture cannot leave the layout expanded.
-    const container = tableElement.parentElement;
-    const originalOverflow = container?.style.overflow;
-    const originalMaxHeight = container?.style.maxHeight;
+    if (!tableElement) {
+      // Silently returning left the button looking like it had done nothing.
+      log.error('Copy image: #yearly-data-table is not in the DOM');
+      toast.error(t('toast.copyFailed', 'Copy failed'));
+      return;
+    }
 
     setIsCopying(true);
     setCopySuccess(false);
 
-    try {
-      if (container) {
-        container.style.overflow = 'visible';
-        container.style.maxHeight = 'none';
-      }
-
-      // Shared helper: follows the light/dark theme and resolves Tailwind v4's
-      // oklch() colours, which html2canvas cannot parse on its own.
-      const canvas = await captureElement(tableElement, { scale: 2 });
-
-      const blob = await new Promise<Blob | null>(resolve =>
-        canvas.toBlob(resolve, 'image/png', 1.0)
-      );
-
-      if (!blob) {
-        toast.error(t('toast.copyFailed', 'Copy failed'));
-        return;
-      }
-
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-      setCopySuccess(true);
-      toast.success(t('toast.copied', 'Copied to clipboard'));
-      if (copyResetRef.current) clearTimeout(copyResetRef.current);
-      copyResetRef.current = setTimeout(() => setCopySuccess(false), 2000);
-    } catch (err) {
-      log.error('Failed to copy the table as an image:', err);
-      toast.error(t('toast.copyFailed', 'Copy failed'));
-    } finally {
-      if (container) {
-        container.style.overflow = originalOverflow || '';
-        container.style.maxHeight = originalMaxHeight || '';
-      }
-      setIsCopying(false);
-    }
+    // Un-clipping the scroll container is the CLONE's job (captureElement does
+    // it in `onclone`). Doing it here too only reflowed the live page and threw
+    // away the scroll position the user was reading at.
+    copyElementToClipboard(tableElement, {
+      scale: 2,
+      fallbackFilename: generateChartFilename(`yearly_data_${currentYear}`, 'png')
+    })
+      .then(ok => {
+        // copyElementToClipboard raises its own toast either way.
+        if (!ok) return;
+        setCopySuccess(true);
+        if (copyResetRef.current) clearTimeout(copyResetRef.current);
+        copyResetRef.current = setTimeout(() => setCopySuccess(false), 2000);
+      })
+      .finally(() => setIsCopying(false));
   };
 
   if (loading) {

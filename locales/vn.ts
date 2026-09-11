@@ -42,6 +42,7 @@ export const vn: Record<string, string> = {
   'chartExport.copied': 'Đã sao chép vào clipboard',
   'chartExport.failed': 'Xuất thất bại',
   'chartExport.copyFailed': 'Sao chép thất bại',
+  'chartExport.clipboardFallback': 'Không dùng được clipboard — ảnh đã được tải xuống thay thế',
   'export.copyImage': 'Sao chép ảnh',
   'export.copied': 'Đã sao chép!',
   'export.savePNG': 'Lưu dạng PNG',

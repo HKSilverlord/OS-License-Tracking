@@ -21,6 +21,7 @@ export const SectionExportMenu: React.FC<SectionExportMenuProps> = ({
     const { t } = useLanguage();
     const [isOpen, setIsOpen] = useState(false);
     const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [copyingId, setCopyingId] = useState<string | null>(null);
     const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     React.useEffect(() => {
@@ -43,7 +44,11 @@ export const SectionExportMenu: React.FC<SectionExportMenuProps> = ({
     }, []);
 
     const handleCopy = async (sectionId: string) => {
-        const ok = await copyChartToClipboard(sectionId);
+        // A capture takes seconds; without this a second click queued another one.
+        if (copyingId) return;
+        setCopyingId(sectionId);
+        // Called before any await so the clipboard write stays inside the click.
+        const ok = await copyChartToClipboard(sectionId).finally(() => setCopyingId(null));
         if (!ok) {
             // copyChartToClipboard already raised the error toast; just close.
             setIsOpen(false);
@@ -78,7 +83,8 @@ export const SectionExportMenu: React.FC<SectionExportMenuProps> = ({
                                 <button
                                     key={section.id}
                                     onClick={() => handleCopy(section.id)}
-                                    className="w-full text-left px-3 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg flex items-center justify-between transition-colors group"
+                                    disabled={copyingId !== null}
+                                    className="w-full text-left px-3 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg flex items-center justify-between transition-colors group disabled:opacity-60"
                                     role="menuitem"
                                 >
                                     <span className="font-medium">{t(section.labelKey, section.defaultLabel)}</span>

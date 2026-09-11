@@ -24,6 +24,7 @@ export const ChartExportMenu: React.FC<ChartExportMenuProps> = ({
     const { t } = useLanguage();
     const [isOpen, setIsOpen] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [copying, setCopying] = useState(false);
     const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Close menu when clicking outside - simple implementation
@@ -47,7 +48,11 @@ export const ChartExportMenu: React.FC<ChartExportMenuProps> = ({
     }, []);
 
     const handleCopy = async () => {
-        const ok = await copyChartToClipboard(chartId);
+        // A capture takes seconds; without this a second click queued another one.
+        if (copying) return;
+        setCopying(true);
+        // Called before any await so the clipboard write stays inside the click.
+        const ok = await copyChartToClipboard(chartId).finally(() => setCopying(false));
         if (!ok) {
             // copyChartToClipboard already raised the error toast; just close.
             setIsOpen(false);
@@ -101,11 +106,12 @@ export const ChartExportMenu: React.FC<ChartExportMenuProps> = ({
 
                         <button
                             onClick={handleCopy}
-                            className="w-full text-left px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-3 transition-colors"
+                            disabled={copying}
+                            className="w-full text-left px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-3 transition-colors disabled:opacity-60"
                             role="menuitem"
                         >
                             {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
-                            <span>{copied ? t('export.copied', 'Copied!') : t('export.copyImage', 'Copy Image')}</span>
+                            <span>{copying ? t('common.loading', 'Loading…') : copied ? t('export.copied', 'Copied!') : t('export.copyImage', 'Copy Image')}</span>
                         </button>
 
                         <button

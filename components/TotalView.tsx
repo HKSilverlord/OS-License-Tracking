@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { MonthlyRecord } from '../types';
 import { dbService } from '../services/dbService';
 import { exportChartToSVG, exportChartToPNG, exportChartDataToCSV, generateChartFilename, copyChartToClipboard } from '../utils/chartExport';
-import { TrendingUp, Download, Palette, Copy, Image } from 'lucide-react';
+import { TrendingUp, Download, Palette, Copy, Check, Image } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { TranslateFn } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
@@ -244,6 +244,10 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   const [allRecords, setAllRecords] = useState<MonthlyRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showColorPicker, setShowColorPicker] = useState(false);
+  // Copying runs a full html2canvas capture; without an in-flight guard a double
+  // click queued a second one, and the button gave no sign it had done anything.
+  const [copyState, setCopyState] = useState<'idle' | 'busy' | 'done'>('idle');
+  const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pinnedMonth, setPinnedMonth] = useState<number | null>(null);
   const columnCoordsRef = useRef<Record<number, number>>({});
   const loadSeqRef = useRef(0);
@@ -283,6 +287,11 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   useEffect(() => {
     tRef.current = t;
   }, [t]);
+
+  // The 2s "Copied!" reset must not fire into an unmounted view.
+  useEffect(() => () => {
+    if (copyResetRef.current) clearTimeout(copyResetRef.current);
+  }, []);
 
   const fetchData = useCallback(async () => {
     const seq = ++loadSeqRef.current;
@@ -409,12 +418,28 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
               {t('chart.colors', 'Colors')}
             </button>
             <button
-              onClick={() => copyChartToClipboard('total-view-chart')}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-indigo-600 dark:bg-indigo-700 text-white rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors"
+              onClick={() => {
+                if (copyState === 'busy') return;
+                setCopyState('busy');
+                // Not awaited before the call: copyChartToClipboard must reach
+                // the clipboard from inside this click.
+                copyChartToClipboard('total-view-chart').then(ok => {
+                  setCopyState(ok ? 'done' : 'idle');
+                  if (!ok) return;
+                  if (copyResetRef.current) clearTimeout(copyResetRef.current);
+                  copyResetRef.current = setTimeout(() => setCopyState('idle'), 2000);
+                });
+              }}
+              disabled={copyState === 'busy'}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-indigo-600 dark:bg-indigo-700 text-white rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors disabled:opacity-60"
               title={t('export.copyAsImage', 'Copy to Clipboard')}
             >
-              <Copy className="w-4 h-4" />
-              {t('buttons.copy', 'Copy')}
+              {copyState === 'done' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copyState === 'busy'
+                ? t('common.loading', 'Loading…')
+                : copyState === 'done'
+                  ? t('export.copied', 'Copied!')
+                  : t('buttons.copy', 'Copy')}
             </button>
             <button
               onClick={() => exportChartToPNG('total-view-chart', generateChartFilename(`yearly_overview_${currentYear}`, 'png'))}
