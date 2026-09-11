@@ -59,3 +59,16 @@ body {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   @apply bg-slate-400 dark:bg-slate-500;
 }
+
+/*
+ * Recharts 3 gives every chart `tabindex="0" role="application"` for its
+ * keyboard layer, and Chrome then draws a black focus box around the whole plot
+ * as soon as a bar is clicked — which also lands in exported and copied images.
+ * Keep the ring for keyboard users, drop it for the pointer.
+ */
+.recharts-surface:focus {
+  outline: none;
+}
+.recharts-surface:focus-visible {
+  @apply outline-2 outline-offset-2 outline-indigo-500 rounded-lg;
+}

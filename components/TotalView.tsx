@@ -2,14 +2,14 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { MonthlyRecord } from '../types';
 import { dbService } from '../services/dbService';
 import { exportChartToSVG, exportChartToPNG, exportChartDataToCSV, generateChartFilename, copyChartToClipboard } from '../utils/chartExport';
-import { TrendingUp, Download, Palette, Copy, Check, Image } from 'lucide-react';
+import { TrendingUp, Download, Palette, Copy, Check, Image, Pin } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { TranslateFn } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
 import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
 import { Skeleton } from './ui/Skeleton';
 import { useIsDarkTheme } from '../hooks/useDarkMode';
-import { ComposedChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList, TooltipContentProps, ReferenceLine } from 'recharts';
+import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LabelList, ReferenceArea, ReferenceLine } from 'recharts';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger('TotalView');
@@ -182,13 +182,15 @@ const CurrentMonthBadge = ({ viewBox, label, color }: {
 };
 
 /** The month breakdown, shown both in the tooltip and in the pinned card. */
-const MonthDetailCard = ({ data, chartColors, t, nf, unit, hideShadow = false }: {
+const MonthDetailCard = ({ data, chartColors, t, nf, unit, pinned = false, hideShadow = false }: {
   data: TotalChartRow;
   chartColors: ChartColors;
   t: TranslateFn;
   /** Formats in the UI language, so 9600 reads 9.600 in vi and 9,600 in en. */
   nf: (value: number) => string;
   unit: string;
+  /** Shown because the month was selected, not because the cursor is on it. */
+  pinned?: boolean;
   hideShadow?: boolean;
 }) => {
   const plan = data.plan || 0;
@@ -202,7 +204,10 @@ const MonthDetailCard = ({ data, chartColors, t, nf, unit, hideShadow = false }:
   return (
     <div className={`bg-white dark:bg-slate-900 p-3 border border-slate-300 dark:border-slate-700 rounded-lg min-w-[200px] ${hideShadow ? '' : 'shadow-lg'}`}>
       <p className="font-semibold text-slate-800 dark:text-slate-100 mb-2 border-b border-slate-200 dark:border-slate-800 pb-1 flex items-center justify-between gap-2">
-        <span>{data.fullName}</span>
+        <span className="flex items-center gap-1.5">
+          {pinned && <Pin className="w-3 h-3 text-indigo-500 dark:text-indigo-400" aria-hidden="true" />}
+          {data.fullName}
+        </span>
         {data.isFuture && (
           <span className="text-[10px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400">
             {t('totalView.forecast', 'Forecast')}
@@ -259,22 +264,6 @@ const MonthDetailCard = ({ data, chartColors, t, nf, unit, hideShadow = false }:
       </div>
     </div>
   );
-};
-
-/**
- * Tooltip body. Recharts 3 fills in `active` / `payload` when it clones the
- * element, which is why they are optional here.
- */
-const CustomTooltip = ({ active, payload, chartColors, t, nf, unit }: Partial<TooltipContentProps<number, string>> & {
-  chartColors: ChartColors;
-  t: TranslateFn;
-  nf: (value: number) => string;
-  unit: string;
-}) => {
-  if (!active || !payload || payload.length === 0) return null;
-  const data = payload[0]?.payload as TotalChartRow | undefined;
-  if (!data) return null;
-  return <MonthDetailCard data={data} chartColors={chartColors} t={t} nf={nf} unit={unit} />;
 };
 
 /**
@@ -376,6 +365,10 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   const [copyState, setCopyState] = useState<'idle' | 'busy' | 'done'>('idle');
   const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pinnedMonth, setPinnedMonth] = useState<number | null>(null);
+  // Hovering and selecting used to render two different cards in two different
+  // places, and both at once on the selected month. They now feed one card:
+  // the cursor wins while it is over the chart, the selection holds otherwise.
+  const [hoveredMonth, setHoveredMonth] = useState<number | null>(null);
   const [hiddenSeries, setHiddenSeries] = useState<Record<PlottedSeries, boolean>>({
     accPlan: false,
     accActual: false,
@@ -383,6 +376,10 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   const isDark = useIsDarkTheme();
   const axis = useMemo(() => axisTheme(isDark), [isDark]);
   const columnCoordsRef = useRef<Record<number, number>>({});
+  const plotRef = useRef<HTMLDivElement | null>(null);
+  // Read by the chart's mouse handlers, which must not be rebuilt on every
+  // data change just to see the current rows.
+  const chartDataRef = useRef<TotalChartRow[]>([]);
   const loadSeqRef = useRef(0);
 
   // Colours live behind the shared preference helper (U8): the localStorage key is unchanged
@@ -408,6 +405,17 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   // See TrackingBar: the ref cannot cross into Recharts, a callback can.
   const recordColumnCoord = useCallback((month: number, centerX: number) => {
     columnCoordsRef.current[month] = centerX;
+  }, []);
+
+  /**
+   * Recharts 3 `MouseHandlerDataParam` has no `activePayload`, so the month has
+   * to be recovered from the active index.
+   */
+  const monthAtIndex = useCallback((rawIndex: unknown): number | null => {
+    if (rawIndex === undefined || rawIndex === null) return null;
+    const index = Number(rawIndex);
+    if (!Number.isInteger(index) || index < 0) return null;
+    return chartDataRef.current[index]?.month ?? null;
   }, []);
 
   const localeTag = language === 'ja' ? 'ja-JP' : language === 'vn' ? 'vi-VN' : 'en-US';
@@ -512,6 +520,15 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
 
     return data;
   }, [allRecords, currentYear, localeTag]);
+
+  chartDataRef.current = chartData;
+
+  // The cursor wins while it is over the plot; the selection is what the card
+  // falls back to. Either way there is exactly one card, in the same place.
+  const focusedMonth = hoveredMonth ?? pinnedMonth;
+  const focusedRow = focusedMonth === null
+    ? null
+    : chartData.find(d => d.month === focusedMonth) ?? null;
 
   // Dynamic Y-axis max based on max accumulated values
   const { yAxisMax, yAxisTicks } = useMemo(() => {
@@ -726,15 +743,16 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
             />
           </div>
 
-          <div className="flex-1 min-h-0 relative">
+          <div ref={plotRef} className="flex-1 min-h-0 relative">
 
-          {/* Pinned Detail Card Overlay */}
-          {pinnedMonth !== null && (() => {
-            const pinnedData = chartData.find((d) => d.month === pinnedMonth);
-            if (!pinnedData) return null;
-
-            const isCardOnLeft = pinnedMonth > 8;
-            const targetX = columnCoordsRef.current[pinnedMonth] || 100;
+          {/* The one detail card: hover and selection both land here. */}
+          {focusedRow !== null && (() => {
+            const targetX = columnCoordsRef.current[focusedRow.month] ?? 100;
+            // Flip to the left of the column near the right edge, measured
+            // rather than guessed from the month number, so it still works when
+            // the panel is narrow or a series is filtered out.
+            const plotWidth = plotRef.current?.clientWidth ?? 0;
+            const isCardOnLeft = plotWidth > 0 ? targetX > plotWidth * 0.62 : focusedRow.month > 8;
             const cardX = isCardOnLeft ? targetX - 230 : targetX + 40;
 
             return (
@@ -755,7 +773,15 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                   style={{ zIndex: 0 }}
                 />
                 <div className="relative z-10">
-                  <MonthDetailCard data={pinnedData} chartColors={chartColors} t={t} nf={nf} unit={unit} hideShadow={true} />
+                  <MonthDetailCard
+                    data={focusedRow}
+                    chartColors={chartColors}
+                    t={t}
+                    nf={nf}
+                    unit={unit}
+                    pinned={hoveredMonth === null && pinnedMonth !== null}
+                    hideShadow={true}
+                  />
                 </div>
               </div>
             );
@@ -766,16 +792,15 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
               data={chartData}
               margin={{ top: 34, right: 30, left: 8, bottom: 8 }}
               onClick={(state) => {
-                // recharts 3 `MouseHandlerDataParam` has no `activePayload` — recover the
-                // clicked datum from the active index instead.
-                const rawIndex = state?.activeIndex;
-                if (rawIndex === undefined || rawIndex === null) return;
-                const index = Number(rawIndex);
-                if (!Number.isInteger(index) || index < 0) return;
-                const clicked = chartData[index];
-                if (!clicked) return;
-                setPinnedMonth(prev => (prev === clicked.month ? null : clicked.month));
+                const clicked = monthAtIndex(state?.activeIndex);
+                if (clicked === null) return;
+                setPinnedMonth(prev => (prev === clicked ? null : clicked));
               }}
+              onMouseMove={(state) => {
+                const month = monthAtIndex(state?.activeIndex);
+                setHoveredMonth(prev => (prev === month ? prev : month));
+              }}
+              onMouseLeave={() => setHoveredMonth(null)}
             >
               {/* `yAxisId` is required: without it the grid looks for the default
                   axis id, finds none, and draws a single line at the top. */}
@@ -806,10 +831,18 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                   style: { fontSize: 13, fontWeight: 600, fill: axis.muted, textAnchor: 'middle' },
                 }}
               />
-              <Tooltip
-                cursor={{ fill: isDark ? 'rgba(148,163,184,0.12)' : 'rgba(100,116,139,0.08)' }}
-                content={<CustomTooltip chartColors={chartColors} t={t} nf={nf} unit={unit} />}
-              />
+              {/* Stands in for the tooltip cursor, which went with the tooltip. */}
+              {focusedMonth !== null && (() => {
+                const focusedName = chartData.find(d => d.month === focusedMonth)?.name;
+                return focusedName ? (
+                  <ReferenceArea
+                    yAxisId="left"
+                    x1={focusedName}
+                    x2={focusedName}
+                    fill={isDark ? 'rgba(148,163,184,0.14)' : 'rgba(100,116,139,0.09)'}
+                  />
+                ) : null;
+              })()}
               {/* Current month: a hairline plus a pill, not a full-height band. */}
               {showCurrentMonth && currentMonth !== null && (() => {
                 const monthName = chartData.find(d => d.month === currentMonth)?.name;
@@ -824,16 +857,16 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                   />
                 ) : null;
               })()}
-              <Bar yAxisId="left" dataKey="accPlan" name={t('dashboard.chart.accPlan')} hide={hiddenSeries.accPlan} fill={chartColors.accPlan.color} fillOpacity={chartColors.accPlan.opacity} shape={<TrackingBar onColumnCoord={recordColumnCoord} />}>
+              {/* No grow-in animation: hovering re-renders the chart, which
+                  restarts it, and every value label vanishes for a second — and
+                  a copy taken in that second comes out without them. */}
+              <Bar yAxisId="left" dataKey="accPlan" name={t('dashboard.chart.accPlan')} hide={hiddenSeries.accPlan} isAnimationActive={false} fill={chartColors.accPlan.color} fillOpacity={chartColors.accPlan.opacity} shape={<TrackingBar onColumnCoord={recordColumnCoord} />}>
                 <LabelList dataKey="accPlan" position="top" content={<OutlinedLabel dataKey="accPlan" chartColors={chartColors} rows={chartData} nf={nf} />} />
               </Bar>
-              <Bar yAxisId="left" dataKey="accActual" name={t('dashboard.chart.accActual')} hide={hiddenSeries.accActual} fill={chartColors.accActual.color} fillOpacity={chartColors.accActual.opacity} radius={[4, 4, 0, 0]}>
-                {chartData.map(row => (
-                  <Cell
-                    key={row.month}
-                    fillOpacity={row.isFuture ? chartColors.accActual.opacity * FORECAST_OPACITY : chartColors.accActual.opacity}
-                  />
-                ))}
+              {/* Same shape as the plan bar so this series reports column
+                  positions too — otherwise filtering the plan series away would
+                  leave the detail card with nowhere to anchor. */}
+              <Bar yAxisId="left" dataKey="accActual" name={t('dashboard.chart.accActual')} hide={hiddenSeries.accActual} isAnimationActive={false} fill={chartColors.accActual.color} fillOpacity={chartColors.accActual.opacity} shape={<TrackingBar onColumnCoord={recordColumnCoord} />}>
                 <LabelList dataKey="accActual" position="top" content={<OutlinedLabel dataKey="accActual" chartColors={chartColors} rows={chartData} nf={nf} />} />
               </Bar>
             </ComposedChart>
