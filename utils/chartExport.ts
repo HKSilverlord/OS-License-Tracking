@@ -322,13 +322,37 @@ const fitScale = (width: number, height: number, requested: number): number => {
   const allowed = Math.min(bySide, byArea);
   if (requested <= allowed) return requested;
 
-  // Never go below 1: a downscaled-past-CSS-pixels capture is unreadable, and at
-  // that point the element is too large to image at all.
-  const scale = Math.max(1, Math.floor(allowed * 100) / 100);
+  const scale = Math.floor(allowed * 100) / 100;
+  if (scale < 1) {
+    // Even 1:1 is past the cap. Downscaling below CSS pixels would make the
+    // table unreadable anyway, so capture at 1 and say plainly that the result
+    // may come back blank rather than failing silently.
+    log.error(
+      `Element is ${width}x${height} CSS px — too large to rasterise (cap ${MAX_CANVAS_SIDE}px/side, ` +
+      `${MAX_CANVAS_AREA} px total). Capturing at scale 1; the image may be incomplete.`
+    );
+    return 1;
+  }
   log.warn(
     `Capture ${width}x${height} would exceed the canvas limit at scale ${requested}; using ${scale}`
   );
   return scale;
+};
+
+/**
+ * The element's full painted size in CSS pixels.
+ *
+ * `scrollWidth`/`scrollHeight` are integers ROUNDED DOWN, so a table whose
+ * layout width is 1439.39px reported 1439 and the capture lost the last
+ * fraction of the rightmost column's border. Take the larger of the two
+ * measurements and round up, so the canvas can only ever be too big.
+ */
+const capturedSize = (element: HTMLElement): { width: number; height: number } => {
+  const rect = element.getBoundingClientRect();
+  return {
+    width: Math.ceil(Math.max(element.scrollWidth, rect.width)),
+    height: Math.ceil(Math.max(element.scrollHeight, rect.height)),
+  };
 };
 
 /**
@@ -347,15 +371,16 @@ export const captureElement = async (
   // Only image export needs html2canvas, and most sessions never trigger one.
   const { default: html2canvas } = await import('html2canvas');
 
-  const width = element.scrollWidth;
-  const height = element.scrollHeight;
+  const { width, height } = capturedSize(element);
 
   if (width === 0 || height === 0) {
     throw new Error(`Nothing to capture: <${element.tagName.toLowerCase()}> measures ${width}x${height}`);
   }
 
-  return html2canvas(element, {
-    scale: fitScale(width, height, options.scale ?? 3),
+  const scale = fitScale(width, height, options.scale ?? 3);
+
+  const canvas = await html2canvas(element, {
+    scale,
     backgroundColor: captureBackgroundColor(),
     logging: false,
     useCORS: true,
@@ -371,6 +396,12 @@ export const captureElement = async (
       let parent = clonedEl.parentElement;
       while (parent) {
         parent.style.overflow = 'visible';
+        // `overflow` is not the only way an ancestor clips its children, and the
+        // others survive setting it to visible. Any of them would crop the
+        // capture back down to what was on screen.
+        parent.style.clipPath = 'none';
+        parent.style.contain = 'none';
+        parent.style.maskImage = 'none';
         parent.scrollTop = 0;
         parent.scrollLeft = 0;
         parent = parent.parentElement;
@@ -379,8 +410,23 @@ export const captureElement = async (
       unclipSingleLineText(clonedEl);
     }
   });
-};
 
+  // A canvas the browser refused to allocate at the requested size comes back
+  // smaller with no error, which reads as "the export cropped my table". Say so
+  // in the console instead of leaving it to be guessed at from the image.
+  const shortBy = {
+    x: Math.round(width * scale) - canvas.width,
+    y: Math.round(height * scale) - canvas.height,
+  };
+  if (shortBy.x > 1 || shortBy.y > 1) {
+    log.error(
+      `Capture came back cropped: asked for ${Math.round(width * scale)}x${Math.round(height * scale)} ` +
+      `(${width}x${height} CSS px at scale ${scale}), got ${canvas.width}x${canvas.height}.`
+    );
+  }
+
+  return canvas;
+};
 /** Capture straight to a PNG blob — the form both the copy and save paths want. */
 export const captureElementToPngBlob = async (
   element: HTMLElement,
