@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { MonthlyRecord } from '../types';
 import { dbService } from '../services/dbService';
 import { exportChartToSVG, exportChartToPNG, exportChartDataToCSV, generateChartFilename, copyChartToClipboard } from '../utils/chartExport';
@@ -64,6 +64,12 @@ type PlottedSeries = (typeof PLOTTED_SERIES)[number];
 
 /** A forecast month is drawn as an outline at this opacity rather than solid. */
 const FORECAST_OPACITY = 0.3;
+
+/** Where a bar sits in chart coordinates, so the detail card can anchor to it. */
+type ColumnBox = { x: number; y: number; width: number };
+
+/** Gap between the anchor point and the card, matching the old tooltip offset. */
+const CARD_OFFSET_PX = 12;
 
 /**
  * Axis, grid and marker colours.
@@ -284,11 +290,12 @@ const TrackingBar = (props: {
   height?: number;
   fillOpacity?: number;
   payload?: TotalChartRow;
-  onColumnCoord: (month: number, centerX: number) => void;
+  seriesKey: PlottedSeries;
+  onColumnMetrics: (seriesKey: PlottedSeries, month: number, box: ColumnBox) => void;
 }) => {
-  const { fill, x = 0, y = 0, width = 0, height = 0, payload, fillOpacity, onColumnCoord } = props;
+  const { fill, x = 0, y = 0, width = 0, height = 0, payload, fillOpacity, seriesKey, onColumnMetrics } = props;
   if (payload?.month) {
-    onColumnCoord(payload.month, x + width / 2);
+    onColumnMetrics(seriesKey, payload.month, { x, y, width });
   }
   const r = 4;
   const path = `M${x},${y + height} L${x},${y + r} A${r},${r} 0 0,1 ${x + r},${y} L${x + width - r},${y} A${r},${r} 0 0,1 ${x + width},${y + r} L${x + width},${y + height} Z`;
@@ -369,14 +376,20 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   // places, and both at once on the selected month. They now feed one card:
   // the cursor wins while it is over the chart, the selection holds otherwise.
   const [hoveredMonth, setHoveredMonth] = useState<number | null>(null);
+  // Read inside the mousemove handler, which must not be rebuilt per render.
+  const hoveredMonthRef = useRef<number | null>(null);
+  hoveredMonthRef.current = hoveredMonth;
   const [hiddenSeries, setHiddenSeries] = useState<Record<PlottedSeries, boolean>>({
     accPlan: false,
     accActual: false,
   });
   const isDark = useIsDarkTheme();
   const axis = useMemo(() => axisTheme(isDark), [isDark]);
-  const columnCoordsRef = useRef<Record<number, number>>({});
+  const columnMetricsRef = useRef<Record<number, Partial<Record<PlottedSeries, ColumnBox>>>>({});
   const plotRef = useRef<HTMLDivElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  /** Where the card points, in plot-local px: the cursor, or the bar it is pinned to. */
+  const anchorRef = useRef<{ x: number; y: number } | null>(null);
   // Read by the chart's mouse handlers, which must not be rebuilt on every
   // data change just to see the current rows.
   const chartDataRef = useRef<TotalChartRow[]>([]);
@@ -403,8 +416,50 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   }, []);
 
   // See TrackingBar: the ref cannot cross into Recharts, a callback can.
-  const recordColumnCoord = useCallback((month: number, centerX: number) => {
-    columnCoordsRef.current[month] = centerX;
+  const recordColumnMetrics = useCallback((seriesKey: PlottedSeries, month: number, box: ColumnBox) => {
+    const forMonth = columnMetricsRef.current[month] ?? (columnMetricsRef.current[month] = {});
+    forMonth[seriesKey] = box;
+  }, []);
+
+  /**
+   * Place the card beside its anchor the way the old Recharts tooltip did:
+   * offset from the point, flipped to the other side rather than pushed off the
+   * right edge, and kept inside the plot vertically.
+   *
+   * Written straight to the DOM. The cursor moves far more often than the month
+   * under it changes, and routing every pixel through React state would
+   * re-render the whole chart.
+   */
+  const placeCard = useCallback(() => {
+    const node = cardRef.current;
+    const plot = plotRef.current;
+    const anchor = anchorRef.current;
+    if (!node || !plot || !anchor) return;
+
+    const { width, height } = node.getBoundingClientRect();
+    const maxX = plot.clientWidth;
+    const maxY = plot.clientHeight;
+
+    let x = anchor.x + CARD_OFFSET_PX;
+    if (x + width > maxX) x = anchor.x - width - CARD_OFFSET_PX;
+    x = Math.max(0, Math.min(x, Math.max(0, maxX - width)));
+
+    let y = anchor.y + CARD_OFFSET_PX;
+    y = Math.max(0, Math.min(y, Math.max(0, maxY - height)));
+
+    node.style.transform = `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0)`;
+  }, []);
+
+  /** Anchor for a month with no cursor on it: the top centre of its tallest bar. */
+  const columnAnchor = useCallback((month: number, hidden: Record<PlottedSeries, boolean>) => {
+    const boxes = PLOTTED_SERIES
+      .filter(key => !hidden[key])
+      .map(key => columnMetricsRef.current[month]?.[key])
+      .filter((box): box is ColumnBox => box !== undefined);
+    if (boxes.length === 0) return null;
+    const left = Math.min(...boxes.map(b => b.x));
+    const right = Math.max(...boxes.map(b => b.x + b.width));
+    return { x: (left + right) / 2, y: Math.min(...boxes.map(b => b.y)) };
   }, []);
 
   /**
@@ -529,6 +584,18 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   const focusedRow = focusedMonth === null
     ? null
     : chartData.find(d => d.month === focusedMonth) ?? null;
+
+  // Runs before paint, so the card is never shown at the wrong spot for a frame.
+  // While hovering, the anchor is already the cursor; once the pointer leaves,
+  // the pinned month's bar takes over.
+  useLayoutEffect(() => {
+    if (focusedMonth === null) return;
+    if (hoveredMonth === null) {
+      const anchor = columnAnchor(focusedMonth, hiddenSeries);
+      if (anchor) anchorRef.current = anchor;
+    }
+    placeCard();
+  }, [focusedMonth, hoveredMonth, hiddenSeries, chartData, columnAnchor, placeCard]);
 
   // Dynamic Y-axis max based on max accumulated values
   const { yAxisMax, yAxisTicks } = useMemo(() => {
@@ -745,47 +812,25 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
 
           <div ref={plotRef} className="flex-1 min-h-0 relative">
 
-          {/* The one detail card: hover and selection both land here. */}
-          {focusedRow !== null && (() => {
-            const targetX = columnCoordsRef.current[focusedRow.month] ?? 100;
-            // Flip to the left of the column near the right edge, measured
-            // rather than guessed from the month number, so it still works when
-            // the panel is narrow or a series is filtered out.
-            const plotWidth = plotRef.current?.clientWidth ?? 0;
-            const isCardOnLeft = plotWidth > 0 ? targetX > plotWidth * 0.62 : focusedRow.month > 8;
-            const cardX = isCardOnLeft ? targetX - 230 : targetX + 40;
-
-            return (
-              <div
-                className="absolute z-10 pointer-events-none transition-all duration-200 ease-in-out drop-shadow-md"
-                style={{
-                  left: cardX,
-                  top: '40%',
-                  transform: 'translateY(-50%)'
-                }}
-              >
-                <div
-                  className={`absolute top-1/2 -translate-y-1/2 w-[14px] h-[14px] bg-white dark:bg-slate-900 transform rotate-45 pointer-events-none ${
-                    isCardOnLeft
-                      ? '-right-[7px] border-t border-r border-slate-300 dark:border-slate-700'
-                      : '-left-[7px] border-b border-l border-slate-300 dark:border-slate-700'
-                  }`}
-                  style={{ zIndex: 0 }}
-                />
-                <div className="relative z-10">
-                  <MonthDetailCard
-                    data={focusedRow}
-                    chartColors={chartColors}
-                    t={t}
-                    nf={nf}
-                    unit={unit}
-                    pinned={hoveredMonth === null && pinnedMonth !== null}
-                    hideShadow={true}
-                  />
-                </div>
-              </div>
-            );
-          })()}
+          {/* The one detail card. It tracks the cursor while the pointer is on
+              the plot, exactly as the tooltip it replaced did, and parks on the
+              selected month's bar once the pointer leaves — `placeCard` moves it,
+              so nothing here depends on the pointer position. */}
+          {focusedRow !== null && (
+            <div
+              ref={cardRef}
+              className="absolute left-0 top-0 z-10 pointer-events-none will-change-transform"
+            >
+              <MonthDetailCard
+                data={focusedRow}
+                chartColors={chartColors}
+                t={t}
+                nf={nf}
+                unit={unit}
+                pinned={hoveredMonth === null && pinnedMonth !== null}
+              />
+            </div>
+          )}
 
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
@@ -796,9 +841,21 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                 if (clicked === null) return;
                 setPinnedMonth(prev => (prev === clicked ? null : clicked));
               }}
-              onMouseMove={(state) => {
+              onMouseMove={(state, event) => {
+                const plot = plotRef.current;
+                const native = event as React.MouseEvent;
+                if (plot && typeof native?.clientX === 'number') {
+                  const rect = plot.getBoundingClientRect();
+                  anchorRef.current = { x: native.clientX - rect.left, y: native.clientY - rect.top };
+                }
                 const month = monthAtIndex(state?.activeIndex);
-                setHoveredMonth(prev => (prev === month ? prev : month));
+                // Only the month goes through state; the position is written
+                // straight to the card so the chart is not re-rendered per pixel.
+                if (month === hoveredMonthRef.current) {
+                  placeCard();
+                  return;
+                }
+                setHoveredMonth(month);
               }}
               onMouseLeave={() => setHoveredMonth(null)}
             >
@@ -860,13 +917,13 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
               {/* No grow-in animation: hovering re-renders the chart, which
                   restarts it, and every value label vanishes for a second — and
                   a copy taken in that second comes out without them. */}
-              <Bar yAxisId="left" dataKey="accPlan" name={t('dashboard.chart.accPlan')} hide={hiddenSeries.accPlan} isAnimationActive={false} fill={chartColors.accPlan.color} fillOpacity={chartColors.accPlan.opacity} shape={<TrackingBar onColumnCoord={recordColumnCoord} />}>
+              <Bar yAxisId="left" dataKey="accPlan" name={t('dashboard.chart.accPlan')} hide={hiddenSeries.accPlan} isAnimationActive={false} fill={chartColors.accPlan.color} fillOpacity={chartColors.accPlan.opacity} shape={<TrackingBar seriesKey="accPlan" onColumnMetrics={recordColumnMetrics} />}>
                 <LabelList dataKey="accPlan" position="top" content={<OutlinedLabel dataKey="accPlan" chartColors={chartColors} rows={chartData} nf={nf} />} />
               </Bar>
               {/* Same shape as the plan bar so this series reports column
                   positions too — otherwise filtering the plan series away would
                   leave the detail card with nowhere to anchor. */}
-              <Bar yAxisId="left" dataKey="accActual" name={t('dashboard.chart.accActual')} hide={hiddenSeries.accActual} isAnimationActive={false} fill={chartColors.accActual.color} fillOpacity={chartColors.accActual.opacity} shape={<TrackingBar onColumnCoord={recordColumnCoord} />}>
+              <Bar yAxisId="left" dataKey="accActual" name={t('dashboard.chart.accActual')} hide={hiddenSeries.accActual} isAnimationActive={false} fill={chartColors.accActual.color} fillOpacity={chartColors.accActual.opacity} shape={<TrackingBar seriesKey="accActual" onColumnMetrics={recordColumnMetrics} />}>
                 <LabelList dataKey="accActual" position="top" content={<OutlinedLabel dataKey="accActual" chartColors={chartColors} rows={chartData} nf={nf} />} />
               </Bar>
             </ComposedChart>
