@@ -2,7 +2,7 @@ import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallba
 import { MonthlyRecord } from '../types';
 import { dbService } from '../services/dbService';
 import { exportChartToSVG, exportChartToPNG, exportChartDataToCSV, generateChartFilename, copyChartToClipboard } from '../utils/chartExport';
-import { TrendingUp, Download, Palette, Copy, Check, Image, Pin } from 'lucide-react';
+import { TrendingUp, Download, Palette, Copy, Check, Image, Pin, X } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { TranslateFn } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
@@ -188,7 +188,7 @@ const CurrentMonthBadge = ({ viewBox, label, color }: {
 };
 
 /** The month breakdown, shown both in the tooltip and in the pinned card. */
-const MonthDetailCard = ({ data, chartColors, t, nf, unit, pinned = false, hideShadow = false }: {
+const MonthDetailCard = ({ data, chartColors, t, nf, unit, pinned = false, onUnpin, hideShadow = false }: {
   data: TotalChartRow;
   chartColors: ChartColors;
   t: TranslateFn;
@@ -197,6 +197,8 @@ const MonthDetailCard = ({ data, chartColors, t, nf, unit, pinned = false, hideS
   unit: string;
   /** Shown because the month was selected, not because the cursor is on it. */
   pinned?: boolean;
+  /** Only passed when pinned: releases the card back to following the cursor. */
+  onUnpin?: () => void;
   hideShadow?: boolean;
 }) => {
   const plan = data.plan || 0;
@@ -214,11 +216,24 @@ const MonthDetailCard = ({ data, chartColors, t, nf, unit, pinned = false, hideS
           {pinned && <Pin className="w-3 h-3 text-indigo-500 dark:text-indigo-400" aria-hidden="true" />}
           {data.fullName}
         </span>
-        {data.isFuture && (
-          <span className="text-[10px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400">
-            {t('totalView.forecast', 'Forecast')}
-          </span>
-        )}
+        <span className="flex items-center gap-1.5">
+          {data.isFuture && (
+            <span className="text-[10px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400">
+              {t('totalView.forecast', 'Forecast')}
+            </span>
+          )}
+          {pinned && onUnpin && (
+            <button
+              type="button"
+              onClick={onUnpin}
+              title={t('common.close', 'Close')}
+              aria-label={t('common.close', 'Close')}
+              className="pointer-events-auto -mr-1 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </span>
       </p>
       <div className="space-y-1.5 text-sm">
         <div className="flex items-center justify-between gap-4">
@@ -379,6 +394,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   // Read inside the mousemove handler, which must not be rebuilt per render.
   const hoveredMonthRef = useRef<number | null>(null);
   hoveredMonthRef.current = hoveredMonth;
+  const pinnedMonthRef = useRef<number | null>(null);
   const [hiddenSeries, setHiddenSeries] = useState<Record<PlottedSeries, boolean>>({
     accPlan: false,
     accActual: false,
@@ -580,22 +596,41 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
 
   // The cursor wins while it is over the plot; the selection is what the card
   // falls back to. Either way there is exactly one card, in the same place.
-  const focusedMonth = hoveredMonth ?? pinnedMonth;
+  // A selected month outranks the cursor: that is what selecting it is for, and
+  // a card that wandered off as soon as the pointer came back was the complaint.
+  const focusedMonth = pinnedMonth ?? hoveredMonth;
+  const isPinned = pinnedMonth !== null;
+  pinnedMonthRef.current = pinnedMonth;
   const focusedRow = focusedMonth === null
     ? null
     : chartData.find(d => d.month === focusedMonth) ?? null;
 
+  const unpin = useCallback(() => {
+    setPinnedMonth(null);
+    setHoveredMonth(null);
+  }, []);
+
   // Runs before paint, so the card is never shown at the wrong spot for a frame.
-  // While hovering, the anchor is already the cursor; once the pointer leaves,
-  // the pinned month's bar takes over.
+  // Following the cursor, the anchor is already set by the move that got us
+  // here; pinned, it is the selected month's own bar.
   useLayoutEffect(() => {
     if (focusedMonth === null) return;
-    if (hoveredMonth === null) {
+    if (isPinned) {
       const anchor = columnAnchor(focusedMonth, hiddenSeries);
       if (anchor) anchorRef.current = anchor;
     }
     placeCard();
-  }, [focusedMonth, hoveredMonth, hiddenSeries, chartData, columnAnchor, placeCard]);
+  }, [focusedMonth, isPinned, hiddenSeries, chartData, columnAnchor, placeCard]);
+
+  // Esc releases the card without having to find the small close button.
+  useEffect(() => {
+    if (!isPinned) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') unpin();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isPinned, unpin]);
 
   // Dynamic Y-axis max based on max accumulated values
   const { yAxisMax, yAxisTicks } = useMemo(() => {
@@ -636,7 +671,9 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
               value={pinnedMonth ?? ""}
               onChange={(e) => {
                 const month = e.target.value ? Number(e.target.value) : null;
+                if (month === null) { unpin(); return; }
                 setPinnedMonth(month);
+                setHoveredMonth(null);
               }}
             >
               <option value="">{t('tracker.selectMonth', '月を選択...')}</option>
@@ -827,7 +864,8 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                 t={t}
                 nf={nf}
                 unit={unit}
-                pinned={hoveredMonth === null && pinnedMonth !== null}
+                pinned={isPinned}
+                onUnpin={unpin}
               />
             </div>
           )}
@@ -839,9 +877,14 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
               onClick={(state) => {
                 const clicked = monthAtIndex(state?.activeIndex);
                 if (clicked === null) return;
-                setPinnedMonth(prev => (prev === clicked ? null : clicked));
+                // Selecting is idempotent on purpose: toggling here meant a
+                // double-click pinned and immediately unpinned again. The card's
+                // close button and Esc are what release it.
+                setPinnedMonth(clicked);
               }}
               onMouseMove={(state, event) => {
+                // Pinned means pinned: the card holds its month and its place.
+                if (pinnedMonthRef.current !== null) return;
                 const plot = plotRef.current;
                 const native = event as React.MouseEvent;
                 if (plot && typeof native?.clientX === 'number') {
@@ -857,7 +900,9 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                 }
                 setHoveredMonth(month);
               }}
-              onMouseLeave={() => setHoveredMonth(null)}
+              onMouseLeave={() => {
+                if (pinnedMonthRef.current === null) setHoveredMonth(null);
+              }}
             >
               {/* `yAxisId` is required: without it the grid looks for the default
                   axis id, finds none, and draws a single line at the top. */}
