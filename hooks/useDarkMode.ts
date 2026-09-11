@@ -31,3 +31,28 @@ export function useDarkMode(): [boolean, (next: boolean) => void] {
 
   return [darkMode, setDarkMode];
 }
+
+/**
+ * Read-only counterpart to `useDarkMode`: reports the theme that is on <html>
+ * right now without owning it, and re-renders when it changes.
+ *
+ * Charts need the boolean in JS rather than as a Tailwind `dark:` class,
+ * because an SVG tick or grid line is styled through a `fill`/`stroke` prop
+ * that no class can reach.
+ */
+export function useIsDarkTheme(): boolean {
+  const [isDark, setIsDark] = useState<boolean>(
+    () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+  );
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const sync = () => setIsDark(root.classList.contains('dark'));
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
+  return isDark;
+}

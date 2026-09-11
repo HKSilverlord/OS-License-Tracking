@@ -586,8 +586,12 @@ export const exportChartToSVG = async (elementId: string, filename: string = 'ch
   }
 
   try {
-    // Find the SVG element
-    const svgElement = chartContainer.querySelector('svg');
+    // Take the Recharts surface by name rather than the first <svg> in the
+    // container: a heading icon inside the export target is also an <svg>, and
+    // picking it up exports a 24x24 glyph instead of the chart.
+    const svgElement =
+      chartContainer.querySelector('svg.recharts-surface') ??
+      chartContainer.querySelector('svg');
 
     if (!svgElement) {
       toast.error(translate('chartExport.noChart', 'No chart found to export'));

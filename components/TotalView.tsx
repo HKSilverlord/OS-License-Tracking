@@ -8,7 +8,8 @@ import type { TranslateFn } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
 import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
 import { Skeleton } from './ui/Skeleton';
-import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, TooltipContentProps, ReferenceArea, ReferenceLine } from 'recharts';
+import { useIsDarkTheme } from '../hooks/useDarkMode';
+import { ComposedChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList, TooltipContentProps, ReferenceLine } from 'recharts';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger('TotalView');
@@ -36,7 +37,11 @@ interface ChartColors {
 /** One point of the monthly chart. */
 interface TotalChartRow {
   name: string;
+  /** Unabbreviated month, for the tooltip heading — "Tháng 9", not "thg 9". */
+  fullName: string;
   month: number;
+  /** After the current month: planned but not yet worked. */
+  isFuture: boolean;
   plan: number;
   actual: number;
   accPlan: number;
@@ -52,6 +57,29 @@ const DEFAULT_CHART_COLORS: ChartColors = {
 };
 
 const SERIES_KEYS = ['plan', 'actual', 'accPlan', 'accActual'] as const;
+
+/** The two series the chart actually draws, and so the ones the legend filters. */
+const PLOTTED_SERIES = ['accPlan', 'accActual'] as const;
+type PlottedSeries = (typeof PLOTTED_SERIES)[number];
+
+/** A forecast month is drawn as an outline at this opacity rather than solid. */
+const FORECAST_OPACITY = 0.3;
+
+/**
+ * Axis, grid and marker colours.
+ *
+ * These cannot be Tailwind `dark:` classes: every one of them is an SVG
+ * `fill`/`stroke` prop that Recharts passes straight to the element.
+ */
+const axisTheme = (isDark: boolean) => ({
+  text: isDark ? '#e2e8f0' : '#334155',
+  muted: isDark ? '#94a3b8' : '#475569',
+  line: isDark ? '#475569' : '#cbd5e1',
+  // Thin but readable: a solid hairline reads more clearly across a wide plot
+  // than the old 3-3 dash, without adding weight.
+  grid: isDark ? 'rgba(148,163,184,0.32)' : 'rgba(100,116,139,0.26)',
+  marker: '#f97316',
+});
 
 /**
  * Migration for the stored `totalView_chartColors` preference:
@@ -94,22 +122,27 @@ const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
  * ------------------------------------------------------------------------ */
 
 /** Outlined label renderer for a <LabelList content=…>. */
-const OutlinedLabel = ({ x, y, value, dataKey, width = 0, chartColors }: {
+const OutlinedLabel = ({ x, y, value, dataKey, width = 0, chartColors, index, rows, nf }: {
   x?: number;
   y?: number;
   value?: number | string;
   dataKey: keyof ChartColors;
   width?: number;
   chartColors: ChartColors;
+  /** Recharts supplies the datum's position; `rows` turns it back into the row. */
+  index?: number;
+  rows: TotalChartRow[];
+  nf: (value: number) => string;
 }) => {
   if (!value || value === 0) return null;
   const style = chartColors[dataKey];
   if (!style) return null;
   const tx = typeof x === 'number' && typeof width === 'number' ? x + width / 2 : x;
-  const ty = typeof y === 'number' ? y - 4 : y;
-  const formatted = typeof value === 'number' && value > 999 ? value.toLocaleString() : value;
+  const ty = typeof y === 'number' ? y - 6 : y;
+  const formatted = typeof value === 'number' ? nf(value) : value;
+  const isFuture = typeof index === 'number' ? rows[index]?.isFuture === true : false;
   return (
-    <g>
+    <g opacity={isFuture ? 0.55 : 1}>
       {style.stroke && (
         <text x={tx} y={ty} textAnchor="middle" fontSize={style.fontSize} fontWeight="bold" stroke="white" strokeWidth={3} strokeLinejoin="round" paintOrder="stroke">
           {formatted}
@@ -122,11 +155,40 @@ const OutlinedLabel = ({ x, y, value, dataKey, width = 0, chartColors }: {
   );
 };
 
+/**
+ * "This month" marker.
+ *
+ * A small pill sitting on top of a hairline at the month the year is currently
+ * at, replacing the full-height tinted band that used to wash out a whole
+ * column of bars.
+ */
+const CurrentMonthBadge = ({ viewBox, label, color }: {
+  viewBox?: { x?: number; y?: number };
+  label: string;
+  color: string;
+}) => {
+  const x = viewBox?.x ?? 0;
+  const y = viewBox?.y ?? 0;
+  const height = 18;
+  const width = Math.max(52, label.length * 7.5 + 16);
+  return (
+    <g transform={`translate(${x - width / 2}, ${y - height - 6})`}>
+      <rect width={width} height={height} rx={height / 2} fill={color} />
+      <text x={width / 2} y={height / 2} textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight="bold" fill="#ffffff">
+        {label}
+      </text>
+    </g>
+  );
+};
+
 /** The month breakdown, shown both in the tooltip and in the pinned card. */
-const MonthDetailCard = ({ data, chartColors, t, hideShadow = false }: {
+const MonthDetailCard = ({ data, chartColors, t, nf, unit, hideShadow = false }: {
   data: TotalChartRow;
   chartColors: ChartColors;
   t: TranslateFn;
+  /** Formats in the UI language, so 9600 reads 9.600 in vi and 9,600 in en. */
+  nf: (value: number) => string;
+  unit: string;
   hideShadow?: boolean;
 }) => {
   const plan = data.plan || 0;
@@ -139,8 +201,13 @@ const MonthDetailCard = ({ data, chartColors, t, hideShadow = false }: {
 
   return (
     <div className={`bg-white dark:bg-slate-900 p-3 border border-slate-300 dark:border-slate-700 rounded-lg min-w-[200px] ${hideShadow ? '' : 'shadow-lg'}`}>
-      <p className="font-semibold text-slate-800 dark:text-slate-100 mb-2 border-b border-slate-200 dark:border-slate-800 pb-1">
-        {data.name}
+      <p className="font-semibold text-slate-800 dark:text-slate-100 mb-2 border-b border-slate-200 dark:border-slate-800 pb-1 flex items-center justify-between gap-2">
+        <span>{data.fullName}</span>
+        {data.isFuture && (
+          <span className="text-[10px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400">
+            {t('totalView.forecast', 'Forecast')}
+          </span>
+        )}
       </p>
       <div className="space-y-1.5 text-sm">
         <div className="flex items-center justify-between gap-4">
@@ -148,7 +215,7 @@ const MonthDetailCard = ({ data, chartColors, t, hideShadow = false }: {
             <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.plan.color }}></div>
             <span className="text-slate-700 dark:text-slate-400">{t('tracker.planShort')}:</span>
           </div>
-          <span className="font-medium text-slate-900 dark:text-slate-100">{plan.toLocaleString()}</span>
+          <span className="font-medium text-slate-900 dark:text-slate-100 tabular-nums">{nf(plan)} <span className="text-slate-500 dark:text-slate-400 font-normal">{unit}</span></span>
         </div>
 
         <div className="flex items-center justify-between gap-4">
@@ -156,7 +223,7 @@ const MonthDetailCard = ({ data, chartColors, t, hideShadow = false }: {
             <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.actual.color }}></div>
             <span className="text-slate-700 dark:text-slate-400">{t('tracker.actualShort')}:</span>
           </div>
-          <span className="font-medium text-slate-900 dark:text-slate-100">{actual.toLocaleString()}</span>
+          <span className="font-medium text-slate-900 dark:text-slate-100 tabular-nums">{nf(actual)} <span className="text-slate-500 dark:text-slate-400 font-normal">{unit}</span></span>
         </div>
 
         <div className="flex items-center justify-between gap-4">
@@ -164,7 +231,7 @@ const MonthDetailCard = ({ data, chartColors, t, hideShadow = false }: {
             <div className="w-3 h-3 rounded border-2" style={{ borderColor: chartColors.accPlan.color }}></div>
             <span className="text-slate-700 dark:text-slate-400">{t('dashboard.chart.accPlan')}:</span>
           </div>
-          <span className="font-medium text-slate-900 dark:text-slate-100">{accPlan.toLocaleString()}</span>
+          <span className="font-medium text-slate-900 dark:text-slate-100 tabular-nums">{nf(accPlan)} <span className="text-slate-500 dark:text-slate-400 font-normal">{unit}</span></span>
         </div>
 
         <div className="flex items-center justify-between gap-4">
@@ -172,14 +239,14 @@ const MonthDetailCard = ({ data, chartColors, t, hideShadow = false }: {
             <div className="w-3 h-3 rounded border-2" style={{ borderColor: chartColors.accActual.color }}></div>
             <span className="text-slate-700 dark:text-slate-400">{t('dashboard.chart.accActual')}:</span>
           </div>
-          <span className="font-medium text-slate-900 dark:text-slate-100">{accActual.toLocaleString()}</span>
+          <span className="font-medium text-slate-900 dark:text-slate-100 tabular-nums">{nf(accActual)} <span className="text-slate-500 dark:text-slate-400 font-normal">{unit}</span></span>
         </div>
 
         <div className="border-t border-slate-200 dark:border-slate-800 pt-2 mt-2">
           <div className="flex items-center justify-between gap-4">
             <span className="text-slate-700 dark:text-slate-400 font-medium">{t('totalView.timeGap', '時間 GAP')}:</span>
-            <span className={`font-semibold ${timeGap >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-              {timeGap >= 0 ? '+' : ''}{timeGap.toLocaleString()}
+            <span className={`font-semibold tabular-nums ${timeGap >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+              {timeGap >= 0 ? '+' : ''}{nf(timeGap)} <span className="font-normal opacity-80">{unit}</span>
             </span>
           </div>
           <div className="flex items-center justify-between gap-4">
@@ -198,14 +265,16 @@ const MonthDetailCard = ({ data, chartColors, t, hideShadow = false }: {
  * Tooltip body. Recharts 3 fills in `active` / `payload` when it clones the
  * element, which is why they are optional here.
  */
-const CustomTooltip = ({ active, payload, chartColors, t }: Partial<TooltipContentProps<number, string>> & {
+const CustomTooltip = ({ active, payload, chartColors, t, nf, unit }: Partial<TooltipContentProps<number, string>> & {
   chartColors: ChartColors;
   t: TranslateFn;
+  nf: (value: number) => string;
+  unit: string;
 }) => {
   if (!active || !payload || payload.length === 0) return null;
   const data = payload[0]?.payload as TotalChartRow | undefined;
   if (!data) return null;
-  return <MonthDetailCard data={data} chartColors={chartColors} t={t} />;
+  return <MonthDetailCard data={data} chartColors={chartColors} t={t} nf={nf} unit={unit} />;
 };
 
 /**
@@ -235,8 +304,66 @@ const TrackingBar = (props: {
   const r = 4;
   const path = `M${x},${y + height} L${x},${y + r} A${r},${r} 0 0,1 ${x + r},${y} L${x + width - r},${y} A${r},${r} 0 0,1 ${x + width},${y + r} L${x + width},${y + height} Z`;
   const d = height < r ? `M${x},${y} L${x + width},${y} L${x + width},${y + height} L${x},${y + height} Z` : path;
+  // A month that has not happened yet is a plan, not a measurement. Drawing it
+  // hollow says that quietly, and keeps the eye on the months with real data.
+  if (payload?.isFuture) {
+    return (
+      <path
+        d={d}
+        fill={fill}
+        fillOpacity={(fillOpacity ?? 1) * FORECAST_OPACITY}
+        stroke={fill}
+        strokeOpacity={0.65}
+        strokeWidth={1.25}
+        strokeDasharray="4 3"
+      />
+    );
+  }
   return <path d={d} stroke="none" fill={fill} fillOpacity={fillOpacity} />;
 };
+
+/**
+ * Legend, top-right, doubling as the series filter — clicking a chip hides or
+ * shows that series. It lives in the header rather than under the plot so the
+ * chart keeps its full height and the key is read before the bars, not after.
+ */
+const SeriesLegend = ({ chartColors, hidden, onToggle, labels, hint }: {
+  chartColors: ChartColors;
+  hidden: Record<PlottedSeries, boolean>;
+  onToggle: (key: PlottedSeries) => void;
+  labels: Record<PlottedSeries, string>;
+  hint: string;
+}) => (
+  <div className="flex items-center gap-2">
+    {PLOTTED_SERIES.map(key => {
+      const shown = !hidden[key];
+      return (
+        <button
+          key={key}
+          type="button"
+          onClick={() => onToggle(key)}
+          title={hint}
+          aria-pressed={shown}
+          className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${
+            shown
+              ? 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+              : 'border-slate-200 bg-slate-100 text-slate-400 line-through dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-500'
+          }`}
+        >
+          <span
+            className="h-2.5 w-2.5 rounded-sm"
+            style={{
+              backgroundColor: shown ? chartColors[key].color : 'transparent',
+              border: `2px solid ${chartColors[key].color}`,
+              opacity: shown ? 1 : 0.5,
+            }}
+          />
+          {labels[key]}
+        </button>
+      );
+    })}
+  </div>
+);
 
 export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   const { t, language } = useLanguage();
@@ -249,6 +376,12 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   const [copyState, setCopyState] = useState<'idle' | 'busy' | 'done'>('idle');
   const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pinnedMonth, setPinnedMonth] = useState<number | null>(null);
+  const [hiddenSeries, setHiddenSeries] = useState<Record<PlottedSeries, boolean>>({
+    accPlan: false,
+    accActual: false,
+  });
+  const isDark = useIsDarkTheme();
+  const axis = useMemo(() => axisTheme(isDark), [isDark]);
   const columnCoordsRef = useRef<Record<number, number>>({});
   const loadSeqRef = useRef(0);
 
@@ -268,10 +401,23 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     });
   };
 
+  const toggleSeries = useCallback((key: PlottedSeries) => {
+    setHiddenSeries(prev => ({ ...prev, [key]: !prev[key] }));
+  }, []);
+
   // See TrackingBar: the ref cannot cross into Recharts, a callback can.
   const recordColumnCoord = useCallback((month: number, centerX: number) => {
     columnCoordsRef.current[month] = centerX;
   }, []);
+
+  const localeTag = language === 'ja' ? 'ja-JP' : language === 'vn' ? 'vi-VN' : 'en-US';
+  // Every number in the chart goes through this, so the separators follow the
+  // UI language (9.600 in Vietnamese, 9,600 in English) instead of the browser's.
+  const nf = useCallback(
+    (value: number) => new Intl.NumberFormat(localeTag).format(value),
+    [localeTag]
+  );
+  const unit = t('totalView.unit.hours', 'h');
 
   // Current month highlight
   const currentMonth = new Date().getFullYear() === currentYear ? new Date().getMonth() + 1 : null;
@@ -325,15 +471,26 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
 
   // Chart Data Preparation
   const chartData = useMemo<TotalChartRow[]>(() => {
-    const locale = language === 'ja' ? 'ja-JP' : language === 'vn' ? 'vi-VN' : 'en-US';
-    const data: TotalChartRow[] = months.map(m => ({
-      name: new Date(currentYear, m - 1).toLocaleString(locale, { month: 'short' }),
-      month: m,
-      plan: 0,
-      actual: 0,
-      accPlan: 0,
-      accActual: 0
-    }));
+    const now = new Date();
+    // Only the year in progress has a past and a future; a past year is all
+    // history and a future one is all forecast.
+    const lastRealMonth = now.getFullYear() === currentYear
+      ? now.getMonth() + 1
+      : now.getFullYear() > currentYear ? 12 : 0;
+
+    const data: TotalChartRow[] = months.map(m => {
+      const full = new Date(currentYear, m - 1).toLocaleString(localeTag, { month: 'long' });
+      return {
+        name: new Date(currentYear, m - 1).toLocaleString(localeTag, { month: 'short' }),
+        fullName: full.charAt(0).toUpperCase() + full.slice(1),
+        month: m,
+        isFuture: m > lastRealMonth,
+        plan: 0,
+        actual: 0,
+        accPlan: 0,
+        accActual: 0
+      };
+    });
 
     // Aggregate monthly totals from all records directly
     allRecords.forEach(r => {
@@ -354,7 +511,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     });
 
     return data;
-  }, [allRecords, currentYear, language]);
+  }, [allRecords, currentYear, localeTag]);
 
   // Dynamic Y-axis max based on max accumulated values
   const { yAxisMax, yAxisTicks } = useMemo(() => {
@@ -388,11 +545,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
 
       {/* 1. Chart Section - Full Page */}
       <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex-1 flex flex-col min-h-0">
-        <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-          <h3 className="text-md font-bold text-slate-700 dark:text-slate-100 flex items-center">
-            <TrendingUp className="w-4 h-4 mr-2 text-blue-600 dark:text-blue-400" />
-            {t('totalView.chartTitle')} - {currentYear}
-          </h3>
+        <div className="flex items-center justify-end mb-2 flex-wrap gap-2">
           <div className="flex gap-2 flex-wrap items-center">
             <select
               className="px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-600 outline-none"
@@ -550,7 +703,30 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
             </div>
           </div>
         )}
-        <div id="total-view-chart" className="flex-1 min-h-0 relative">
+        <div id="total-view-chart" className="flex-1 min-h-0 relative flex flex-col">
+
+          {/* Title and legend sit INSIDE the capture target, so an exported or
+              copied image carries its own heading and key. */}
+          <div className="flex items-start justify-between gap-4 flex-wrap px-1 pb-3">
+            <div className="min-w-0">
+              <h3 className="text-base md:text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center">
+                <TrendingUp className="w-4 h-4 mr-2 shrink-0 text-blue-600 dark:text-blue-400" />
+                {t('totalView.chartTitle')} — {currentYear}
+              </h3>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                {t('totalView.axis.accumulated')} ({unit}) · {t('totalView.forecastNote', 'Months after the current one are forecast')}
+              </p>
+            </div>
+            <SeriesLegend
+              chartColors={chartColors}
+              hidden={hiddenSeries}
+              onToggle={toggleSeries}
+              labels={{ accPlan: t('dashboard.chart.accPlan'), accActual: t('dashboard.chart.accActual') }}
+              hint={t('chart.toggleSeries', 'Click to show or hide a series')}
+            />
+          </div>
+
+          <div className="flex-1 min-h-0 relative">
 
           {/* Pinned Detail Card Overlay */}
           {pinnedMonth !== null && (() => {
@@ -579,7 +755,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                   style={{ zIndex: 0 }}
                 />
                 <div className="relative z-10">
-                  <MonthDetailCard data={pinnedData} chartColors={chartColors} t={t} hideShadow={true} />
+                  <MonthDetailCard data={pinnedData} chartColors={chartColors} t={t} nf={nf} unit={unit} hideShadow={true} />
                 </div>
               </div>
             );
@@ -588,7 +764,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={chartData}
-              margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+              margin={{ top: 34, right: 30, left: 8, bottom: 8 }}
               onClick={(state) => {
                 // recharts 3 `MouseHandlerDataParam` has no `activePayload` — recover the
                 // clicked datum from the active index instead.
@@ -601,29 +777,68 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                 setPinnedMonth(prev => (prev === clicked.month ? null : clicked.month));
               }}
             >
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_PALETTE.grid} />
-              <XAxis dataKey="name" fontSize={12} />
-              <YAxis yAxisId="left" orientation="left" fontSize={11} domain={[0, yAxisMax]} ticks={yAxisTicks} label={{ value: t('totalView.axis.accumulated'), angle: -90, position: 'insideLeft' }} />
-              <Tooltip content={<CustomTooltip chartColors={chartColors} t={t} />} />
-              <Legend />
-              {/* Current Month Highlight */}
+              {/* `yAxisId` is required: without it the grid looks for the default
+                  axis id, finds none, and draws a single line at the top. */}
+              <CartesianGrid yAxisId="left" vertical={false} stroke={axis.grid} strokeWidth={1} />
+              <XAxis
+                dataKey="name"
+                interval={0}
+                tickMargin={8}
+                tickLine={false}
+                axisLine={{ stroke: axis.line }}
+                tick={{ fontSize: 13, fontWeight: 600, fill: axis.text }}
+              />
+              <YAxis
+                yAxisId="left"
+                orientation="left"
+                domain={[0, yAxisMax]}
+                ticks={yAxisTicks}
+                width={78}
+                tickMargin={6}
+                tickLine={false}
+                axisLine={{ stroke: axis.line }}
+                tick={{ fontSize: 12, fontWeight: 500, fill: axis.text }}
+                tickFormatter={nf}
+                label={{
+                  value: `${t('totalView.axis.accumulated')} (${unit})`,
+                  angle: -90,
+                  position: 'insideLeft',
+                  style: { fontSize: 13, fontWeight: 600, fill: axis.muted, textAnchor: 'middle' },
+                }}
+              />
+              <Tooltip
+                cursor={{ fill: isDark ? 'rgba(148,163,184,0.12)' : 'rgba(100,116,139,0.08)' }}
+                content={<CustomTooltip chartColors={chartColors} t={t} nf={nf} unit={unit} />}
+              />
+              {/* Current month: a hairline plus a pill, not a full-height band. */}
               {showCurrentMonth && currentMonth !== null && (() => {
                 const monthName = chartData.find(d => d.month === currentMonth)?.name;
                 return monthName ? (
-                  <>
-                    <ReferenceArea yAxisId="left" x1={monthName} x2={monthName} fill="rgba(251,146,60,0.12)" />
-                    <ReferenceLine yAxisId="left" x={monthName} stroke="#f97316" strokeWidth={2} strokeDasharray="6 3" label={{ value: t('chart.thisMonth', '今月'), position: 'top', fontSize: 10, fill: '#f97316', fontWeight: 'bold' }} />
-                  </>
+                  <ReferenceLine
+                    yAxisId="left"
+                    x={monthName}
+                    stroke={axis.marker}
+                    strokeWidth={1.5}
+                    strokeDasharray="4 4"
+                    label={<CurrentMonthBadge label={t('chart.thisMonth', '今月')} color={axis.marker} />}
+                  />
                 ) : null;
               })()}
-              <Bar yAxisId="left" dataKey="accPlan" name={t('dashboard.chart.accPlan')} fill={chartColors.accPlan.color} fillOpacity={chartColors.accPlan.opacity} shape={<TrackingBar onColumnCoord={recordColumnCoord} />}>
-                <LabelList dataKey="accPlan" position="top" content={<OutlinedLabel dataKey="accPlan" chartColors={chartColors} />} />
+              <Bar yAxisId="left" dataKey="accPlan" name={t('dashboard.chart.accPlan')} hide={hiddenSeries.accPlan} fill={chartColors.accPlan.color} fillOpacity={chartColors.accPlan.opacity} shape={<TrackingBar onColumnCoord={recordColumnCoord} />}>
+                <LabelList dataKey="accPlan" position="top" content={<OutlinedLabel dataKey="accPlan" chartColors={chartColors} rows={chartData} nf={nf} />} />
               </Bar>
-              <Bar yAxisId="left" dataKey="accActual" name={t('dashboard.chart.accActual')} fill={chartColors.accActual.color} fillOpacity={chartColors.accActual.opacity} radius={[4, 4, 0, 0]}>
-                <LabelList dataKey="accActual" position="top" content={<OutlinedLabel dataKey="accActual" chartColors={chartColors} />} />
+              <Bar yAxisId="left" dataKey="accActual" name={t('dashboard.chart.accActual')} hide={hiddenSeries.accActual} fill={chartColors.accActual.color} fillOpacity={chartColors.accActual.opacity} radius={[4, 4, 0, 0]}>
+                {chartData.map(row => (
+                  <Cell
+                    key={row.month}
+                    fillOpacity={row.isFuture ? chartColors.accActual.opacity * FORECAST_OPACITY : chartColors.accActual.opacity}
+                  />
+                ))}
+                <LabelList dataKey="accActual" position="top" content={<OutlinedLabel dataKey="accActual" chartColors={chartColors} rows={chartData} nf={nf} />} />
               </Bar>
             </ComposedChart>
           </ResponsiveContainer>
+          </div>
         </div>
       </div>
 
