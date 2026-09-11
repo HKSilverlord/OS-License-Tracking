@@ -77,6 +77,13 @@ const CARD_OFFSET_PX = 12;
  * These cannot be Tailwind `dark:` classes: every one of them is an SVG
  * `fill`/`stroke` prop that Recharts passes straight to the element.
  */
+/**
+ * How long the bars take to grow in, and how long hovering is ignored for: any
+ * re-render hands Recharts a fresh animation id and restarts the grow-in, and
+ * it hides every value label while one is running.
+ */
+const BAR_ANIMATION_MS = 650;
+
 const axisTheme = (isDark: boolean) => ({
   text: isDark ? '#e2e8f0' : '#334155',
   muted: isDark ? '#94a3b8' : '#475569',
@@ -399,6 +406,12 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     accPlan: false,
     accActual: false,
   });
+  // The bars grow in on mount and on every series toggle — but only then. The
+  // rest of the time the animation is switched off, because a re-render
+  // restarts it and blanks the value labels (a copy taken then lost them).
+  const [barsAnimating, setBarsAnimating] = useState(true);
+  const barsAnimatingRef = useRef(true);
+  barsAnimatingRef.current = barsAnimating;
   const isDark = useIsDarkTheme();
   const axis = useMemo(() => axisTheme(isDark), [isDark]);
   const columnMetricsRef = useRef<Record<number, Partial<Record<PlottedSeries, ColumnBox>>>>({});
@@ -632,6 +645,27 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isPinned, unpin]);
 
+  // Replay the grow-in when a series is switched on or off, or the data reloads.
+  const firstPaintRef = useRef(true);
+  useEffect(() => {
+    if (firstPaintRef.current) {
+      firstPaintRef.current = false;
+      return;
+    }
+    setBarsAnimating(true);
+  }, [hiddenSeries, chartData]);
+
+  // Recharts' own onAnimationEnd also fires when the animation is torn down, so
+  // the window is timed here instead of being read back from the chart.
+  useEffect(() => {
+    if (!barsAnimating) return;
+    const id = window.setTimeout(() => setBarsAnimating(false), BAR_ANIMATION_MS + 120);
+    return () => window.clearTimeout(id);
+  }, [barsAnimating]);
+
+  /** Labels are hidden mid-grow-in, so settle the bars before any capture. */
+  const settleBars = useCallback(() => setBarsAnimating(false), []);
+
   // Dynamic Y-axis max based on max accumulated values
   const { yAxisMax, yAxisTicks } = useMemo(() => {
     const maxPlan = Math.max(0, ...chartData.map(d => d.accPlan || 0));
@@ -694,6 +728,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
             <button
               onClick={() => {
                 if (copyState === 'busy') return;
+                settleBars();
                 setCopyState('busy');
                 // Not awaited before the call: copyChartToClipboard must reach
                 // the clipboard from inside this click.
@@ -716,7 +751,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                   : t('buttons.copy', 'Copy')}
             </button>
             <button
-              onClick={() => exportChartToPNG('total-view-chart', generateChartFilename(`yearly_overview_${currentYear}`, 'png'))}
+              onClick={() => { settleBars(); exportChartToPNG('total-view-chart', generateChartFilename(`yearly_overview_${currentYear}`, 'png')); }}
               className="flex items-center gap-1 px-3 py-1.5 text-sm bg-rose-600 dark:bg-rose-700 text-white rounded-lg hover:bg-rose-700 dark:hover:bg-rose-600 transition-colors"
               title={t('export.savePNG', 'Save as PNG')}
             >
@@ -724,7 +759,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
               PNG
             </button>
             <button
-              onClick={() => exportChartToSVG('total-view-chart', generateChartFilename(`yearly_overview_${currentYear}`, 'svg'))}
+              onClick={() => { settleBars(); exportChartToSVG('total-view-chart', generateChartFilename(`yearly_overview_${currentYear}`, 'svg')); }}
               className="flex items-center gap-1 px-3 py-1.5 text-sm bg-emerald-600 dark:bg-emerald-700 text-white rounded-lg hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors"
               title={t('export.saveSVG', 'Save as SVG')}
             >
@@ -885,6 +920,9 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
               onMouseMove={(state, event) => {
                 // Pinned means pinned: the card holds its month and its place.
                 if (pinnedMonthRef.current !== null) return;
+                // Moving over the chart mid-grow-in would restart it, so the
+                // bars are left to finish first.
+                if (barsAnimatingRef.current) return;
                 const plot = plotRef.current;
                 const native = event as React.MouseEvent;
                 if (plot && typeof native?.clientX === 'number') {
@@ -959,16 +997,15 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                   />
                 ) : null;
               })()}
-              {/* No grow-in animation: hovering re-renders the chart, which
-                  restarts it, and every value label vanishes for a second — and
-                  a copy taken in that second comes out without them. */}
-              <Bar yAxisId="left" dataKey="accPlan" name={t('dashboard.chart.accPlan')} hide={hiddenSeries.accPlan} isAnimationActive={false} fill={chartColors.accPlan.color} fillOpacity={chartColors.accPlan.opacity} shape={<TrackingBar seriesKey="accPlan" onColumnMetrics={recordColumnMetrics} />}>
+              {/* Animated only in the window `barsAnimating` is open: mount,
+                  a legend toggle, a data reload. See BAR_ANIMATION_MS. */}
+              <Bar yAxisId="left" dataKey="accPlan" name={t('dashboard.chart.accPlan')} hide={hiddenSeries.accPlan} isAnimationActive={barsAnimating} animationDuration={BAR_ANIMATION_MS} animationEasing="ease-out" fill={chartColors.accPlan.color} fillOpacity={chartColors.accPlan.opacity} shape={<TrackingBar seriesKey="accPlan" onColumnMetrics={recordColumnMetrics} />}>
                 <LabelList dataKey="accPlan" position="top" content={<OutlinedLabel dataKey="accPlan" chartColors={chartColors} rows={chartData} nf={nf} />} />
               </Bar>
               {/* Same shape as the plan bar so this series reports column
                   positions too — otherwise filtering the plan series away would
                   leave the detail card with nowhere to anchor. */}
-              <Bar yAxisId="left" dataKey="accActual" name={t('dashboard.chart.accActual')} hide={hiddenSeries.accActual} isAnimationActive={false} fill={chartColors.accActual.color} fillOpacity={chartColors.accActual.opacity} shape={<TrackingBar seriesKey="accActual" onColumnMetrics={recordColumnMetrics} />}>
+              <Bar yAxisId="left" dataKey="accActual" name={t('dashboard.chart.accActual')} hide={hiddenSeries.accActual} isAnimationActive={barsAnimating} animationDuration={BAR_ANIMATION_MS} animationEasing="ease-out" fill={chartColors.accActual.color} fillOpacity={chartColors.accActual.opacity} shape={<TrackingBar seriesKey="accActual" onColumnMetrics={recordColumnMetrics} />}>
                 <LabelList dataKey="accActual" position="top" content={<OutlinedLabel dataKey="accActual" chartColors={chartColors} rows={chartData} nf={nf} />} />
               </Bar>
             </ComposedChart>
