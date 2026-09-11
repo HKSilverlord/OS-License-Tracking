@@ -364,28 +364,34 @@ const capturedSize = (element: HTMLElement): { width: number; height: number } =
  * first (html2canvas cannot parse them and silently drops the styles that use
  * them), and the requested scale has to fit inside the browser's canvas cap.
  */
-export const captureElement = async (
+type CaptureSize = { width: number; height: number };
+
+/**
+ * One html2canvas pass.
+ *
+ * Also reports the size the CLONE laid out at. That number matters because
+ * html2canvas sizes the canvas from the numbers we pass (measured on the LIVE
+ * element) but paints from a copy of the page inside an iframe. Anything that
+ * makes the copy lay out wider or taller — a web font that has to re-resolve in
+ * the iframe, a scrollbar the iframe does not have, a sticky offset that
+ * collapses — is painted past the edge of the canvas and reaches the user as
+ * "the export cut the right-hand columns off".
+ */
+const capturePass = async (
+  html2canvas: typeof import('html2canvas').default,
   element: HTMLElement,
-  options: { scale?: number } = {}
-): Promise<HTMLCanvasElement> => {
-  // Only image export needs html2canvas, and most sessions never trigger one.
-  const { default: html2canvas } = await import('html2canvas');
-
-  const { width, height } = capturedSize(element);
-
-  if (width === 0 || height === 0) {
-    throw new Error(`Nothing to capture: <${element.tagName.toLowerCase()}> measures ${width}x${height}`);
-  }
-
-  const scale = fitScale(width, height, options.scale ?? 3);
+  size: CaptureSize,
+  scale: number
+): Promise<{ canvas: HTMLCanvasElement; cloneSize: CaptureSize | null }> => {
+  let cloneSize: CaptureSize | null = null;
 
   const canvas = await html2canvas(element, {
     scale,
     backgroundColor: captureBackgroundColor(),
     logging: false,
     useCORS: true,
-    width,
-    height,
+    width: size.width,
+    height: size.height,
     onclone: async (clonedDoc: Document, clonedEl: HTMLElement) => {
       // The capture target usually lives inside a scroll box. html2canvas paints
       // whatever the CLONE's layout says, so un-clipping the clone's ancestors is
@@ -408,25 +414,79 @@ export const captureElement = async (
       }
       await resolveOklchColors(clonedDoc);
       unclipSingleLineText(clonedEl);
+      // Last thing before html2canvas paints, so this is the layout it paints.
+      cloneSize = capturedSize(clonedEl);
     }
   });
+
+  return { canvas, cloneSize };
+};
+
+/**
+ * Shared html2canvas capture for every image export in the app.
+ *
+ * Centralised because four things must be true at EVERY call site and are easy
+ * to forget at one of them: the background has to follow the theme (above),
+ * Tailwind v4's `oklch()` / `color-mix()` colours have to be resolved to rgb()
+ * first (html2canvas cannot parse them and silently drops the styles that use
+ * them), the requested scale has to fit inside the browser's canvas cap, and
+ * the canvas has to be at least as big as the clone that gets painted into it.
+ */
+export const captureElement = async (
+  element: HTMLElement,
+  options: { scale?: number } = {}
+): Promise<HTMLCanvasElement> => {
+  // Only image export needs html2canvas, and most sessions never trigger one.
+  const { default: html2canvas } = await import('html2canvas');
+
+  const requested = options.scale ?? 3;
+  let size = capturedSize(element);
+
+  if (size.width === 0 || size.height === 0) {
+    throw new Error(
+      `Nothing to capture: <${element.tagName.toLowerCase()}> measures ${size.width}x${size.height}`
+    );
+  }
+
+  let scale = fitScale(size.width, size.height, requested);
+  const first = await capturePass(html2canvas, element, size, scale);
+  const cloneSize = first.cloneSize;
+  let canvas = first.canvas;
+
+  // If the clone laid out bigger than the live element did, the first pass has
+  // already lost whatever fell outside. Redo it at the size that actually got
+  // painted rather than hand back a cropped table; one retry is enough, because
+  // the second pass asks for the clone's own measurement.
+  if (cloneSize && (cloneSize.width > size.width + 1 || cloneSize.height > size.height + 1)) {
+    log.warn(
+      `Clone laid out at ${cloneSize.width}x${cloneSize.height} but the element measured ` +
+      `${size.width}x${size.height}; recapturing at the larger size so nothing is cut off.`
+    );
+    size = {
+      width: Math.max(size.width, cloneSize.width),
+      height: Math.max(size.height, cloneSize.height),
+    };
+    scale = fitScale(size.width, size.height, requested);
+    ({ canvas } = await capturePass(html2canvas, element, size, scale));
+  }
 
   // A canvas the browser refused to allocate at the requested size comes back
   // smaller with no error, which reads as "the export cropped my table". Say so
   // in the console instead of leaving it to be guessed at from the image.
   const shortBy = {
-    x: Math.round(width * scale) - canvas.width,
-    y: Math.round(height * scale) - canvas.height,
+    x: Math.round(size.width * scale) - canvas.width,
+    y: Math.round(size.height * scale) - canvas.height,
   };
   if (shortBy.x > 1 || shortBy.y > 1) {
     log.error(
-      `Capture came back cropped: asked for ${Math.round(width * scale)}x${Math.round(height * scale)} ` +
-      `(${width}x${height} CSS px at scale ${scale}), got ${canvas.width}x${canvas.height}.`
+      `Capture came back cropped: asked for ${Math.round(size.width * scale)}x${Math.round(size.height * scale)} ` +
+      `(${size.width}x${size.height} CSS px at scale ${scale}), got ${canvas.width}x${canvas.height}.`
     );
   }
 
   return canvas;
 };
+
 /** Capture straight to a PNG blob — the form both the copy and save paths want. */
 export const captureElementToPngBlob = async (
   element: HTMLElement,
