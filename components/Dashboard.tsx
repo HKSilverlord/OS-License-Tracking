@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { formatCurrency } from '../utils/helpers';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Area, Line, LabelList } from 'recharts';
 import { TrendingUp, JapaneseYen, Clock, Calculator, Palette } from 'lucide-react';
-import { ChartExportMenu } from './ChartExportMenu';
+import { ExportButton } from './ExportButton';
 import { SectionExportMenu } from './SectionExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUserRole } from '../contexts/UserRoleContext';
@@ -801,9 +801,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
                   <Palette className="w-4 h-4" />
                   {t('dashboard.colors.button', 'Colors')}
                 </button>
-                <ChartExportMenu
-                  chartId="dashboard-monthly-chart"
-                  filenameRequest={`monthly_revenue_${currentYear}`}
+                <ExportButton
+                  targetId="dashboard-monthly-chart"
+                  filename={`monthly_revenue_${currentYear}`}
                   data={stats}
                 />
               </div>
@@ -873,9 +873,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
                 <TrendingUp className="w-4 h-4 mr-2 text-emerald-500 dark:text-emerald-400" />
                 {t('dashboard.charts.cumulative', 'Cumulative Revenue (Plan vs Actual)')}
               </h3>
-              <ChartExportMenu
-                chartId="dashboard-cumulative-chart"
-                filenameRequest={`cumulative_revenue_${currentYear}`}
+              <ExportButton
+                targetId="dashboard-cumulative-chart"
+                filename={`cumulative_revenue_${currentYear}`}
                 data={accumulatedStats}
               />
             </div>

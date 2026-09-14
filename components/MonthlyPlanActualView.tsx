@@ -1,6 +1,6 @@
 import React, { useCallback, useState, useRef } from 'react';
 import { TrendingUp, Palette } from 'lucide-react';
-import { ChartExportMenu } from './ChartExportMenu';
+import { ExportButton } from './ExportButton';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { TranslateFn } from '../contexts/LanguageContext';
 import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
@@ -385,9 +385,9 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
               <Palette className="w-4 h-4" />
               {t('chart.colors', 'Colors')}
             </button>
-            <ChartExportMenu
-              chartId="monthly-plan-actual-chart"
-              filenameRequest={`monthly_plan_actual_${currentYear}`}
+            <ExportButton
+              targetId="monthly-plan-actual-chart"
+              filename={`monthly_plan_actual_${currentYear}`}
               data={monthlyData}
             />
           </div>

@@ -6,8 +6,8 @@ import type { PriceIndex } from '../services/pricing';
 import { formatCurrency } from '../utils/helpers';
 import { TABLE_COLUMN_WIDTHS, STICKY_CLASSES } from '../utils/tableStyles';
 import { exportTableToCSV, generateCSVFilename } from '../utils/csvExport';
-import { Loader2, FileDown, Copy, Check, GripVertical, ListChecks } from 'lucide-react';
-import { copyElementToClipboard, generateChartFilename } from '../utils/chartExport';
+import { Check, GripVertical, ListChecks } from 'lucide-react';
+import { ExportButton } from './ExportButton';
 import { createLogger } from '../utils/logger';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
@@ -92,8 +92,6 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
   const [priceIndex, setPriceIndex] = useState<PriceIndex>(EMPTY_PRICE_INDEX);
   const [periodLabels, setPeriodLabels] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isCopying, setIsCopying] = useState(false);
-  const [copySuccess, setCopySuccess] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
 
   const dragOffset = isEditMode ? 32 : 0;
@@ -127,7 +125,6 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
   // year faster than a request completes. Without this guard an older response
   // lands after a newer one and the view shows the wrong year's numbers.
   const loadSeqRef = useRef(0);
-  const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // `t` is memoised per language, so making it a dependency of the fetch would
   // refetch the year's data on every language switch. The ref keeps the error
@@ -181,11 +178,6 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
       if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [currentYear, toast]);
-
-  // Don't let the 2s "Copied!" reset fire after the view unmounts.
-  useEffect(() => () => {
-    if (copyResetRef.current) clearTimeout(copyResetRef.current);
-  }, []);
 
   useEffect(() => {
     fetchData();
@@ -318,37 +310,6 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
     exportTableToCSV(headers, rows, generateCSVFilename(`yearly_data_${currentYear}`));
   };
 
-  // Deliberately NOT async: the shared helper has to issue the clipboard write
-  // inside this click, so nothing may be awaited before it. The button state
-  // rides on the returned promise instead.
-  const handleCopyImage = () => {
-    const tableElement = document.getElementById('yearly-data-table');
-    if (!tableElement) {
-      // Silently returning left the button looking like it had done nothing.
-      log.error('Copy image: #yearly-data-table is not in the DOM');
-      toast.error(t('toast.copyFailed', 'Copy failed'));
-      return;
-    }
-
-    setIsCopying(true);
-    setCopySuccess(false);
-
-    // Un-clipping the scroll container is the CLONE's job (captureElement does
-    // it in `onclone`). Doing it here too only reflowed the live page and threw
-    // away the scroll position the user was reading at.
-    copyElementToClipboard(tableElement, {
-      fallbackFilename: generateChartFilename(`yearly_data_${currentYear}`, 'png')
-    })
-      .then(ok => {
-        // copyElementToClipboard raises its own toast either way.
-        if (!ok) return;
-        setCopySuccess(true);
-        if (copyResetRef.current) clearTimeout(copyResetRef.current);
-        copyResetRef.current = setTimeout(() => setCopySuccess(false), 2000);
-      })
-      .finally(() => setIsCopying(false));
-  };
-
   if (loading) {
     return (
       <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-4 md:p-6 overflow-hidden">
@@ -381,31 +342,14 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
               {isEditMode ? <Check className="w-4 h-4" /> : <ListChecks className="w-4 h-4" />}
               <span className="hidden sm:inline">{isEditMode ? t('tracker.done', '完了') : t('tracker.editOrder', '順序を編集')}</span>
             </button>
-            <button
-              onClick={handleCopyImage}
-              disabled={isCopying}
-              className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors shadow-sm ${copySuccess
-                ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800'
-                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'
-                }`}
-            >
-              {isCopying ? (
-                <Loader2 className="w-4 h-4 animate-spin text-slate-500 dark:text-slate-400" />
-              ) : copySuccess ? (
-                <Check className="w-4 h-4" />
-              ) : (
-                <Copy className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-              )}
-              {isCopying ? t('common.loading', 'Loading…') : copySuccess ? t('export.copied', 'Copied!') : t('export.copyImage', 'Copy Image')}
-            </button>
-            <button
-              onClick={handleExportCSV}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-emerald-600 dark:bg-emerald-700 text-white rounded-lg hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors shadow-sm"
-              title={t('buttons.exportTable', 'Export Table')}
-            >
-              <FileDown className="w-4 h-4" />
-              CSV
-            </button>
+            {/* No SVG: this target is an HTML table, not a Recharts surface.
+                The CSV is built here because its columns are translated. */}
+            <ExportButton
+              targetId="yearly-data-table"
+              filename={`yearly_data_${currentYear}`}
+              onExportCsv={handleExportCSV}
+              allowSvg={false}
+            />
           </div>
         </div>
         <div className="flex-1 min-h-0 overflow-auto relative isolate custom-scrollbar">

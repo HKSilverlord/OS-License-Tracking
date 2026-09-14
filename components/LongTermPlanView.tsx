@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { TrendingUp, Palette } from 'lucide-react';
-import { ChartExportMenu } from './ChartExportMenu';
+import { ExportButton } from './ExportButton';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { TranslateFn } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
@@ -223,9 +223,9 @@ export const LongTermPlanView: React.FC = () => {
               {t('chart.colors', 'Colors')}
             </button>
 
-            <ChartExportMenu
-              chartId="long-term-plan-chart"
-              filenameRequest="long_term_plan"
+            <ExportButton
+              targetId="long-term-plan-chart"
+              filename="long_term_plan"
               data={chartData}
             />
           </div>

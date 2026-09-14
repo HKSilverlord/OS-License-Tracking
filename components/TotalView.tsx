@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { MonthlyRecord } from '../types';
 import { dbService } from '../services/dbService';
-import { exportChartToSVG, exportChartToPNG, exportChartDataToCSV, generateChartFilename, copyChartToClipboard } from '../utils/chartExport';
-import { TrendingUp, Download, Palette, Copy, Check, Image, Pin, X } from 'lucide-react';
+import { ExportButton } from './ExportButton';
+import { TrendingUp, Palette, Pin, X } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { TranslateFn } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
@@ -393,10 +393,6 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   const [allRecords, setAllRecords] = useState<MonthlyRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showColorPicker, setShowColorPicker] = useState(false);
-  // Copying runs a full html2canvas capture; without an in-flight guard a double
-  // click queued a second one, and the button gave no sign it had done anything.
-  const [copyState, setCopyState] = useState<'idle' | 'busy' | 'done'>('idle');
-  const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pinnedMonth, setPinnedMonth] = useState<number | null>(null);
   // Hovering and selecting used to render two different cards in two different
   // places, and both at once on the selected month. They now feed one card:
@@ -529,11 +525,6 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   useEffect(() => {
     tRef.current = t;
   }, [t]);
-
-  // The 2s "Copied!" reset must not fire into an unmounted view.
-  useEffect(() => () => {
-    if (copyResetRef.current) clearTimeout(copyResetRef.current);
-  }, []);
 
   const fetchData = useCallback(async () => {
     const seq = ++loadSeqRef.current;
@@ -705,7 +696,8 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
         <div className="flex items-center justify-end mb-2 flex-wrap gap-2">
           <div className="flex gap-2 flex-wrap items-center">
             <select
-              className="px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-600 outline-none"
+              aria-label={t('tracker.selectMonth', 'Select a month')}
+              className="px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
               value={pinnedMonth ?? ""}
               onChange={(e) => {
                 const month = e.target.value ? Number(e.target.value) : null;
@@ -721,63 +713,27 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                 </option>
               ))}
             </select>
+            {/* Secondary to copying, so it reads as secondary: an icon button,
+                not a fifth block of saturated colour competing for attention. */}
             <button
               onClick={() => setShowColorPicker(!showColorPicker)}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 dark:bg-purple-700 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors"
+              aria-pressed={showColorPicker}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg border transition-colors ${
+                showColorPicker
+                  ? 'border-purple-300 bg-purple-50 text-purple-700 dark:border-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
+                  : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'
+              }`}
               title={t('chart.customizeColors', 'Customize chart colors')}
             >
               <Palette className="w-4 h-4" />
-              {t('chart.colors', 'Colors')}
+              <span className="hidden sm:inline">{t('chart.colors', 'Colors')}</span>
             </button>
-            <button
-              onClick={() => {
-                if (copyState === 'busy') return;
-                settleBars();
-                setCopyState('busy');
-                // Not awaited before the call: copyChartToClipboard must reach
-                // the clipboard from inside this click.
-                copyChartToClipboard('total-view-chart').then(ok => {
-                  setCopyState(ok ? 'done' : 'idle');
-                  if (!ok) return;
-                  if (copyResetRef.current) clearTimeout(copyResetRef.current);
-                  copyResetRef.current = setTimeout(() => setCopyState('idle'), 2000);
-                });
-              }}
-              disabled={copyState === 'busy'}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-indigo-600 dark:bg-indigo-700 text-white rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors disabled:opacity-60"
-              title={t('export.copyAsImage', 'Copy to Clipboard')}
-            >
-              {copyState === 'done' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              {copyState === 'busy'
-                ? t('common.loading', 'Loading…')
-                : copyState === 'done'
-                  ? t('export.copied', 'Copied!')
-                  : t('buttons.copy', 'Copy')}
-            </button>
-            <button
-              onClick={() => { settleBars(); exportChartToPNG('total-view-chart', generateChartFilename(`yearly_overview_${currentYear}`, 'png')); }}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-rose-600 dark:bg-rose-700 text-white rounded-lg hover:bg-rose-700 dark:hover:bg-rose-600 transition-colors"
-              title={t('export.savePNG', 'Save as PNG')}
-            >
-              <Image className="w-4 h-4" />
-              PNG
-            </button>
-            <button
-              onClick={() => { settleBars(); exportChartToSVG('total-view-chart', generateChartFilename(`yearly_overview_${currentYear}`, 'svg')); }}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-emerald-600 dark:bg-emerald-700 text-white rounded-lg hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors"
-              title={t('export.saveSVG', 'Save as SVG')}
-            >
-              <Download className="w-4 h-4" />
-              SVG
-            </button>
-            <button
-              onClick={() => exportChartDataToCSV(chartData, generateChartFilename(`yearly_data_${currentYear}`, 'csv'))}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
-              title={t('export.downloadData', 'Download Data (Excel/CSV)')}
-            >
-              <Download className="w-4 h-4" />
-              {t('chart.dataCsv', 'Data')}
-            </button>
+            <ExportButton
+              targetId="total-view-chart"
+              filename={`yearly_overview_${currentYear}`}
+              data={chartData}
+              onBeforeCapture={settleBars}
+            />
           </div>
         </div>
 
