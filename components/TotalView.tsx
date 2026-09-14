@@ -194,13 +194,70 @@ const CurrentMonthBadge = ({ viewBox, label, color }: {
   );
 };
 
+/**
+ * Where the year stands at `row`: accumulated actual against accumulated plan.
+ *
+ * Shared by the detail card and the header summary, so the two can never
+ * disagree about the same month.
+ */
+const accumulatedGap = (row: TotalChartRow): { timeGap: number; percentGap: number } => {
+  const accPlan = row.accPlan || 0;
+  const timeGap = (row.accActual || 0) - accPlan;
+  return { timeGap, percentGap: accPlan !== 0 ? (timeGap / accPlan) * 100 : 0 };
+};
+
+/**
+ * The chart's conclusion, in one line, inside the capture target.
+ *
+ * A copied chart used to leave the reader to work out from the bars whether the
+ * year is ahead or behind; the number that answers that was only in a hover
+ * card, which no image ever carries. It reports the last month that has actual
+ * hours, so it does not swing to zero on the forecast months at the right.
+ */
+const AccumulatedSummary = ({ row, t, nf, nfPct, unit }: {
+  row: TotalChartRow;
+  t: TranslateFn;
+  nf: (value: number) => string;
+  /** Percentages carry the language's decimal mark too: 19,7 in vi, 19.7 in en. */
+  nfPct: (value: number) => string;
+  unit: string;
+}) => {
+  const { timeGap, percentGap } = accumulatedGap(row);
+  const ahead = timeGap >= 0;
+  const sign = ahead ? '+' : '';
+
+  return (
+    <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs md:text-sm">
+      <span className="font-semibold text-slate-700 dark:text-slate-200">
+        {t('totalView.summary.through', 'Through {month}').replace('{month}', row.fullName)}
+      </span>
+      <span className="text-slate-500 dark:text-slate-400">
+        {t('tracker.actualShort', 'Actual')}{' '}
+        <span className="font-semibold tabular-nums text-slate-800 dark:text-slate-100">{nf(row.accActual || 0)}</span>
+        {' / '}
+        {t('tracker.planShort', 'Plan')}{' '}
+        <span className="font-semibold tabular-nums text-slate-800 dark:text-slate-100">{nf(row.accPlan || 0)}</span>{' '}
+        {unit}
+      </span>
+      <span className={`font-semibold tabular-nums ${ahead ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+        {sign}{nf(timeGap)} {unit} ({sign}{nfPct(percentGap)}%){' '}
+        <span className="font-medium">
+          {ahead ? t('totalView.summary.ahead', 'ahead of plan') : t('totalView.summary.behind', 'behind plan')}
+        </span>
+      </span>
+    </p>
+  );
+};
+
 /** The month breakdown, shown both in the tooltip and in the pinned card. */
-const MonthDetailCard = ({ data, chartColors, t, nf, unit, pinned = false, onUnpin, hideShadow = false }: {
+const MonthDetailCard = ({ data, chartColors, t, nf, nfPct, unit, pinned = false, onUnpin, hideShadow = false }: {
   data: TotalChartRow;
   chartColors: ChartColors;
   t: TranslateFn;
   /** Formats in the UI language, so 9600 reads 9.600 in vi and 9,600 in en. */
   nf: (value: number) => string;
+  /** Percentages carry the language's decimal mark too: 19,7 in vi, 19.7 in en. */
+  nfPct: (value: number) => string;
   unit: string;
   /** Shown because the month was selected, not because the cursor is on it. */
   pinned?: boolean;
@@ -213,8 +270,7 @@ const MonthDetailCard = ({ data, chartColors, t, nf, unit, pinned = false, onUnp
   const accPlan = data.accPlan || 0;
   const accActual = data.accActual || 0;
 
-  const timeGap = accActual - accPlan;
-  const percentGap = accPlan !== 0 ? ((timeGap / accPlan) * 100) : 0;
+  const { timeGap, percentGap } = accumulatedGap(data);
 
   return (
     <div className={`bg-white dark:bg-slate-900 p-3 border border-slate-300 dark:border-slate-700 rounded-lg min-w-[200px] ${hideShadow ? '' : 'shadow-lg'}`}>
@@ -289,7 +345,7 @@ const MonthDetailCard = ({ data, chartColors, t, nf, unit, pinned = false, onUnp
           <div className="flex items-center justify-between gap-4">
             <span className="text-slate-700 dark:text-slate-400 font-medium">{t('totalView.percentGap', '% GAP')}:</span>
             <span className={`font-semibold ${percentGap >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-              {percentGap >= 0 ? '+' : ''}{percentGap.toFixed(1)}%
+              {percentGap >= 0 ? '+' : ''}{nfPct(percentGap)}%
             </span>
           </div>
         </div>
@@ -509,6 +565,14 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     (value: number) => new Intl.NumberFormat(localeTag).format(value),
     [localeTag]
   );
+  /** One decimal, in the UI language: -19,7% in vi, -19.7% in en. */
+  const nfPct = useCallback(
+    (value: number) => new Intl.NumberFormat(localeTag, {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    }).format(value),
+    [localeTag]
+  );
   const unit = t('totalView.unit.hours', 'h');
 
   /**
@@ -614,6 +678,16 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
 
     return data;
   }, [allRecords, currentYear, localeTag]);
+
+  /**
+   * The latest month with real hours in it. A year still in progress ends in
+   * forecast months whose accumulated actual is flat, and summarising those
+   * would report a gap that only grows because the year has not happened yet.
+   */
+  const summaryRow = useMemo(
+    () => [...chartData].reverse().find(row => !row.isFuture && (row.accPlan > 0 || row.accActual > 0)) ?? null,
+    [chartData]
+  );
 
   chartDataRef.current = chartData;
 
@@ -848,6 +922,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
               <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                 {t('totalView.axis.accumulated')} ({unit}) · {t('totalView.forecastNote', 'Months after the current one are forecast')}
               </p>
+              {summaryRow && <AccumulatedSummary row={summaryRow} t={t} nf={nf} nfPct={nfPct} unit={unit} />}
             </div>
             <SeriesLegend
               chartColors={chartColors}
@@ -874,6 +949,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                 chartColors={chartColors}
                 t={t}
                 nf={nf}
+                nfPct={nfPct}
                 unit={unit}
                 pinned={isPinned}
                 onUnpin={unpin}
