@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { MonthlyRecord } from '../types';
 import { dbService } from '../services/dbService';
+import { Link } from 'react-router-dom';
 import { ExportButton } from './ExportButton';
-import { TrendingUp, Palette, Pin, X } from 'lucide-react';
+import { EmptyStatePage, emptyStateActionClass } from './ui/EmptyState';
+import { TrendingUp, Palette, Pin, RefreshCw, X } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { TranslateFn } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
@@ -448,6 +450,8 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   const toast = useToast();
   const [allRecords, setAllRecords] = useState<MonthlyRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  /** A failed load used to leave an empty grid behind a toast nobody saw. */
+  const [loadError, setLoadError] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [pinnedMonth, setPinnedMonth] = useState<number | null>(null);
   // Hovering and selecting used to render two different cards in two different
@@ -612,9 +616,11 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
       const recordsData = await dbService.getAllRecords(currentYear);
       if (seq !== loadSeqRef.current) return;
       setAllRecords(recordsData);
+      setLoadError(false);
     } catch (error) {
       if (seq !== loadSeqRef.current) return;
       log.error('Failed to load data for Total View', error);
+      setLoadError(true);
       toast.error(tRef.current('toast.loadFailed', 'Failed to load data'));
     } finally {
       if (seq === loadSeqRef.current) setLoading(false);
@@ -774,6 +780,38 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
           <span className="sr-only text-slate-500 dark:text-slate-400">{t('common.loading', 'Loading…')}</span>
         </div>
       </div>
+    );
+  }
+
+  // A chart drawn against a fallback axis with no bars on it looks broken, and
+  // looks exactly the same whether the year is empty or the request failed.
+  if (loadError) {
+    return (
+      <EmptyStatePage
+        tone="error"
+        title={t('empty.loadFailedTitle', 'Could not load this year')}
+        description={t('empty.loadFailedHint', 'The request did not come back. Check the connection and try again.')}
+        actions={
+          <button type="button" onClick={fetchData} className={emptyStateActionClass}>
+            <RefreshCw className="w-4 h-4" />
+            {t('buttons.retry', 'Try again')}
+          </button>
+        }
+      />
+    );
+  }
+
+  if (allRecords.length === 0) {
+    return (
+      <EmptyStatePage
+        title={t('empty.noDataTitle', 'No hours recorded for {year} yet').replace('{year}', String(currentYear))}
+        description={t('empty.noDataHint', 'Enter planned and actual hours in Project Tracking, or pick another year in the bar above.')}
+        actions={
+          <Link to="/tracking" className={emptyStateActionClass}>
+            {t('empty.goToTracking', 'Go to Project Tracking')}
+          </Link>
+        }
+      />
     );
   }
 

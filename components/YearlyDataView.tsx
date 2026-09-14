@@ -6,8 +6,10 @@ import type { PriceIndex } from '../services/pricing';
 import { formatCurrency } from '../utils/helpers';
 import { TABLE_COLUMN_WIDTHS, STICKY_CLASSES } from '../utils/tableStyles';
 import { exportTableToCSV, generateCSVFilename } from '../utils/csvExport';
-import { Check, GripVertical, ListChecks } from 'lucide-react';
+import { Check, GripVertical, ListChecks, RefreshCw } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { ExportButton } from './ExportButton';
+import { EmptyStatePage, emptyStateActionClass } from './ui/EmptyState';
 import { createLogger } from '../utils/logger';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
@@ -92,6 +94,8 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
   const [priceIndex, setPriceIndex] = useState<PriceIndex>(EMPTY_PRICE_INDEX);
   const [periodLabels, setPeriodLabels] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  /** A failed load used to leave a table of dashes behind a toast nobody saw. */
+  const [loadError, setLoadError] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
 
   const dragOffset = isEditMode ? 32 : 0;
@@ -170,9 +174,11 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
       setRecords(groupedRecords);
       setPriceIndex(yearPrices.index);
       setPeriodLabels(yearPrices.periodLabels);
+      setLoadError(false);
     } catch (error) {
       if (seq !== loadSeqRef.current) return;
       log.error('Failed to load data for Yearly Data View', error);
+      setLoadError(true);
       toast.error(tRef.current('toast.loadFailed', 'Failed to load data'));
     } finally {
       if (seq === loadSeqRef.current) setLoading(false);
@@ -318,6 +324,38 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
           <span className="sr-only text-slate-500 dark:text-slate-400">{t('common.loading', 'Loading…')}</span>
         </div>
       </div>
+    );
+  }
+
+  // Without a guard the table still draws its header and four total rows, all
+  // reading `-`, which is what a broken year looks like too.
+  if (loadError) {
+    return (
+      <EmptyStatePage
+        tone="error"
+        title={t('empty.loadFailedTitle', 'Could not load this year')}
+        description={t('empty.loadFailedHint', 'The request did not come back. Check the connection and try again.')}
+        actions={
+          <button type="button" onClick={fetchData} className={emptyStateActionClass}>
+            <RefreshCw className="w-4 h-4" />
+            {t('buttons.retry', 'Try again')}
+          </button>
+        }
+      />
+    );
+  }
+
+  if (projects.length === 0) {
+    return (
+      <EmptyStatePage
+        title={t('empty.noDataTitle', 'No hours recorded for {year} yet').replace('{year}', String(currentYear))}
+        description={t('empty.noDataHint', 'Enter planned and actual hours in Project Tracking, or pick another year in the bar above.')}
+        actions={
+          <Link to="/tracking" className={emptyStateActionClass}>
+            {t('empty.goToTracking', 'Go to Project Tracking')}
+          </Link>
+        }
+      />
     );
   }
 
