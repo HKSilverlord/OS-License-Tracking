@@ -23,7 +23,7 @@ import { NewProjectModal } from './components/modals/NewProjectModal';
 import { NewPeriodModal } from './components/modals/NewPeriodModal';
 import { dbService } from './services/dbService';
 import { exportYearToExcel } from './services/exportService';
-import { LayoutDashboard, Table, Plus, LogOut, Download, Menu, X, Search, Languages, BarChart3, Calendar as CalendarIcon, TrendingUp, Wrench, ChevronLeft, ChevronRight, Monitor, Moon, Sun, Loader2 } from 'lucide-react';
+import { LayoutDashboard, Table, ClipboardList, Plus, LogOut, Download, Menu, X, Search, Languages, BarChart3, LineChart, Calendar as CalendarIcon, TrendingUp, Wrench, ChevronLeft, ChevronRight, Monitor, Moon, Sun, Loader2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useLanguage, SUPPORTED_LANGUAGES } from './contexts/LanguageContext';
 import { useAuthSession } from './hooks/useAuthSession';
@@ -38,6 +38,9 @@ const log = createLogger('App');
 
 /** The only route that consumes the top-bar search query (U5). */
 const SEARCHABLE_PATH = '/tracking';
+
+/** Routes that span every year, so the year control means nothing on them. */
+const YEARLESS_PATHS = ['/long-term-plan', '/period-management'];
 
 function App() {
   const { t, language, setLanguage } = useLanguage();
@@ -157,19 +160,19 @@ function App() {
 
           <div className="flex-1 overflow-y-auto custom-scrollbar py-4 px-3 space-y-6">
             <div>
-              {!sidebarCollapsed && <p className="px-3 text-xs font-semibold text-slate-500 dark:text-slate-500 uppercase tracking-wider mb-2">Analytics</p>}
+              {!sidebarCollapsed && <p className="px-3 text-xs font-semibold text-slate-500 dark:text-slate-500 uppercase tracking-wider mb-2">{t('nav.analytics', 'Analytics')}</p>}
               <nav className="space-y-1">
                 <NavLink to="/" icon={LayoutDashboard} label={t('nav.dashboard')} collapsed={sidebarCollapsed} />
                 <NavLink to="/yearly-data" icon={Table} label={t('nav.yearlyData')} collapsed={sidebarCollapsed} />
                 <NavLink to="/total" icon={BarChart3} label={t('nav.totalView')} collapsed={sidebarCollapsed} />
-                <NavLink to="/monthly-plan-actual" icon={BarChart3} label={t('nav.monthlyPlanActual')} collapsed={sidebarCollapsed} />
+                <NavLink to="/monthly-plan-actual" icon={LineChart} label={t('nav.monthlyPlanActual')} collapsed={sidebarCollapsed} />
               </nav>
             </div>
 
             <div>
-              {!sidebarCollapsed && <p className="px-3 text-xs font-semibold text-slate-500 dark:text-slate-500 uppercase tracking-wider mb-2">Management</p>}
+              {!sidebarCollapsed && <p className="px-3 text-xs font-semibold text-slate-500 dark:text-slate-500 uppercase tracking-wider mb-2">{t('nav.management', 'Management')}</p>}
               <nav className="space-y-1">
-                <NavLink to="/tracking" icon={Table} label={t('nav.tracking')} collapsed={sidebarCollapsed} />
+                <NavLink to="/tracking" icon={ClipboardList} label={t('nav.tracking')} collapsed={sidebarCollapsed} />
                 <NavLink to="/catia-license" icon={Monitor} label={t('nav.catiaLicense')} collapsed={sidebarCollapsed} />
                 <NavLink to="/long-term-plan" icon={TrendingUp} label={t('nav.longTermPlan')} collapsed={sidebarCollapsed} />
                 <NavLink to="/period-management" icon={CalendarIcon} label={t('nav.periodManagement')} collapsed={sidebarCollapsed} />
@@ -199,7 +202,7 @@ function App() {
                   <div className="ml-3 overflow-hidden">
                     <p className="text-sm font-medium text-white dark:text-white truncate">{session.user.email}</p>
                     <p className="text-xs text-slate-400 dark:text-slate-400 truncate">
-                      {isAdmin ? 'Administrator' : 'Viewer'}
+                      {isAdmin ? t('role.administrator', 'Administrator') : t('role.viewer', 'Viewer')}
                     </p>
                   </div>
                 </div>
@@ -246,12 +249,12 @@ function App() {
           <div className="fixed inset-0 bg-white dark:bg-slate-900 z-20 pt-16 flex flex-col md:hidden animate-fade-in">
             <nav className="flex-1 overflow-y-auto px-4 py-6 space-y-2">
               <MobileNavLink to="/" icon={LayoutDashboard} label={t('nav.dashboard')} onClick={() => setMobileMenuOpen(false)} />
-              <MobileNavLink to="/tracking" icon={Table} label={t('nav.tracking')} onClick={() => setMobileMenuOpen(false)} />
+              <MobileNavLink to="/tracking" icon={ClipboardList} label={t('nav.tracking')} onClick={() => setMobileMenuOpen(false)} />
               <MobileNavLink to="/catia-license" icon={Monitor} label={t('nav.catiaLicense')} onClick={() => setMobileMenuOpen(false)} />
               <MobileNavLink to="/yearly-data" icon={Table} label={t('nav.yearlyData')} onClick={() => setMobileMenuOpen(false)} />
               <MobileNavLink to="/total" icon={BarChart3} label={t('nav.totalView')} onClick={() => setMobileMenuOpen(false)} />
               <MobileNavLink to="/long-term-plan" icon={TrendingUp} label={t('nav.longTermPlan')} onClick={() => setMobileMenuOpen(false)} />
-              <MobileNavLink to="/monthly-plan-actual" icon={BarChart3} label={t('nav.monthlyPlanActual')} onClick={() => setMobileMenuOpen(false)} />
+              <MobileNavLink to="/monthly-plan-actual" icon={LineChart} label={t('nav.monthlyPlanActual')} onClick={() => setMobileMenuOpen(false)} />
               <MobileNavLink to="/period-management" icon={CalendarIcon} label={t('nav.periodManagement')} onClick={() => setMobileMenuOpen(false)} />
               {isAdmin && (
                 <>
@@ -282,17 +285,12 @@ function App() {
                 <RouteName />
               </h2>
               {/* Period Selector (Year Only) — the single year control of the app (U1) */}
-              <div className="flex items-center space-x-2 bg-slate-100 dark:bg-slate-800 rounded-lg p-1 border border-slate-200 dark:border-slate-700">
-                <select
-                  value={currentYear}
-                  onChange={handleYearChange}
-                  className="bg-transparent border-none text-slate-900 dark:text-white text-sm focus:ring-0 font-bold cursor-pointer"
-                >
-                  {availableYears.map(year => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
-              </div>
+              <YearSelector
+                currentYear={currentYear}
+                years={availableYears}
+                onChange={handleYearChange}
+                label={t('year.select', 'Select year')}
+              />
             </div>
 
             <div className="flex items-center gap-2 md:gap-3 flex-wrap justify-end w-full md:w-auto">
@@ -308,7 +306,7 @@ function App() {
               <button
                 onClick={() => setDarkMode(!darkMode)}
                 className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
-                title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                title={darkMode ? t('theme.toLight', 'Switch to light mode') : t('theme.toDark', 'Switch to dark mode')}
               >
                 {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
               </button>
@@ -415,6 +413,39 @@ interface TopBarSearchProps {
   onChange: (value: string) => void;
   placeholder: string;
 }
+
+/**
+ * The app's one year control, hidden where it does nothing.
+ *
+ * LongTermPlanView spans every year and PeriodManagement lists every period;
+ * neither takes `currentYear` at all, so on those two routes picking a year
+ * changed the number in the box and nothing else.
+ */
+const YearSelector: React.FC<{
+  currentYear: number;
+  years: number[];
+  onChange: (event: React.ChangeEvent<HTMLSelectElement>) => void;
+  label: string;
+}> = ({ currentYear, years, onChange, label }) => {
+  const location = useLocation();
+  if (YEARLESS_PATHS.includes(location.pathname)) return null;
+
+  return (
+    <div className="flex items-center space-x-2 bg-slate-100 dark:bg-slate-800 rounded-lg p-1 border border-slate-200 dark:border-slate-700">
+      <select
+        aria-label={label}
+        title={label}
+        value={currentYear}
+        onChange={onChange}
+        className="bg-transparent border-none text-slate-900 dark:text-white text-sm font-bold cursor-pointer rounded focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+      >
+        {years.map(year => (
+          <option key={year} value={year}>{year}</option>
+        ))}
+      </select>
+    </div>
+  );
+};
 
 const TopBarSearch: React.FC<TopBarSearchProps> = ({ variant, value, onChange, placeholder }) => {
   const location = useLocation();
