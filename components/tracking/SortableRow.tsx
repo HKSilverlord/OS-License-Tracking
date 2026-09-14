@@ -23,12 +23,16 @@ export const SortableRow = ({ children, id, disabled, className }: { children: R
     position: isDragging ? 'relative' as const : undefined,
   };
 
+  // dnd-kit's attributes turn the row group into a focusable button and mark it
+  // aria-disabled whenever dragging is off - which is most of the time, over rows
+  // full of inputs people are meant to type into. The row only wears them when it
+  // can actually be dragged.
   return (
     <tbody
       ref={setNodeRef}
       style={style}
       className={isDragging ? 'opacity-90 bg-blue-50 relative z-50' : className}
-      {...attributes}
+      {...(disabled ? {} : attributes)}
     >
       <SortableRowContext.Provider value={{ listeners }}>
         {children}

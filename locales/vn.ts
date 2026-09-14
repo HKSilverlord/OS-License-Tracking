@@ -110,6 +110,7 @@ export const vn: Record<string, string> = {
   'tracker.revenuePlan': 'Doanh thu (KH)',
   'tracker.revenueActual': 'Doanh thu (TT)',
   'tracker.noResults': 'Không tìm thấy dự án phù hợp.',
+  'tracker.autosaved': 'Đã lưu',
   'dashboard.kpi.totalRevenue': 'Tổng doanh thu (Thực tế)',
   'export.kpiSummary': 'Chỉ số nổi bật (KPI – Bản quyền)',
   'export.costAnalysis': 'Phân tích chi phí',

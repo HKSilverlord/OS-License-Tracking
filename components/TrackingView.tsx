@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Project, MonthlyRecord, PeriodType } from '../types';
 import { dbService } from '../services/dbService';
-import { getMonthsForPeriod } from '../utils/helpers';
+import { getCurrentPeriod, getMonthsForPeriod } from '../utils/helpers';
 import { TABLE_COLUMN_WIDTHS, STICKY_CLASSES } from '../utils/tableStyles';
 import { Save, Loader2, Search, ArrowUpDown, Check, ListChecks, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -32,7 +32,12 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
   const confirm = useConfirm();
 
   // Tabs State
-  const [activeTerm, setActiveTerm] = useState<'H1' | 'H2'>('H1');
+  // Seeded from today's half-year: opening this view in October on H1 meant six
+  // empty columns and a tab click before anyone could type anything.
+  const [activeTerm, setActiveTerm] = useState<'H1' | 'H2'>(() => {
+    const current = getCurrentPeriod();
+    return current.year === currentYear ? (current.type as 'H1' | 'H2') : 'H1';
+  });
   const currentPeriodLabel = `${currentYear}-${activeTerm}`;
 
   const [projects, setProjects] = useState<Project[]>([]);
@@ -51,6 +56,21 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
 
   const pendingCount = Object.keys(pendingChanges).length;
   const hasPendingChanges = pendingCount > 0;
+
+  /**
+   * Text fields save themselves 500ms after the last keystroke, and said so
+   * nowhere at all - the only way to know an edit had landed was to reload.
+   */
+  const [autosaved, setAutosaved] = useState(false);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const markAutosaved = useCallback(() => {
+    setAutosaved(true);
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => setAutosaved(false), 2000);
+  }, []);
+  useEffect(() => () => {
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+  }, []);
 
   // Latest pending edits, readable from effects without re-running them.
   const pendingChangesRef = useRef(pendingChanges);
@@ -410,6 +430,50 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
     }
   };
 
+  /**
+   * Ctrl/Cmd+S saves the hours.
+   *
+   * Hours are held until "Save All" is pressed, and the reflex for keeping work
+   * is Ctrl+S - which, unhandled, opened the browser's Save Page dialog over a
+   * table of unsaved edits.
+   */
+  const canSaveRef = useRef(false);
+  canSaveRef.current = isAdmin && hasPendingChanges && !isSaving;
+  const saveAllRef = useRef(handleSaveAll);
+  saveAllRef.current = handleSaveAll;
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 's') return;
+      event.preventDefault();
+      if (!canSaveRef.current) return;
+      void saveAllRef.current();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  /**
+   * Enter walks down a month's column, Shift+Enter back up.
+   *
+   * Hours are entered a month at a time, down the list of projects; without
+   * this that means a mouse click per cell, or Tab across a row nobody is
+   * filling in that order.
+   */
+  const handleHourKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    const cell = event.currentTarget.dataset.hourCell;
+    if (!cell) return;
+    const column = Array.from(
+      document.querySelectorAll<HTMLInputElement>(`input[data-hour-cell="${cell}"]`)
+    );
+    const next = column[column.indexOf(event.currentTarget) + (event.shiftKey ? -1 : 1)];
+    next?.focus();
+    next?.select();
+  };
+
+
   const handleValueChange = (
     projectId: string,
     month: number,
@@ -548,6 +612,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
 
           // Dispatch event only after successful save
           window.dispatchEvent(new CustomEvent('dataUpdated'));
+          markAutosaved();
         } catch (error) {
           log.error('Failed to save project update', error);
           // Could revert changes here if strict data integrity needed
@@ -704,9 +769,17 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
               <span className="hidden sm:inline">{isCollapsed ? t('tracker.expandBtn', 'Expand') : t('tracker.collapseBtn', 'Collapse')}</span>
             </button>
 
+            {autosaved && (
+              <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 animate-fade-in">
+                <Check className="w-3.5 h-3.5" />
+                {t('tracker.autosaved', 'Saved')}
+              </span>
+            )}
+
             {isAdmin && (
               <button
                 onClick={handleSaveAll}
+                title={`${t('saveAll', 'Save All')} (Ctrl+S)`}
                 disabled={!hasPendingChanges || isSaving}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${hasPendingChanges && !isSaving
                   ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600'
@@ -885,10 +958,13 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
                             <td key={`p-${m}`} className="px-0.5 py-1 border-r border-b border-slate-200 dark:border-slate-700 relative" style={{ width: `${MONTH_WIDTH}px` }}>
                               <input
                                 type="number"
+                                data-hour-cell={`planned_hours-${m}`}
                                 className="w-full text-xs border-slate-300 dark:border-slate-600 rounded focus:ring-blue-500 focus:border-blue-500 text-right px-1 py-1 bg-white dark:bg-slate-800 dark:text-slate-100 focus:bg-blue-50 dark:focus:bg-blue-900/30 transition-colors"
                                 value={plan === 0 ? '' : plan}
                                 placeholder="-"
                                 onChange={(e) => handleValueChange(project.id, m, 'planned_hours', e.target.value)}
+                                onKeyDown={handleHourKeyDown}
+                                onWheel={(e) => e.currentTarget.blur()}
                                 disabled={!isAdmin}
                               />
                               {isSaving && <Save className="w-2 h-2 absolute top-1 right-1 text-blue-500 animate-pulse" />}
@@ -930,10 +1006,13 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
                             <td key={`a-${m}`} className="px-0.5 py-1 border-r border-b border-slate-200 dark:border-slate-700 relative" style={{ width: `${MONTH_WIDTH}px` }}>
                               <input
                                 type="number"
+                                data-hour-cell={`actual_hours-${m}`}
                                 className={`w-full text-xs border-slate-300 dark:border-slate-600 rounded focus:ring-green-500 focus:border-green-500 text-right px-1 py-1 transition-colors dark:text-slate-100 ${actual > 0 ? 'bg-green-50 dark:bg-green-900/20 font-medium text-green-700 dark:text-green-300' : 'bg-white dark:bg-slate-800'}`}
                                 value={actual === 0 ? '' : actual}
                                 placeholder="-"
                                 onChange={(e) => handleValueChange(project.id, m, 'actual_hours', e.target.value)}
+                                onKeyDown={handleHourKeyDown}
+                                onWheel={(e) => e.currentTarget.blur()}
                                 disabled={!isAdmin}
                               />
                               {isSaving && <Save className="w-2 h-2 absolute top-1 right-1 text-green-500 animate-pulse" />}

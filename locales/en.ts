@@ -110,6 +110,7 @@ export const en: Record<string, string> = {
   'tracker.revenuePlan': 'Revenue (Plan)',
   'tracker.revenueActual': 'Revenue (Actual)',
   'tracker.noResults': 'No projects found matching your search.',
+  'tracker.autosaved': 'Saved',
   'dashboard.kpi.totalRevenue': 'Total Revenue (Actual)',
   'export.kpiSummary': 'Performance Highlights (KPI – Licence)',
   'export.costAnalysis': 'Cost Analysis',

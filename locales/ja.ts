@@ -110,6 +110,7 @@ export const ja: Record<string, string> = {
   'tracker.revenuePlan': '売上（計画）',
   'tracker.revenueActual': '売上（実績）',
   'tracker.noResults': '検索条件に一致するプロジェクトがありません。',
+  'tracker.autosaved': '保存しました',
   'dashboard.kpi.totalRevenue': '実績売上高',
   'export.kpiSummary': '業績ハイライト (KPI〜ライセンス)',
   'export.costAnalysis': 'コスト分析',
