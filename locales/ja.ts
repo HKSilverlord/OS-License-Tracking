@@ -115,6 +115,7 @@ export const ja: Record<string, string> = {
   'export.costAnalysis': 'コスト分析',
   'export.financialSummary': '財務サマリー',
   'dashboard.kpi.varianceDesc': '実績 - 計画',
+  'variance.arrowHint': '▲ は計画を下回る差異（マイナス）を表します',
   'periodManagement.monthRange.h1': '1月-6月',
   'periodManagement.monthRange.h2': '7月-12月',
   'dashboard.colors.title': 'ダッシュボードの配色をカスタマイズ',

@@ -115,6 +115,7 @@ export const vn: Record<string, string> = {
   'export.costAnalysis': 'Phân tích chi phí',
   'export.financialSummary': 'Tóm tắt tài chính',
   'dashboard.kpi.varianceDesc': 'Thực tế - Kế hoạch',
+  'variance.arrowHint': '▲ là vượt kế hoạch, ▼ là chậm kế hoạch',
   'periodManagement.monthRange.h1': 'Thg 1-6',
   'periodManagement.monthRange.h2': 'Thg 7-12',
   'dashboard.colors.title': 'Tùy chỉnh màu bảng điều khiển',

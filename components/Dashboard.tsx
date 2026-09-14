@@ -5,6 +5,7 @@ import { TrendingUp, JapaneseYen, Clock, Calculator, Palette } from 'lucide-reac
 import { ExportButton } from './ExportButton';
 import { SectionExportMenu } from './SectionExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
+import { formatVariance } from '../utils/variance';
 import { useUserRole } from '../contexts/UserRoleContext';
 import { computeYearlyCost, useCatiaStore } from '../stores/useCatiaStore';
 import { CHART_PALETTE, useChartPref } from '../utils/chartColorPrefs';
@@ -209,7 +210,7 @@ const KpiSkeletonCard: React.FC = () => (
 /* ------------------------------------------------------------------ */
 
 export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { isAdmin } = useUserRole();
 
   const {
@@ -348,6 +349,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
     { key: 'accPlannedRevenue', label: `${t('dashboard.chart.accPlan', 'Accumulated Plan')} (${currency})` },
     { key: 'accActualRevenue', label: `${t('dashboard.chart.accActual', 'Accumulated Actual')} (${currency})` },
   ];
+
+  // Actual minus plan, written the way this reader's language writes a
+  // shortfall - see utils/variance. Three cards showed the same kind of
+  // difference three different ways before this.
+  const hoursDelta = totalActualHours - totalPlanHours;
+  const grossDelta = grossRevenueActual - grossRevenuePlan;
+  const netDelta = netRevenueActual - netRevenuePlan;
+  const hoursVariance = formatVariance(hoursDelta, language, fmtHours);
+  const grossVariance = formatVariance(grossDelta, language, fmt);
+  const netVariance = formatVariance(netDelta, language, fmt);
+  const arrowHint = t('variance.arrowHint', '▲ is above plan, ▼ is below plan');
 
   const gradientSuffix = t('dashboard.colors.gradientSuffix', '(Gradient)');
   const fromLabel = t('dashboard.colors.from', 'From');
@@ -598,7 +610,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
             />
             <KpiCard
               label={t('dashboard.kpi.varianceLabel', '差異')}
-              value={`${fmtHours(Math.abs(totalActualHours - totalPlanHours))}`}
+              value={hoursVariance.text}
               subtitle={t('dashboard.kpi.varianceDesc')}
               icon={TrendingUp}
               trend={{
@@ -645,8 +657,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
               </p>
             </div>
             <div className={`mt-3 text-3xl font-bold pb-1 ${grossRevenueActual >= grossRevenuePlan ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
-              <span className="mr-1 text-2xl">{grossRevenueActual - grossRevenuePlan < 0 ? '▲' : '▼'}</span>
-              {fmt(Math.abs(grossRevenueActual - grossRevenuePlan))}
+              {grossVariance.arrow && <span className="mr-1 text-2xl" title={arrowHint}>{grossVariance.arrow}</span>}
+              {grossVariance.text}
             </div>
             <div className={`text-sm mt-1 font-medium ${grossRevenueActual >= grossRevenuePlan ? 'text-emerald-600 dark:text-emerald-500' : 'text-rose-600 dark:text-rose-500'}`}>
               {toMan(Math.abs(grossRevenueActual - grossRevenuePlan))}
@@ -711,8 +723,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
               </div>
             </div>
             <div className={`mt-4 text-3xl font-bold relative z-10 pb-1 ${netRevenueActual >= netRevenuePlan ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
-              <span className="mr-1 text-2xl">{netRevenueActual < netRevenuePlan ? '▲' : '▼'}</span>
-              {fmt(Math.abs(netRevenueActual - netRevenuePlan))}
+              {netVariance.arrow && <span className="mr-1 text-2xl" title={arrowHint}>{netVariance.arrow}</span>}
+              {netVariance.text}
             </div>
             <div className={`text-sm mt-1 font-semibold relative z-10 ${netRevenueActual >= netRevenuePlan ? 'text-emerald-600 dark:text-emerald-500' : 'text-rose-600 dark:text-rose-500'}`}>
               {toMan(Math.abs(netRevenueActual - netRevenuePlan))}

@@ -115,6 +115,7 @@ export const en: Record<string, string> = {
   'export.costAnalysis': 'Cost Analysis',
   'export.financialSummary': 'Financial Summary',
   'dashboard.kpi.varianceDesc': 'Actual - Plan',
+  'variance.arrowHint': '▲ is above plan, ▼ is below plan',
   'periodManagement.monthRange.h1': 'Jan-Jun',
   'periodManagement.monthRange.h2': 'Jul-Dec',
   'dashboard.colors.title': 'Customize Dashboard Colors',

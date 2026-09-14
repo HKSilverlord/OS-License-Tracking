@@ -2,6 +2,8 @@ import React from 'react';
 import { Card } from './Card';
 import { LucideIcon, TrendingUp } from 'lucide-react';
 import { formatCurrency } from '../../utils/helpers';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { varianceArrow } from '../../utils/variance';
 
 export interface KpiCardProps {
   label: string;
@@ -36,6 +38,9 @@ export const KpiCard: React.FC<KpiCardProps> = ({
   headingSize = 18,
   isCurrency = false
 }) => {
+  // The arrow convention is the reader's, not the component's: in Japanese a
+  // triangle marks a shortfall, everywhere else it marks a rise.
+  const { t, language } = useLanguage();
   const displayValue = isCurrency && typeof value === 'number' 
     ? formatCurrency(value) 
     : value;
@@ -68,8 +73,12 @@ export const KpiCard: React.FC<KpiCardProps> = ({
         </div>
         
         <div className={`mt-3 text-3xl font-bold ${trend ? (trend.direction === 'up' ? 'text-emerald-700 dark:text-emerald-400' : trend.direction === 'down' ? 'text-rose-700 dark:text-rose-400' : 'text-slate-900 dark:text-white') : 'text-slate-900 dark:text-white'}`}>
-          {trend?.direction && trend.direction !== 'neutral' && (
-            <span className="mr-1 text-2xl">{trend.direction === 'up' ? '▲' : '▼'}</span>
+          {/* Japanese writes a figure above plan plain, with no arrow at all, so
+              there is nothing to render for half the cases in that language. */}
+          {trend?.direction && varianceArrow(trend.direction === 'up' ? 1 : -1, language) && (
+            <span className="mr-1 text-2xl" title={t('variance.arrowHint', '▲ is above plan, ▼ is below plan')}>
+              {varianceArrow(trend.direction === 'up' ? 1 : -1, language)}
+            </span>
           )}
           {displayValue}
         </div>
