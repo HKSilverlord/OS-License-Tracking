@@ -12,6 +12,7 @@ import { toast } from '../contexts/ToastContext';
 import { createLogger } from './logger';
 import { translate } from '../contexts/LanguageContext';
 import { timestampedFilename } from './exportFilename';
+import { exportsOnLightBackground, withExportTheme } from './exportPrefs';
 
 const log = createLogger('chartExport');
 
@@ -279,15 +280,21 @@ export const DEFAULT_CAPTURE_SCALE = 2;
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+const XML_DECLARATION = '<?xml version="1.0" encoding="UTF-8" standalone="no"?>' + String.fromCharCode(10);
+
 /** Room above the plot for the exported SVG's heading. */
 const SVG_TITLE_BAND_PX = 40;
 
 /** Readable against `captureBackgroundColor()`, for text we draw ourselves. */
 export const captureForegroundColor = (): string =>
-  document.documentElement.classList.contains('dark') ? '#e2e8f0' : '#1e293b';
+  document.documentElement.classList.contains('dark') && !exportsOnLightBackground()
+    ? '#e2e8f0'
+    : '#1e293b';
 
 export const captureBackgroundColor = (): string =>
-  document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff';
+  document.documentElement.classList.contains('dark') && !exportsOnLightBackground()
+    ? '#0f172a'
+    : '#ffffff';
 
 /**
  * Give one-line clipped text room for its descenders.
@@ -425,6 +432,11 @@ const capturePass = async (
         parent.scrollLeft = 0;
         parent = parent.parentElement;
       }
+      // Drop dark mode from the CLONE, not the page, so every Tailwind `dark:`
+      // colour resolves light for the capture and the user's screen never
+      // flickers. Must happen BEFORE the oklch pass, which freezes whatever
+      // colours are in force at the time.
+      if (exportsOnLightBackground()) clonedDoc.documentElement.classList.remove('dark');
       await resolveOklchColors(clonedDoc);
       unclipSingleLineText(clonedEl);
       // Last thing before html2canvas paints, so this is the layout it paints.
@@ -445,9 +457,17 @@ const capturePass = async (
  * them), the requested scale has to fit inside the browser's canvas cap, and
  * the canvas has to be at least as big as the clone that gets painted into it.
  */
-export const captureElement = async (
+export const captureElement = (
   element: HTMLElement,
   options: { scale?: number } = {}
+): Promise<HTMLCanvasElement> =>
+  // Returns its promise synchronously so `copyElementToClipboard` can still
+  // hand a pending ClipboardItem to write() from inside the click.
+  withExportTheme(element, () => capture(element, options));
+
+const capture = async (
+  element: HTMLElement,
+  options: { scale?: number }
 ): Promise<HTMLCanvasElement> => {
   // Only image export needs html2canvas, and most sessions never trigger one.
   const { default: html2canvas } = await import('html2canvas');
@@ -616,71 +636,72 @@ export const exportChartToSVG = async (elementId: string, filename: string = 'ch
 
     log.debug('Exporting chart as SVG...');
 
-    // Measure the PLOT, not the container. The container also holds the HTML
-    // heading and legend, so sizing the surface by it left every exported file
-    // with a blank strip along the bottom exactly that row's height tall.
-    const surfaceRect = svgElement.getBoundingClientRect();
-    const width = Math.round(surfaceRect.width);
-    const height = Math.round(surfaceRect.height);
+    // Same export theme as the raster paths: `inlineAllStyles` copies the LIVE
+    // computed styles, so the palette has to be switched before it reads them.
+    const svgString = await withExportTheme(chartContainer, async () => {
+      // Measure the PLOT, not the container. The container also holds the HTML
+      // heading and legend, so sizing the surface by it left every exported file
+      // with a blank strip along the bottom exactly that row's height tall.
+      const surfaceRect = svgElement.getBoundingClientRect();
+      const width = Math.round(surfaceRect.width);
+      const height = Math.round(surfaceRect.height);
 
-    // Clone the SVG deeply
-    const clonedSvg = svgElement.cloneNode(true) as SVGElement;
+      // Clone the SVG deeply
+      const clonedSvg = svgElement.cloneNode(true) as SVGElement;
 
-    // Copy all computed styles inline for standalone rendering
-    log.debug('Copying styles...');
-    inlineAllStyles(svgElement, clonedSvg);
+      // Copy all computed styles inline for standalone rendering
+      log.debug('Copying styles...');
+      inlineAllStyles(svgElement, clonedSvg);
 
-    clonedSvg.setAttribute('width', width.toString());
-    clonedSvg.setAttribute('height', height.toString());
-    clonedSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      clonedSvg.setAttribute('width', width.toString());
+      clonedSvg.setAttribute('height', height.toString());
+      clonedSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
 
-    // The plot alone is a mystery once it leaves the app, so carry the heading
-    // across as real text. It is the one piece of the HTML header worth the
-    // handful of lines; the legend would mean redrawing swatches and layout.
-    const title = chartContainer.querySelector('h1, h2, h3, h4')?.textContent?.trim() ?? '';
-    const titleBand = title ? SVG_TITLE_BAND_PX : 0;
+      // The plot alone is a mystery once it leaves the app, so carry the heading
+      // across as real text. It is the one piece of the HTML header worth the
+      // handful of lines; the legend would mean redrawing swatches and layout.
+      const title = chartContainer.querySelector('h1, h2, h3, h4')?.textContent?.trim() ?? '';
+      const titleBand = title ? SVG_TITLE_BAND_PX : 0;
 
-    const doc = chartContainer.ownerDocument;
-    const root = doc.createElementNS(SVG_NS, 'svg');
-    root.setAttribute('xmlns', SVG_NS);
-    root.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
-    root.setAttribute('width', width.toString());
-    root.setAttribute('height', (height + titleBand).toString());
-    root.setAttribute('viewBox', `0 0 ${width} ${height + titleBand}`);
+      const doc = chartContainer.ownerDocument;
+      const root = doc.createElementNS(SVG_NS, 'svg');
+      root.setAttribute('xmlns', SVG_NS);
+      root.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+      root.setAttribute('width', width.toString());
+      root.setAttribute('height', (height + titleBand).toString());
+      root.setAttribute('viewBox', `0 0 ${width} ${height + titleBand}`);
 
-    // An SVG with no background is transparent, and in dark mode the axis text
-    // is light — the file opened to near-invisible text on anything white.
-    const background = doc.createElementNS(SVG_NS, 'rect');
-    background.setAttribute('x', '0');
-    background.setAttribute('y', '0');
-    background.setAttribute('width', width.toString());
-    background.setAttribute('height', (height + titleBand).toString());
-    background.setAttribute('fill', captureBackgroundColor());
-    root.appendChild(background);
+      // An SVG with no background is transparent, and in dark mode the axis text
+      // is light — the file opened to near-invisible text on anything white.
+      const background = doc.createElementNS(SVG_NS, 'rect');
+      background.setAttribute('x', '0');
+      background.setAttribute('y', '0');
+      background.setAttribute('width', width.toString());
+      background.setAttribute('height', (height + titleBand).toString());
+      background.setAttribute('fill', captureBackgroundColor());
+      root.appendChild(background);
 
-    if (title) {
-      const heading = doc.createElementNS(SVG_NS, 'text');
-      heading.setAttribute('x', '16');
-      heading.setAttribute('y', '26');
-      heading.setAttribute('font-size', '16');
-      heading.setAttribute('font-weight', '700');
-      heading.setAttribute('font-family', getComputedStyle(chartContainer).fontFamily);
-      heading.setAttribute('fill', captureForegroundColor());
-      heading.textContent = title;
-      root.appendChild(heading);
-    }
+      if (title) {
+        const heading = doc.createElementNS(SVG_NS, 'text');
+        heading.setAttribute('x', '16');
+        heading.setAttribute('y', '26');
+        heading.setAttribute('font-size', '16');
+        heading.setAttribute('font-weight', '700');
+        heading.setAttribute('font-family', getComputedStyle(chartContainer).fontFamily);
+        heading.setAttribute('fill', captureForegroundColor());
+        heading.textContent = title;
+        root.appendChild(heading);
+      }
 
-    const plotGroup = doc.createElementNS(SVG_NS, 'g');
-    plotGroup.setAttribute('transform', `translate(0, ${titleBand})`);
-    plotGroup.appendChild(clonedSvg);
-    root.appendChild(plotGroup);
+      const plotGroup = doc.createElementNS(SVG_NS, 'g');
+      plotGroup.setAttribute('transform', `translate(0, ${titleBand})`);
+      plotGroup.appendChild(clonedSvg);
+      root.appendChild(plotGroup);
 
-    // Serialize to string
-    const serializer = new XMLSerializer();
-    let svgString = serializer.serializeToString(root);
-
-    // Add XML declaration for proper SVG file
-    svgString = '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n' + svgString;
+      // Serialize to string, XML declaration first so the file stands alone.
+      const serializer = new XMLSerializer();
+      return XML_DECLARATION + serializer.serializeToString(root);
+    });
 
     log.debug('SVG created, size:', (svgString.length / 1024).toFixed(2), 'KB');
 
