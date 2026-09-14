@@ -736,11 +736,31 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     placeCard();
   }, [focusedMonth, isPinned, hiddenSeries, chartData, columnAnchor, placeCard]);
 
-  // Esc releases the card without having to find the small close button.
+  /**
+   * With a month pinned: Esc releases the card, the arrows walk the year.
+   *
+   * Reading a month at a time is the point of the card, and stepping to the
+   * next one meant going back to the select or finding a 40px-wide bar with the
+   * pointer. Only bound while a month is pinned, so the arrows keep their usual
+   * meaning everywhere else on the page.
+   */
   useEffect(() => {
     if (!isPinned) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') unpin();
+      if (e.key === 'Escape') {
+        unpin();
+        return;
+      }
+      const step = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
+      const jump = e.key === 'Home' ? 1 : e.key === 'End' ? 12 : 0;
+      if (!step && !jump) return;
+      e.preventDefault();
+      setPinnedMonth(current => {
+        if (current === null) return current;
+        // Stops at January and December rather than wrapping: a card that
+        // jumps from December to January reads as having lost its place.
+        return jump || Math.min(12, Math.max(1, current + step));
+      });
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
