@@ -5,6 +5,7 @@ import { getCurrentPeriod, getMonthsForPeriod } from '../utils/helpers';
 import { TABLE_COLUMN_WIDTHS, STICKY_CLASSES } from '../utils/tableStyles';
 import { Save, Loader2, Search, ArrowUpDown, Check, ListChecks, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useNumberFormat, localeTagFor } from '../hooks/useNumberFormat';
 import { useUserRole } from '../contexts/UserRoleContext';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -27,6 +28,7 @@ interface TrackingViewProps {
 
 export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQuery, refreshTrigger }) => {
   const { t, language } = useLanguage();
+  const { format: nf } = useNumberFormat();
   const { isAdmin } = useUserRole();
   const toast = useToast();
   const confirm = useConfirm();
@@ -175,7 +177,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
   const formatMonthLabel = useCallback((month: number) => {
     if (language === 'ja') return `${month}月`;
     if (language === 'vn') return `Tháng ${month}`;
-    return new Date(2000, month - 1).toLocaleString('en-US', { month: 'short' });
+    return new Date(2000, month - 1).toLocaleString(localeTagFor(language), { month: 'short' });
   }, [language]);
 
   // Handle Sort
@@ -942,7 +944,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
 
                         {/* Price Column */}
                         <td style={{ width: `${PRICE_WIDTH}px` }} className="px-2 py-2 text-xs text-slate-500 dark:text-slate-400 text-right border-r border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono">
-                          {prices.plan.toLocaleString()}
+                          {nf(prices.plan)}
                         </td>
 
                         <td className="px-2 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400 text-center border-r border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
@@ -990,7 +992,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
 
                         {/* Price Column */}
                         <td style={{ width: `${PRICE_WIDTH}px` }} className="px-2 py-2 text-xs text-emerald-600 dark:text-emerald-400 text-right border-r border-b border-slate-200 dark:border-slate-700 bg-emerald-50/10 dark:bg-emerald-900/10 font-mono">
-                          {prices.actual.toLocaleString()}
+                          {nf(prices.actual)}
                         </td>
 
                         <td className="px-2 py-2 text-xs font-bold text-blue-600 dark:text-blue-400 text-center border-r border-b border-slate-200 dark:border-slate-700 bg-blue-50/30 dark:bg-blue-900/20">

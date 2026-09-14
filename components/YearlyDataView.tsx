@@ -13,6 +13,7 @@ import { EmptyStatePage, emptyStateActionClass } from './ui/EmptyState';
 import { RefreshBar } from './ui/RefreshBar';
 import { createLogger } from '../utils/logger';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useNumberFormat } from '../hooks/useNumberFormat';
 import { useToast } from '../contexts/ToastContext';
 import { Skeleton } from './ui/Skeleton';
 import {
@@ -88,6 +89,7 @@ const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) => {
   const { t, language } = useLanguage();
+  const { format: nf } = useNumberFormat();
   const toast = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [records, setRecords] = useState<Record<string, MonthlyRecord[]>>({});
@@ -449,7 +451,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
                 </td>
                 {monthlyTotals.map((d, idx) => (
                   <td key={`sp-${idx}`} className="px-1 py-2 text-xs font-bold text-right text-slate-600 dark:text-slate-300 border-r border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
-                    {d.plan > 0 ? d.plan.toLocaleString() : '-'}
+                    {d.plan > 0 ? nf(d.plan) : '-'}
                   </td>
                 ))}
                 <td className="px-2 py-2 border-l border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800"></td>
@@ -463,7 +465,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
                 </td>
                 {monthlyTotals.map((d, idx) => (
                   <td key={`sa-${idx}`} className="px-1 py-2 text-xs font-bold text-right text-blue-700 dark:text-blue-300 border-r border-b-2 border-slate-300 dark:border-slate-700 bg-blue-50/60 dark:bg-blue-900/30">
-                    {d.actual > 0 ? d.actual.toLocaleString() : '-'}
+                    {d.actual > 0 ? nf(d.actual) : '-'}
                   </td>
                 ))}
                 <td className="px-2 py-2 border-l border-b-2 border-slate-300 dark:border-slate-700 bg-blue-50/60 dark:bg-blue-900/30"></td>
@@ -473,11 +475,11 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
               {/* Summary Row: Accumulated Plan Total */}
               <tr className="bg-slate-100 dark:bg-slate-800 border-b border-slate-300 dark:border-slate-700">
                 <td className="px-2 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400 text-center border-r border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
-                  {t('tracker.planShort')} (累計)
+                  {`${t('tracker.planShort')} (${t('tracker.accumulated', 'Acc.')})`}
                 </td>
                 {accumulatedTotals.map((d, idx) => (
                   <td key={`sap-${idx}`} className="px-1 py-2 text-xs font-bold text-right text-slate-600 dark:text-slate-300 border-r border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
-                    {d.accPlan > 0 ? d.accPlan.toLocaleString() : '-'}
+                    {d.accPlan > 0 ? nf(d.accPlan) : '-'}
                   </td>
                 ))}
                 <td className="px-2 py-2 border-l border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800"></td>
@@ -487,11 +489,11 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
               {/* Summary Row: Accumulated Actual Total */}
               <tr className="bg-blue-50/60 dark:bg-blue-900/30 border-b-2 border-slate-400 dark:border-slate-600">
                 <td className="px-2 py-2 text-xs font-bold text-blue-600 dark:text-blue-400 text-center border-r border-b-2 border-slate-400 dark:border-slate-600 bg-blue-50/60 dark:bg-blue-900/30">
-                  {t('tracker.actualShort')} (累計)
+                  {`${t('tracker.actualShort')} (${t('tracker.accumulated', 'Acc.')})`}
                 </td>
                 {accumulatedTotals.map((d, idx) => (
                   <td key={`saa-${idx}`} className="px-1 py-2 text-xs font-bold text-right text-blue-700 dark:text-blue-300 border-r border-b-2 border-slate-400 dark:border-slate-600 bg-blue-50/60 dark:bg-blue-900/30">
-                    {d.accActual > 0 ? d.accActual.toLocaleString() : '-'}
+                    {d.accActual > 0 ? nf(d.accActual) : '-'}
                   </td>
                 ))}
                 <td className="px-2 py-2 border-l border-b-2 border-slate-400 dark:border-slate-600 bg-blue-50/60 dark:bg-blue-900/30"></td>
@@ -529,11 +531,11 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
                       </td>
                       {monthlyData.map((d, idx) => (
                         <td key={`p-${idx}`} className="px-1 py-2 text-xs text-right text-slate-500 dark:text-slate-400 border-r border-b border-slate-200 dark:border-slate-700">
-                          {d.plan > 0 ? d.plan.toLocaleString() : '-'}
+                          {d.plan > 0 ? nf(d.plan) : '-'}
                         </td>
                       ))}
                       <td className="px-2 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 text-right border-l border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-                        {totalPlan > 0 ? totalPlan.toLocaleString() : '-'}
+                        {totalPlan > 0 ? nf(totalPlan) : '-'}
                       </td>
                       <td
                         className="px-2 py-2 text-xs font-bold text-amber-700 dark:text-amber-400 text-right border-l border-b border-slate-200 dark:border-slate-700 bg-amber-50/30 dark:bg-amber-900/20"
@@ -550,11 +552,11 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
                       </td>
                       {monthlyData.map((d, idx) => (
                         <td key={`a-${idx}`} className={`px-1 py-2 text-xs text-right border-r border-b border-slate-200 dark:border-slate-700 font-medium ${d.actual > 0 ? 'text-blue-700 dark:text-blue-400 bg-blue-50/10 dark:bg-blue-900/10' : 'text-slate-400 dark:text-slate-500'}`}>
-                          {d.actual > 0 ? d.actual.toLocaleString() : '-'}
+                          {d.actual > 0 ? nf(d.actual) : '-'}
                         </td>
                       ))}
                       <td className="px-2 py-2 text-xs font-bold text-blue-700 dark:text-blue-400 text-right border-l border-b border-slate-200 dark:border-slate-700 bg-blue-50/30 dark:bg-blue-900/20">
-                        {totalActual > 0 ? totalActual.toLocaleString() : '-'}
+                        {totalActual > 0 ? nf(totalActual) : '-'}
                       </td>
                       <td
                         className="px-2 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-400 text-right border-l border-b border-slate-200 dark:border-slate-700 bg-emerald-50/30 dark:bg-emerald-900/20"

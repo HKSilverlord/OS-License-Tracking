@@ -5,6 +5,7 @@ import { TrendingUp, JapaneseYen, Clock, Calculator, Palette } from 'lucide-reac
 import { ExportButton } from './ExportButton';
 import { SectionExportMenu } from './SectionExportMenu';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useNumberFormat } from '../hooks/useNumberFormat';
 import { formatVariance } from '../utils/variance';
 import { useUserRole } from '../contexts/UserRoleContext';
 import { computeYearlyCost, useCatiaStore } from '../stores/useCatiaStore';
@@ -248,6 +249,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
 
   useCatiaHydration();
 
+  const { format: nf, formatDecimal: nfDecimal } = useNumberFormat();
+  const manYen = t('catia.manYenUnit', '万');
+
   const planShort = t('tracker.planShort', 'Plan');
   const actualShort = t('tracker.actualShort', 'Actual');
 
@@ -323,14 +327,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
   const breakEvenHours = unitPrice !== 0 ? licenseTotal / unitPrice : 0;
   const remainingHours = Math.max(0, totalPlanHours - totalActualHours);
 
-  const toMan = (val: number) => `${(val / 10000).toFixed(1)}万`;
+  const toMan = (val: number) => `${nfDecimal(val / 10000)}${manYen}`;
   const fmt = (val: number) => formatCurrency(val);
   const fmtSigned = (val: number) => {
     const abs = Math.abs(val);
     const sign = val < 0 ? '-' : '';
     return `${sign}${formatCurrency(abs)}`;
   };
-  const fmtHours = (val: number) => `${Math.round(val).toLocaleString()}h`;
+  const fmtHours = (val: number) => `${nf(Math.round(val))}h`;
 
   const currency = t('csv.unitCurrency', 'JPY');
 
@@ -683,8 +687,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
 
             <div className="mt-4 text-[11px] font-mono bg-slate-50 dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300 relative z-10">
               <div className="flex justify-between items-center">
-                <span>総額: {toMan(grossRevenuePlan)}</span>
-                <span className="text-rose-500 dark:text-rose-400">- ライセンス: {toMan(licenseTotal)}</span>
+                <span>{t('dashboard.net.grossTotal', 'Gross')}: {toMan(grossRevenuePlan)}</span>
+                <span className="text-rose-500 dark:text-rose-400">- {t('dashboard.summary.license', 'License Cost')}: {toMan(licenseTotal)}</span>
               </div>
             </div>
           </Card>
@@ -708,8 +712,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
 
             <div className="mt-4 text-[11px] font-mono bg-slate-50 dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300 relative z-10">
               <div className="flex justify-between items-center">
-                <span>総額: {toMan(grossRevenueActual)}</span>
-                <span className="text-rose-500 dark:text-rose-400">- ライセンス: {toMan(licenseTotal)}</span>
+                <span>{t('dashboard.net.grossTotal', 'Gross')}: {toMan(grossRevenueActual)}</span>
+                <span className="text-rose-500 dark:text-rose-400">- {t('dashboard.summary.license', 'License Cost')}: {toMan(licenseTotal)}</span>
               </div>
             </div>
           </Card>
@@ -732,8 +736,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
 
             <div className={`mt-4 text-[11px] font-mono p-2 rounded-lg border relative z-10 ${netRevenueActual >= netRevenuePlan ? 'bg-emerald-100/50 dark:bg-emerald-900/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300' : 'bg-rose-100/50 dark:bg-rose-900/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300'}`}>
               <div className="flex justify-between items-center">
-                <span>実績利益</span>
-                <span>- 目標利益</span>
+                <span>{t('dashboard.net.actual', 'Net Revenue (Actual)')}</span>
+                <span>- {t('dashboard.net.plan', 'Net Revenue (Plan)')}</span>
               </div>
             </div>
           </Card>
@@ -761,7 +765,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
           <div className="grid md:grid-cols-3 gap-3">
             <div className="bg-black/10 dark:bg-black/20 rounded-lg p-3 border border-white/10 backdrop-blur-sm">
               <div className="text-xs text-teal-50 font-semibold mb-1">{t('dashboard.license.count', 'License Seats')}</div>
-              <div className="text-xl font-bold text-white">{licenseComputers.toLocaleString()} <span className="text-base font-medium opacity-80">{t('dashboard.license.units', 'units')}</span></div>
+              <div className="text-xl font-bold text-white">{nf(licenseComputers)} <span className="text-base font-medium opacity-80">{t('dashboard.license.units', 'units')}</span></div>
               <div className="text-xs text-teal-50/80 mt-1">{t('dashboard.license.targetPc', 'Target PCs')}</div>
             </div>
             <div className="bg-black/10 dark:bg-black/20 rounded-lg p-3 border border-white/10 backdrop-blur-sm">
@@ -806,7 +810,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
             </div>
             <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 transition-colors">
               <p className="text-xs font-semibold text-slate-700 dark:text-slate-400 uppercase">{t('dashboard.costAnalysis.breakEven', 'Break-even Hours')}</p>
-              <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{Math.ceil(breakEvenHours).toLocaleString()} h</p>
+              <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{nf(Math.ceil(breakEvenHours))} h</p>
               <p className="text-[11px] font-medium text-slate-500 dark:text-slate-500 mt-1.5">{t('dashboard.notes.breakEven', 'License cost ÷ unit rate')}</p>
             </div>
           </div>
@@ -844,17 +848,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
               <div data-html2canvas-ignore="true" className="mb-4 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
                 <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">
                   <Palette className="w-4 h-4" />
-                  チャートの色をカスタマイズ
+                  {t('dashboard.colors.chartTitle', 'Customize chart colors')}
                 </h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <ColorField
-                    label={`売上（${planShort}）`}
+                    label={t('tracker.revenuePlan', 'Revenue (Plan)')}
                     labelClassName="text-xs font-medium text-slate-600 dark:text-slate-300"
                     value={chartColors.planRevenue}
                     onChange={(planRevenue) => setChartColors({ ...chartColors, planRevenue })}
                   />
                   <ColorField
-                    label={`売上（${actualShort}）`}
+                    label={t('tracker.revenueActual', 'Revenue (Actual)')}
                     labelClassName="text-xs font-medium text-slate-600 dark:text-slate-300"
                     value={chartColors.actualRevenue}
                     onChange={(actualRevenue) => setChartColors({ ...chartColors, actualRevenue })}
@@ -879,7 +883,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
                 <BarChart data={stats}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_PALETTE.grid} />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} stroke={CHART_PALETTE.labelNeutral} tick={{ fill: CHART_PALETTE.labelNeutral, fontSize: 12 }} />
-                  <YAxis axisLine={false} tickLine={false} stroke={CHART_PALETTE.labelNeutral} tick={{ fill: CHART_PALETTE.labelNeutral, fontSize: 11 }} tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
+                  <YAxis axisLine={false} tickLine={false} stroke={CHART_PALETTE.labelNeutral} tick={{ fill: CHART_PALETTE.labelNeutral, fontSize: 11 }} tickFormatter={(val) => `${nfDecimal(val / 10000)}${manYen}`} />
                   <Tooltip
                     formatter={(val: number) => fmt(val)}
                     contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.92)', color: '#fff', borderRadius: '8px', border: `1px solid ${CHART_PALETTE.grid}` }}
@@ -922,7 +926,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_PALETTE.grid} />
                   <XAxis dataKey="month" axisLine={false} tickLine={false} stroke={CHART_PALETTE.labelNeutral} tick={{ fill: CHART_PALETTE.labelNeutral, fontSize: 12 }} />
-                  <YAxis axisLine={false} tickLine={false} stroke={CHART_PALETTE.labelNeutral} tick={{ fill: CHART_PALETTE.labelNeutral, fontSize: 11 }} tickFormatter={(val) => `${(val / 10000).toFixed(1)}万`} />
+                  <YAxis axisLine={false} tickLine={false} stroke={CHART_PALETTE.labelNeutral} tick={{ fill: CHART_PALETTE.labelNeutral, fontSize: 11 }} tickFormatter={(val) => `${nfDecimal(val / 10000)}${manYen}`} />
                   <Tooltip
                     formatter={(val: number) => fmt(val)}
                     contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.92)', color: '#fff', borderRadius: '8px', border: `1px solid ${CHART_PALETTE.grid}` }}

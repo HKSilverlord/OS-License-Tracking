@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { TrendingUp, Palette } from 'lucide-react';
 import { ExportButton } from './ExportButton';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useNumberFormat } from '../hooks/useNumberFormat';
 import type { TranslateFn } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
 import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
@@ -61,17 +62,19 @@ const migrateChartColors = (raw: unknown): ChartColors | null => {
 };
 
 /** recharts 3 `LabelFormatter`: the label is a RenderableText, not necessarily a number. */
-const formatLabel = (value: string | number | boolean | null | undefined): string =>
-  typeof value === 'number' ? value.toLocaleString() : String(value ?? '');
+const makeFormatLabel = (nf: (value: number) => string) =>
+  (value: string | number | boolean | null | undefined): string =>
+    typeof value === 'number' ? nf(value) : String(value ?? '');
 
 /**
  * Tooltip body. Module scope on purpose: declared inside the view it would be a
  * new component type on every render and React would remount it. Recharts fills
  * in `active` / `payload` when it clones the element, so they are optional here.
  */
-const CustomTooltip = ({ active, payload, chartColors, t }: Partial<TooltipContentProps<number, string>> & {
+const CustomTooltip = ({ active, payload, chartColors, t, nf }: Partial<TooltipContentProps<number, string>> & {
   chartColors: ChartColors;
   t: TranslateFn;
+  nf: (value: number) => string;
 }) => {
   if (!active || !payload || payload.length === 0) return null;
 
@@ -91,7 +94,7 @@ const CustomTooltip = ({ active, payload, chartColors, t }: Partial<TooltipConte
               <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesPlan }}></div>
               <span className="text-slate-700 dark:text-slate-400">{t('longTermPlan.salesPlan', '売上計画')}:</span>
             </div>
-            <span className="font-medium text-slate-900 dark:text-slate-100">{data.salesPlan.toLocaleString()} {t('longTermPlan.unit.sales', '万円')}</span>
+            <span className="font-medium text-slate-900 dark:text-slate-100">{nf(data.salesPlan)} {t('longTermPlan.unit.sales', '万円')}</span>
           </div>
         )}
 
@@ -101,7 +104,7 @@ const CustomTooltip = ({ active, payload, chartColors, t }: Partial<TooltipConte
               <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesActual }}></div>
               <span className="text-slate-700 dark:text-slate-400">{t('longTermPlan.salesActual', '売上実績')}:</span>
             </div>
-            <span className="font-medium text-slate-900 dark:text-slate-100">{data.salesActual.toLocaleString()} {t('longTermPlan.unit.sales', '万円')}</span>
+            <span className="font-medium text-slate-900 dark:text-slate-100">{nf(data.salesActual)} {t('longTermPlan.unit.sales', '万円')}</span>
           </div>
         )}
 
@@ -116,7 +119,7 @@ const CustomTooltip = ({ active, payload, chartColors, t }: Partial<TooltipConte
               <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.hourlyRatePlan }}></div>
               <span className="text-slate-700 dark:text-slate-400">{t('longTermPlan.hourlyRatePlan', '平均時給計画')}:</span>
             </div>
-            <span className="font-medium text-slate-900 dark:text-slate-100">{data.hourlyRatePlan.toLocaleString()} {t('longTermPlan.unit.hourlyRate', '千円/時')}</span>
+            <span className="font-medium text-slate-900 dark:text-slate-100">{nf(data.hourlyRatePlan)} {t('longTermPlan.unit.hourlyRate', '千円/時')}</span>
           </div>
         )}
 
@@ -126,7 +129,7 @@ const CustomTooltip = ({ active, payload, chartColors, t }: Partial<TooltipConte
               <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.hourlyRateActual }}></div>
               <span className="text-slate-700 dark:text-slate-400">{t('longTermPlan.hourlyRateActual', '平均時給実績')}:</span>
             </div>
-            <span className="font-medium text-slate-900 dark:text-slate-100">{data.hourlyRateActual.toLocaleString()} {t('longTermPlan.unit.hourlyRate', '千円/時')}</span>
+            <span className="font-medium text-slate-900 dark:text-slate-100">{nf(data.hourlyRateActual)} {t('longTermPlan.unit.hourlyRate', '千円/時')}</span>
           </div>
         )}
       </div>
@@ -136,6 +139,8 @@ const CustomTooltip = ({ active, payload, chartColors, t }: Partial<TooltipConte
 
 export const LongTermPlanView: React.FC = () => {
   const { t } = useLanguage();
+  const { format: nf } = useNumberFormat();
+  const formatLabel = useMemo(() => makeFormatLabel(nf), [nf]);
   const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [longTermData, setLongTermData] = useState<LongTermPlanData[]>([]);
@@ -331,7 +336,7 @@ export const LongTermPlanView: React.FC = () => {
                 }}
               />
 
-              <Tooltip content={<CustomTooltip chartColors={chartColors} t={t} />} />
+              <Tooltip content={<CustomTooltip chartColors={chartColors} t={t} nf={nf} />} />
               <Legend
                 verticalAlign="top"
                 height={36}

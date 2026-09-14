@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useNumberFormat } from '../hooks/useNumberFormat';
 import { useUserRole } from '../contexts/UserRoleContext';
 import { useCatiaHydration } from '../hooks/useCatiaHydration';
 import { useCatiaStore, computeYearlyCost } from '../stores/useCatiaStore';
@@ -20,6 +21,7 @@ const years = [
 
 export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear }) => {
   const { t } = useLanguage();
+  const { format: nf } = useNumberFormat();
   const { isAdmin } = useUserRole();
 
   // Value-derived selectors (never select the stable `getYearlyCost` function —
@@ -196,7 +198,7 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
                   {t('catia.totalCostForYear', 'Total {year} license cost').replace('{year}', String(currentYear))}
                 </div>
                 <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">
-                  ¥{totalCostForYear.toLocaleString()}
+                  ¥{nf(totalCostForYear)}
                 </div>
               </div>
             </div>

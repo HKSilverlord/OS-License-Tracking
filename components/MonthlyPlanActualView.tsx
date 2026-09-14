@@ -2,6 +2,7 @@ import React, { useCallback, useState, useRef } from 'react';
 import { TrendingUp, Palette } from 'lucide-react';
 import { ExportButton } from './ExportButton';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useNumberFormat } from '../hooks/useNumberFormat';
 import type { TranslateFn } from '../contexts/LanguageContext';
 import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
 import { Skeleton } from './ui/Skeleton';
@@ -83,10 +84,11 @@ interface MonthlyPlanActualViewProps {
  * ------------------------------------------------------------------------ */
 
 // Reusable Detail Card Component
-const MonthDetailCard = ({ data, chartColors, t, hideShadow = false }: {
+const MonthDetailCard = ({ data, chartColors, t, nf, hideShadow = false }: {
   data: MonthlyPlanActualData;
   chartColors: MonthlyChartColors;
   t: TranslateFn;
+  nf: (value: number) => string;
   hideShadow?: boolean;
 }) => {
   return (
@@ -101,7 +103,7 @@ const MonthDetailCard = ({ data, chartColors, t, hideShadow = false }: {
             <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.capacityLine.color, opacity: chartColors.capacityLine.opacity, borderStyle: 'dashed' }}></div>
             <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.capacityLine', '能力線')}:</span>
           </div>
-          <span className="font-medium text-slate-900 dark:text-slate-100">{data.capacityLine.toLocaleString()} {t('monthlyPlanActual.unit.hours', '時間')}</span>
+          <span className="font-medium text-slate-900 dark:text-slate-100">{nf(data.capacityLine)} {t('monthlyPlanActual.unit.hours', '時間')}</span>
         </div>
 
         <div className="flex items-center justify-between gap-4">
@@ -109,7 +111,7 @@ const MonthDetailCard = ({ data, chartColors, t, hideShadow = false }: {
             <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.workingHoursPlan.color, opacity: chartColors.workingHoursPlan.opacity }}></div>
             <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.workingPlan', '稼働計画')}:</span>
           </div>
-          <span className="font-medium text-slate-900 dark:text-slate-100">{data.workingHoursPlan.toLocaleString()} {t('monthlyPlanActual.unit.hours', '時間')}</span>
+          <span className="font-medium text-slate-900 dark:text-slate-100">{nf(data.workingHoursPlan)} {t('monthlyPlanActual.unit.hours', '時間')}</span>
         </div>
 
         <div className="flex items-center justify-between gap-4">
@@ -117,7 +119,7 @@ const MonthDetailCard = ({ data, chartColors, t, hideShadow = false }: {
             <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.workingHoursActual.color, opacity: chartColors.workingHoursActual.opacity }}></div>
             <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.workingActual', '稼働実績')}:</span>
           </div>
-          <span className="font-medium text-slate-900 dark:text-slate-100">{data.workingHoursActual.toLocaleString()} {t('monthlyPlanActual.unit.hours', '時間')}</span>
+          <span className="font-medium text-slate-900 dark:text-slate-100">{nf(data.workingHoursActual)} {t('monthlyPlanActual.unit.hours', '時間')}</span>
         </div>
 
         {/* Sales Section */}
@@ -128,7 +130,7 @@ const MonthDetailCard = ({ data, chartColors, t, hideShadow = false }: {
             <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesPlan.color, opacity: chartColors.salesPlan.opacity }}></div>
             <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.salesPlan', '売上計画')}:</span>
           </div>
-          <span className="font-medium text-slate-900 dark:text-slate-100">{data.salesPlan.toLocaleString()} {t('monthlyPlanActual.unit.sales', '万円')}</span>
+          <span className="font-medium text-slate-900 dark:text-slate-100">{nf(data.salesPlan)} {t('monthlyPlanActual.unit.sales', '万円')}</span>
         </div>
 
         <div className="flex items-center justify-between gap-4">
@@ -136,7 +138,7 @@ const MonthDetailCard = ({ data, chartColors, t, hideShadow = false }: {
             <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesActual.color, opacity: chartColors.salesActual.opacity }}></div>
             <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.salesActual', '売上実績')}:</span>
           </div>
-          <span className="font-medium text-slate-900 dark:text-slate-100">{data.salesActual.toLocaleString()} {t('monthlyPlanActual.unit.sales', '万円')}</span>
+          <span className="font-medium text-slate-900 dark:text-slate-100">{nf(data.salesActual)} {t('monthlyPlanActual.unit.sales', '万円')}</span>
         </div>
       </div>
     </div>
@@ -144,14 +146,15 @@ const MonthDetailCard = ({ data, chartColors, t, hideShadow = false }: {
 };
 
 // Custom Tooltip Component (wraps Detail Card) — recharts 3 passes `TooltipContentProps`
-const CustomTooltip = ({ active, payload, chartColors, t }: Partial<TooltipContentProps<number, string>> & {
+const CustomTooltip = ({ active, payload, chartColors, t, nf }: Partial<TooltipContentProps<number, string>> & {
   chartColors: MonthlyChartColors;
   t: TranslateFn;
+  nf: (value: number) => string;
 }) => {
   if (!active || !payload || payload.length === 0) return null;
   const data = payload[0]?.payload as MonthlyPlanActualData | undefined;
   if (!data) return null;
-  return <MonthDetailCard data={data} chartColors={chartColors} t={t} />;
+  return <MonthDetailCard data={data} chartColors={chartColors} t={t} nf={nf} />;
 };
 
 // Custom zero label renderer for the Actual Sales bar
@@ -172,19 +175,20 @@ const ZeroLabel = ({ x = 0, y = 0, width = 0, value, chartColors }: {
 };
 
 // Generic custom label with semi-transparent background pill + optional outline
-const CustomLabel = ({ x = 0, y = 0, value, width = 0, dataKey, chartColors, offset = 10, position = 'top' }: {
+const CustomLabel = ({ x = 0, y = 0, value, width = 0, dataKey, chartColors, nf, offset = 10, position = 'top' }: {
   x?: number;
   y?: number;
   value?: number | string;
   width?: number;
   dataKey: keyof MonthlyChartColors;
   chartColors: MonthlyChartColors;
+  nf: (value: number) => string;
   offset?: number;
   position?: 'top' | 'insideTop' | 'left';
 }) => {
   if (value === 0 || !value) return null;
 
-  const formatted = typeof value === 'number' && value > 1000 ? value.toLocaleString() : value;
+  const formatted = typeof value === 'number' && value > 1000 ? nf(value) : value;
   const style = chartColors[dataKey];
   const color = style?.labelColor || CHART_PALETTE.labelNeutral;
   const fSize = style?.fontSize || 10;
@@ -306,6 +310,7 @@ const WorkingHoursActualBar = ({ fill, x = 0, y = 0, width = 0, height = 0, payl
 
 export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ currentYear }) => {
   const { t } = useLanguage();
+  const { format: nf } = useNumberFormat();
   const { loading, monthlyData, maxSales, maxWorkingHours } = useMonthlyPlanActualData(currentYear);
   const [pinnedMonth, setPinnedMonth] = useState<number | null>(null);
   const columnCoordsRef = useRef<Record<number, number>>({});
@@ -536,7 +541,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                   style={{ zIndex: 0 }}
                 />
                 <div className="relative z-10">
-                  <MonthDetailCard data={pinnedData} chartColors={chartColors} t={t} hideShadow={true} />
+                  <MonthDetailCard data={pinnedData} chartColors={chartColors} t={t} nf={nf} hideShadow={true} />
                 </div>
               </div>
             );
@@ -622,7 +627,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 }}
               />
 
-              <Tooltip content={<CustomTooltip chartColors={chartColors} t={t} />} />
+              <Tooltip content={<CustomTooltip chartColors={chartColors} t={t} nf={nf} />} />
               <Legend
                 verticalAlign="top"
                 height={36}
@@ -672,7 +677,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 strokeDasharray="5 5"
                 dot={false}
               >
-                <LabelList dataKey="capacityLine" position="left" content={<CustomLabel position="left" dataKey="capacityLine" chartColors={chartColors} />} />
+                <LabelList dataKey="capacityLine" position="left" content={<CustomLabel position="left" dataKey="capacityLine" chartColors={chartColors} nf={nf} />} />
               </Line>
 
               {/* Series 2: Working Hours Plan - Stacked Column (Y2) */}
@@ -685,7 +690,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 fillOpacity={chartColors.workingHoursPlan.opacity}
                 maxBarSize={chartColors.workingHoursPlan.barSize ?? 60}
               >
-                <LabelList dataKey="workingHoursPlan" position="insideTop" content={<CustomLabel position="insideTop" dataKey="workingHoursPlan" chartColors={chartColors} />} />
+                <LabelList dataKey="workingHoursPlan" position="insideTop" content={<CustomLabel position="insideTop" dataKey="workingHoursPlan" chartColors={chartColors} nf={nf} />} />
               </Bar>
 
               {/* Series 4: Sales Plan - Line with Markers and Data Labels (Y1) */}
@@ -700,7 +705,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 strokeWidth={3}
                 dot={{ fill: chartColors.salesPlan.color, r: 5 }}
               >
-                <LabelList dataKey="salesPlan" position="top" content={<CustomLabel position="top" dataKey="salesPlan" chartColors={chartColors} />} />
+                <LabelList dataKey="salesPlan" position="top" content={<CustomLabel position="top" dataKey="salesPlan" chartColors={chartColors} nf={nf} />} />
               </Line>
 
               {/* Series 5: Sales Actual - Column (Y1) */}
@@ -714,7 +719,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 radius={[4, 4, 0, 0]}
                 maxBarSize={chartColors.salesActual.barSize ?? 40}
               >
-                <LabelList dataKey="salesActual" position="top" content={<CustomLabel position="top" dataKey="salesActual" chartColors={chartColors} />} />
+                <LabelList dataKey="salesActual" position="top" content={<CustomLabel position="top" dataKey="salesActual" chartColors={chartColors} nf={nf} />} />
                 <LabelList content={<ZeroLabel chartColors={chartColors} />} />
               </Bar>
 
@@ -730,7 +735,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 maxBarSize={chartColors.workingHoursActual.barSize ?? 30}
                 shape={<WorkingHoursActualBar chartColors={chartColors} onColumnCoord={recordColumnCoord} />}
               >
-                <LabelList dataKey="workingHoursActual" position="insideTop" content={<CustomLabel position="insideTop" dataKey="workingHoursActual" chartColors={chartColors} />} />
+                <LabelList dataKey="workingHoursActual" position="insideTop" content={<CustomLabel position="insideTop" dataKey="workingHoursActual" chartColors={chartColors} nf={nf} />} />
               </Bar>
 
               {/* Invisible spacer to maintain layout mapping for actualLayer */}
