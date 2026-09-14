@@ -11,6 +11,7 @@
 import { toast } from '../contexts/ToastContext';
 import { createLogger } from './logger';
 import { translate } from '../contexts/LanguageContext';
+import { timestampedFilename } from './exportFilename';
 
 const log = createLogger('chartExport');
 
@@ -273,6 +274,18 @@ const downloadFile = (content: string | Blob, filename: string, mimeType: string
  * unreadable. Follow the theme instead; `index.css` drives dark mode from the
  * `dark` class on <html>, so that is what we read.
  */
+/** Device-pixel multiplier for every capture in the app. */
+export const DEFAULT_CAPTURE_SCALE = 2;
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/** Room above the plot for the exported SVG's heading. */
+const SVG_TITLE_BAND_PX = 40;
+
+/** Readable against `captureBackgroundColor()`, for text we draw ourselves. */
+export const captureForegroundColor = (): string =>
+  document.documentElement.classList.contains('dark') ? '#e2e8f0' : '#1e293b';
+
 export const captureBackgroundColor = (): string =>
   document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff';
 
@@ -439,7 +452,10 @@ export const captureElement = async (
   // Only image export needs html2canvas, and most sessions never trigger one.
   const { default: html2canvas } = await import('html2canvas');
 
-  const requested = options.scale ?? 3;
+  // 2x is the whole app's export resolution. A 1600px-wide chart lands at
+  // 3200px, which is more than any slide or document needs, and the 3x this
+  // used to default to made every capture ~2.2x slower and heavier for nothing.
+  const requested = options.scale ?? DEFAULT_CAPTURE_SCALE;
   let size = capturedSize(element);
 
   if (size.width === 0 || size.height === 0) {
@@ -569,12 +585,12 @@ export const copyElementToClipboard = async (
 };
 
 /**
- * PRIMARY: Export chart as SVG (vector format)
- * ✅ Perfect quality at any size
- * ✅ Transparent background
- * ✅ No canvas conversion issues
- * ✅ Smaller file size
- * ✅ Can be edited in design tools
+ * Export the chart as a standalone SVG.
+ *
+ * Vector, so it scales without blurring and stays editable in design tools. It
+ * carries the plot and its heading only: the legend and the detail card are
+ * HTML siblings of the chart, and there is no cheap way to redraw them as SVG.
+ * Reach for PNG or the clipboard when the whole panel is what you want.
  */
 export const exportChartToSVG = async (elementId: string, filename: string = 'chart.svg'): Promise<void> => {
   const chartContainer = document.getElementById(elementId);
@@ -600,28 +616,68 @@ export const exportChartToSVG = async (elementId: string, filename: string = 'ch
 
     log.debug('Exporting chart as SVG...');
 
-    // Get container dimensions
-    const containerRect = chartContainer.getBoundingClientRect();
-    const width = containerRect.width;
-    const height = containerRect.height;
+    // Measure the PLOT, not the container. The container also holds the HTML
+    // heading and legend, so sizing the surface by it left every exported file
+    // with a blank strip along the bottom exactly that row's height tall.
+    const surfaceRect = svgElement.getBoundingClientRect();
+    const width = Math.round(surfaceRect.width);
+    const height = Math.round(surfaceRect.height);
 
     // Clone the SVG deeply
     const clonedSvg = svgElement.cloneNode(true) as SVGElement;
-
-    // Set proper SVG attributes for standalone use
-    clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    clonedSvg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
-    clonedSvg.setAttribute('width', width.toString());
-    clonedSvg.setAttribute('height', height.toString());
-    clonedSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
 
     // Copy all computed styles inline for standalone rendering
     log.debug('Copying styles...');
     inlineAllStyles(svgElement, clonedSvg);
 
+    clonedSvg.setAttribute('width', width.toString());
+    clonedSvg.setAttribute('height', height.toString());
+    clonedSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+
+    // The plot alone is a mystery once it leaves the app, so carry the heading
+    // across as real text. It is the one piece of the HTML header worth the
+    // handful of lines; the legend would mean redrawing swatches and layout.
+    const title = chartContainer.querySelector('h1, h2, h3, h4')?.textContent?.trim() ?? '';
+    const titleBand = title ? SVG_TITLE_BAND_PX : 0;
+
+    const doc = chartContainer.ownerDocument;
+    const root = doc.createElementNS(SVG_NS, 'svg');
+    root.setAttribute('xmlns', SVG_NS);
+    root.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+    root.setAttribute('width', width.toString());
+    root.setAttribute('height', (height + titleBand).toString());
+    root.setAttribute('viewBox', `0 0 ${width} ${height + titleBand}`);
+
+    // An SVG with no background is transparent, and in dark mode the axis text
+    // is light — the file opened to near-invisible text on anything white.
+    const background = doc.createElementNS(SVG_NS, 'rect');
+    background.setAttribute('x', '0');
+    background.setAttribute('y', '0');
+    background.setAttribute('width', width.toString());
+    background.setAttribute('height', (height + titleBand).toString());
+    background.setAttribute('fill', captureBackgroundColor());
+    root.appendChild(background);
+
+    if (title) {
+      const heading = doc.createElementNS(SVG_NS, 'text');
+      heading.setAttribute('x', '16');
+      heading.setAttribute('y', '26');
+      heading.setAttribute('font-size', '16');
+      heading.setAttribute('font-weight', '700');
+      heading.setAttribute('font-family', getComputedStyle(chartContainer).fontFamily);
+      heading.setAttribute('fill', captureForegroundColor());
+      heading.textContent = title;
+      root.appendChild(heading);
+    }
+
+    const plotGroup = doc.createElementNS(SVG_NS, 'g');
+    plotGroup.setAttribute('transform', `translate(0, ${titleBand})`);
+    plotGroup.appendChild(clonedSvg);
+    root.appendChild(plotGroup);
+
     // Serialize to string
     const serializer = new XMLSerializer();
-    let svgString = serializer.serializeToString(clonedSvg);
+    let svgString = serializer.serializeToString(root);
 
     // Add XML declaration for proper SVG file
     svgString = '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n' + svgString;
@@ -742,13 +798,6 @@ export const copyChartToClipboard = (elementId: string): Promise<boolean> => {
   });
 };
 
-/**
- * Generate a filename with timestamp
- * @param prefix - Prefix for the filename
- * @param extension - File extension (default: 'svg')
- */
-export const generateChartFilename = (prefix: string, extension: string = 'svg'): string => {
-  const now = new Date();
-  const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-');
-  return `${prefix}_${timestamp}.${extension}`;
-};
+/** Generate a filename stamped with the local date and time. */
+export const generateChartFilename = (prefix: string, extension: string = 'svg'): string =>
+  timestampedFilename(prefix, extension);

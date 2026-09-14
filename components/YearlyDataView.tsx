@@ -337,7 +337,6 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
     // it in `onclone`). Doing it here too only reflowed the live page and threw
     // away the scroll position the user was reading at.
     copyElementToClipboard(tableElement, {
-      scale: 2,
       fallbackFilename: generateChartFilename(`yearly_data_${currentYear}`, 'png')
     })
       .then(ok => {

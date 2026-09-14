@@ -1,3 +1,5 @@
+import { timestampedFilename } from './exportFilename';
+
 /**
  * CSV Export Utilities
  * Export table data to CSV with UTF-8 encoding (BOM) for Excel compatibility
@@ -57,11 +59,8 @@ export const downloadCSV = (csvContent: string, filename: string): void => {
  * Generate a filename with timestamp
  * @param prefix - Prefix for the filename
  */
-export const generateCSVFilename = (prefix: string): string => {
-  const now = new Date();
-  const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-');
-  return `${prefix}_${timestamp}.csv`;
-};
+export const generateCSVFilename = (prefix: string): string =>
+  timestampedFilename(prefix, 'csv');
 
 /**
  * Export table data to CSV file

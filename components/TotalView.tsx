@@ -220,7 +220,10 @@ const MonthDetailCard = ({ data, chartColors, t, nf, unit, pinned = false, onUnp
     <div className={`bg-white dark:bg-slate-900 p-3 border border-slate-300 dark:border-slate-700 rounded-lg min-w-[200px] ${hideShadow ? '' : 'shadow-lg'}`}>
       <p className="font-semibold text-slate-800 dark:text-slate-100 mb-2 border-b border-slate-200 dark:border-slate-800 pb-1 flex items-center justify-between gap-2">
         <span className="flex items-center gap-1.5">
-          {pinned && <Pin className="w-3 h-3 text-indigo-500 dark:text-indigo-400" aria-hidden="true" />}
+          {/* The card itself is worth having in an exported image - it says which
+              month the chart is making a point about. Its controls are not: a
+              close button printed in a slide is just confusing. */}
+          {pinned && <Pin data-html2canvas-ignore className="w-3 h-3 text-indigo-500 dark:text-indigo-400" aria-hidden="true" />}
           {data.fullName}
         </span>
         <span className="flex items-center gap-1.5">
@@ -232,6 +235,7 @@ const MonthDetailCard = ({ data, chartColors, t, nf, unit, pinned = false, onUnp
           {pinned && onUnpin && (
             <button
               type="button"
+              data-html2canvas-ignore
               onClick={onUnpin}
               title={t('common.close', 'Close')}
               aria-label={t('common.close', 'Close')}
