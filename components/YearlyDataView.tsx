@@ -10,6 +10,7 @@ import { Check, GripVertical, ListChecks, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ExportButton } from './ExportButton';
 import { EmptyStatePage, emptyStateActionClass } from './ui/EmptyState';
+import { RefreshBar } from './ui/RefreshBar';
 import { createLogger } from '../utils/logger';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
@@ -96,6 +97,8 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
   const [loading, setLoading] = useState(true);
   /** A failed load used to leave a table of dashes behind a toast nobody saw. */
   const [loadError, setLoadError] = useState(false);
+  /** After the first year has landed, later loads refresh in place. */
+  const loadedOnceRef = useRef(false);
   const [isEditMode, setIsEditMode] = useState(false);
 
   const dragOffset = isEditMode ? 32 : 0;
@@ -138,9 +141,15 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
     tRef.current = t;
   }, [t]);
 
-  const fetchData = useCallback(async () => {
+  /**
+   * `silent` keeps the table on screen while the request runs.
+   *
+   * Saving hours in another view fires `dataUpdated`, and refetching loudly
+   * meant a save in Tracking wiped this whole table back to a skeleton.
+   */
+  const fetchData = useCallback(async (options?: { silent?: boolean }) => {
     const seq = ++loadSeqRef.current;
-    setLoading(true);
+    if (!options?.silent) setLoading(true);
     try {
       // A5: one year-scoped call replaces getPeriods() + getProjects(period) per period.
       // A1: `yearPrices.index` resolves the price of a (period_label, project_id) pair, so a
@@ -175,6 +184,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
       setPriceIndex(yearPrices.index);
       setPeriodLabels(yearPrices.periodLabels);
       setLoadError(false);
+      loadedOnceRef.current = true;
     } catch (error) {
       if (seq !== loadSeqRef.current) return;
       log.error('Failed to load data for Yearly Data View', error);
@@ -257,7 +267,8 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
   // Listen for data updates from other tabs
   useEffect(() => {
     const handleDataUpdated = () => {
-      fetchData();
+      // In place: an edit somewhere else must not blank the table being read.
+      fetchData({ silent: true });
     };
 
     window.addEventListener('dataUpdated', handleDataUpdated);
@@ -316,7 +327,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
     exportTableToCSV(headers, rows, generateCSVFilename(`yearly_data_${currentYear}`));
   };
 
-  if (loading) {
+  if (loading && !loadedOnceRef.current) {
     return (
       <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-4 md:p-6 overflow-hidden">
         <div className="flex-1 min-h-0 bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-200 dark:border-slate-800 p-4">
@@ -329,14 +340,14 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
 
   // Without a guard the table still draws its header and four total rows, all
   // reading `-`, which is what a broken year looks like too.
-  if (loadError) {
+  if (loadError && !loading) {
     return (
       <EmptyStatePage
         tone="error"
         title={t('empty.loadFailedTitle', 'Could not load this year')}
         description={t('empty.loadFailedHint', 'The request did not come back. Check the connection and try again.')}
         actions={
-          <button type="button" onClick={fetchData} className={emptyStateActionClass}>
+          <button type="button" onClick={() => fetchData()} className={emptyStateActionClass}>
             <RefreshCw className="w-4 h-4" />
             {t('buttons.retry', 'Try again')}
           </button>
@@ -345,7 +356,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
     );
   }
 
-  if (projects.length === 0) {
+  if (projects.length === 0 && !loading) {
     return (
       <EmptyStatePage
         title={t('empty.noDataTitle', 'No hours recorded for {year} yet').replace('{year}', String(currentYear))}
@@ -387,10 +398,14 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
               filename={`yearly_data_${currentYear}`}
               onExportCsv={handleExportCSV}
               allowSvg={false}
+              disabled={loading}
             />
           </div>
         </div>
-        <div className="flex-1 min-h-0 overflow-auto relative isolate custom-scrollbar">
+        {loading && <RefreshBar />}
+        {/* The old year stays readable while the new one loads; it is dimmed so
+            nobody reads it as the year they just picked. */}
+        <div className={`flex-1 min-h-0 overflow-auto relative isolate custom-scrollbar transition-opacity duration-200 ${loading ? 'opacity-40' : ''}`}>
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={projects.map(p => p.id)} strategy={verticalListSortingStrategy}>
               <table id="yearly-data-table" className="w-full min-w-max border-separate border-spacing-0">

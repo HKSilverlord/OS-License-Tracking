@@ -4,6 +4,7 @@ import { dbService } from '../services/dbService';
 import { Link } from 'react-router-dom';
 import { ExportButton } from './ExportButton';
 import { EmptyStatePage, emptyStateActionClass } from './ui/EmptyState';
+import { RefreshBar } from './ui/RefreshBar';
 import { TrendingUp, Palette, Pin, RefreshCw, X } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { TranslateFn } from '../contexts/LanguageContext';
@@ -452,6 +453,8 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   const [loading, setLoading] = useState(true);
   /** A failed load used to leave an empty grid behind a toast nobody saw. */
   const [loadError, setLoadError] = useState(false);
+  /** After the first year has landed, later loads refresh in place. */
+  const loadedOnceRef = useRef(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [pinnedMonth, setPinnedMonth] = useState<number | null>(null);
   // Hovering and selecting used to render two different cards in two different
@@ -609,14 +612,21 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     tRef.current = t;
   }, [t]);
 
-  const fetchData = useCallback(async () => {
+  /**
+   * `silent` keeps whatever is on screen while the request runs.
+   *
+   * Saving hours in another view fires `dataUpdated`, and refetching loudly
+   * meant a save in Tracking wiped this whole view back to a skeleton.
+   */
+  const fetchData = useCallback(async (options?: { silent?: boolean }) => {
     const seq = ++loadSeqRef.current;
-    setLoading(true);
+    if (!options?.silent) setLoading(true);
     try {
       const recordsData = await dbService.getAllRecords(currentYear);
       if (seq !== loadSeqRef.current) return;
       setAllRecords(recordsData);
       setLoadError(false);
+      loadedOnceRef.current = true;
     } catch (error) {
       if (seq !== loadSeqRef.current) return;
       log.error('Failed to load data for Total View', error);
@@ -634,7 +644,8 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   // Listen for data updates from other tabs
   useEffect(() => {
     const handleDataUpdated = () => {
-      fetchData();
+      // In place: an edit somewhere else must not blank the chart being read.
+      fetchData({ silent: true });
     };
 
     window.addEventListener('dataUpdated', handleDataUpdated);
@@ -771,7 +782,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     return { yAxisMax: maxLimit, yAxisTicks: ticks };
   }, [chartData]);
 
-  if (loading) {
+  if (loading && !loadedOnceRef.current) {
     return (
       <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-4 md:p-6 overflow-hidden">
         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex-1 flex flex-col gap-4">
@@ -785,14 +796,14 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
 
   // A chart drawn against a fallback axis with no bars on it looks broken, and
   // looks exactly the same whether the year is empty or the request failed.
-  if (loadError) {
+  if (loadError && !loading) {
     return (
       <EmptyStatePage
         tone="error"
         title={t('empty.loadFailedTitle', 'Could not load this year')}
         description={t('empty.loadFailedHint', 'The request did not come back. Check the connection and try again.')}
         actions={
-          <button type="button" onClick={fetchData} className={emptyStateActionClass}>
+          <button type="button" onClick={() => fetchData()} className={emptyStateActionClass}>
             <RefreshCw className="w-4 h-4" />
             {t('buttons.retry', 'Try again')}
           </button>
@@ -801,7 +812,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     );
   }
 
-  if (allRecords.length === 0) {
+  if (allRecords.length === 0 && !loading) {
     return (
       <EmptyStatePage
         title={t('empty.noDataTitle', 'No hours recorded for {year} yet').replace('{year}', String(currentYear))}
@@ -860,6 +871,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
               filename={`yearly_overview_${currentYear}`}
               data={chartData}
               csvColumns={csvColumns}
+              disabled={loading}
               onBeforeCapture={settleBars}
             />
           </div>
@@ -947,7 +959,13 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
             </div>
           </div>
         )}
-        <div id="total-view-chart" className="flex-1 min-h-0 relative flex flex-col">
+        {loading && <RefreshBar className="mb-2" />}
+        {/* The old year stays readable while the new one loads; it is dimmed so
+            nobody reads it as the year they just picked. */}
+        <div
+          id="total-view-chart"
+          className={`flex-1 min-h-0 relative flex flex-col transition-opacity duration-200 ${loading ? 'opacity-40' : ''}`}
+        >
 
           {/* Title and legend sit INSIDE the capture target, so an exported or
               copied image carries its own heading and key. */}
