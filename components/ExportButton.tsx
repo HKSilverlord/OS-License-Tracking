@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Copy, FileSpreadsheet, Image as ImageIcon, Loader2, Shapes } from 'lucide-react';
+import type { CsvColumn } from '../utils/chartExport';
 import {
   copyChartToClipboard,
   exportChartDataToCSV,
@@ -17,6 +18,11 @@ interface ExportButtonProps {
   filename: string;
   /** Rows for the default CSV export. Omit to hide the CSV entry. */
   data?: readonly unknown[];
+  /**
+   * Which fields of `data` go into the CSV, and their translated headings.
+   * Omit and the file carries the raw property names.
+   */
+  csvColumns?: readonly CsvColumn[];
   /** Replaces the default CSV export, for views that build their own columns. */
   onExportCsv?: () => void;
   /** SVG only makes sense for a Recharts panel; tables and sections set false. */
@@ -52,6 +58,7 @@ export const ExportButton: React.FC<ExportButtonProps> = ({
   targetId,
   filename,
   data,
+  csvColumns,
   onExportCsv,
   allowSvg = true,
   disabled = false,
@@ -190,7 +197,7 @@ export const ExportButton: React.FC<ExportButtonProps> = ({
                 className={ITEM}
                 onClick={run(() => {
                   if (onExportCsv) return onExportCsv();
-                  if (data) exportChartDataToCSV(data, generateChartFilename(`${filename}_data`, 'csv'));
+                  if (data) exportChartDataToCSV(data, generateChartFilename(`${filename}_data`, 'csv'), csvColumns);
                 })}
               >
                 <FileSpreadsheet className="w-4 h-4" />

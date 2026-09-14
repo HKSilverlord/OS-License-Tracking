@@ -511,6 +511,21 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   );
   const unit = t('totalView.unit.hours', 'h');
 
+  /**
+   * Headings for the CSV, in the reader's own language.
+   *
+   * Also the field list: `name` duplicates `fullName` and `isFuture` is an
+   * internal flag, and neither belongs in a file someone opens in Excel.
+   */
+  const csvColumns = useMemo(() => [
+    { key: 'month', label: t('csv.month', 'Month') },
+    { key: 'fullName', label: t('csv.monthName', 'Month name') },
+    { key: 'plan', label: `${t('tracker.planShort', 'Plan')} (${unit})` },
+    { key: 'actual', label: `${t('tracker.actualShort', 'Actual')} (${unit})` },
+    { key: 'accPlan', label: `${t('dashboard.chart.accPlan', 'Accumulated Plan')} (${unit})` },
+    { key: 'accActual', label: `${t('dashboard.chart.accActual', 'Accumulated Actual')} (${unit})` },
+  ], [t, unit]);
+
   // Current month highlight
   const currentMonth = new Date().getFullYear() === currentYear ? new Date().getMonth() + 1 : null;
   const [showCurrentMonth, setShowCurrentMonth] = useState(true);
@@ -732,6 +747,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
               targetId="total-view-chart"
               filename={`yearly_overview_${currentYear}`}
               data={chartData}
+              csvColumns={csvColumns}
               onBeforeCapture={settleBars}
             />
           </div>

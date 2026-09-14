@@ -182,6 +182,18 @@ export const LongTermPlanView: React.FC = () => {
   }, [toast]);
 
   // Chart data preparation - convert nulls to undefined for Recharts
+  const salesUnit = t('longTermPlan.unit.sales', '10k JPY');
+  const rateUnit = t('longTermPlan.unit.hourlyRate', 'k JPY/hr');
+
+  /** Translated headings, with the unit each column is actually in. */
+  const csvColumns = [
+    { key: 'year', label: t('longTermPlan.year', 'Year') },
+    { key: 'salesPlan', label: `${t('longTermPlan.salesPlan', 'Sales (Plan)')} (${salesUnit})` },
+    { key: 'salesActual', label: `${t('longTermPlan.salesActual', 'Sales (Actual)')} (${salesUnit})` },
+    { key: 'hourlyRatePlan', label: `${t('longTermPlan.hourlyRatePlan', 'Hourly rate (Plan)')} (${rateUnit})` },
+    { key: 'hourlyRateActual', label: `${t('longTermPlan.hourlyRateActual', 'Hourly rate (Actual)')} (${rateUnit})` },
+  ];
+
   const chartData = useMemo<LongTermChartRow[]>(() => {
     return longTermData.map(d => ({
       year: d.year.toString(),
@@ -227,6 +239,7 @@ export const LongTermPlanView: React.FC = () => {
               targetId="long-term-plan-chart"
               filename="long_term_plan"
               data={chartData}
+              csvColumns={csvColumns}
             />
           </div>
         </div>

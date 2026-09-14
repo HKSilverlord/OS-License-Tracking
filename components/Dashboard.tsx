@@ -331,6 +331,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
   };
   const fmtHours = (val: number) => `${Math.round(val).toLocaleString()}h`;
 
+  const currency = t('csv.unitCurrency', 'JPY');
+
+  /** Translated headings for the two chart CSVs, so Excel shows words, not field names. */
+  const monthlyCsvColumns = [
+    { key: 'month', label: t('csv.month', 'Month') },
+    { key: 'name', label: t('csv.monthName', 'Month name') },
+    { key: 'plannedHours', label: t('dashboard.kpi.planHoursLabel', 'Planned Hours') },
+    { key: 'actualHours', label: t('dashboard.kpi.actualHoursLabel', 'Actual Hours') },
+    { key: 'plannedRevenue', label: `${t('tracker.revenuePlan', 'Revenue (Plan)')} (${currency})` },
+    { key: 'actualRevenue', label: `${t('tracker.revenueActual', 'Revenue (Actual)')} (${currency})` },
+  ];
+
+  const cumulativeCsvColumns = [
+    { key: 'month', label: t('csv.month', 'Month') },
+    { key: 'accPlannedRevenue', label: `${t('dashboard.chart.accPlan', 'Accumulated Plan')} (${currency})` },
+    { key: 'accActualRevenue', label: `${t('dashboard.chart.accActual', 'Accumulated Actual')} (${currency})` },
+  ];
+
   const gradientSuffix = t('dashboard.colors.gradientSuffix', '(Gradient)');
   const fromLabel = t('dashboard.colors.from', 'From');
   const toLabel = t('dashboard.colors.to', 'To');
@@ -805,6 +823,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
                   targetId="dashboard-monthly-chart"
                   filename={`monthly_revenue_${currentYear}`}
                   data={stats}
+                  csvColumns={monthlyCsvColumns}
                 />
               </div>
             </div>
@@ -877,6 +896,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
                 targetId="dashboard-cumulative-chart"
                 filename={`cumulative_revenue_${currentYear}`}
                 data={accumulatedStats}
+                csvColumns={cumulativeCsvColumns}
               />
             </div>
             <div id="dashboard-cumulative-chart" className="h-72">

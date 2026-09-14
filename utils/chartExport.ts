@@ -750,10 +750,35 @@ export const exportChartToPNG = async (elementId: string, filename: string = 'ch
   }
 };
 
+/** One column of an exported CSV: the field to read, and the heading to print. */
+export interface CsvColumn {
+  /** Property name on each row. */
+  key: string;
+  /** Heading, already translated by the caller. */
+  label: string;
+}
+
+const csvCell = (value: unknown): string => {
+  // Quote on newline as well as comma/quote: an unquoted newline splits the
+  // record and shifts every later column. Headings go through this too, since a
+  // translated one is free to contain a comma.
+  const text = value == null ? '' : String(value);
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
+
 /**
- * Export chart data as CSV for analysis
+ * Export chart data as CSV for analysis.
+ *
+ * Pass `columns` to choose which fields go into the file and what they are
+ * called. Without it the headings are the internal property names, so whoever
+ * opened the file met `accPlannedRevenue` instead of "Accumulated Plan (JPY)",
+ * with internal flags like `isFuture` along for the ride.
  */
-export const exportChartDataToCSV = (data: readonly unknown[], filename: string = 'chart-data.csv'): void => {
+export const exportChartDataToCSV = (
+  data: readonly unknown[],
+  filename: string = 'chart-data.csv',
+  columns?: readonly CsvColumn[]
+): void => {
   try {
     const rows = (data ?? []).filter(
       (row): row is Record<string, unknown> => typeof row === 'object' && row !== null
@@ -766,21 +791,13 @@ export const exportChartDataToCSV = (data: readonly unknown[], filename: string 
 
     log.debug('Exporting chart data as CSV...');
 
-    const headers = Object.keys(rows[0]);
+    const fields: readonly CsvColumn[] = columns?.length
+      ? columns
+      : Object.keys(rows[0]).map(key => ({ key, label: key }));
 
     const csvRows = [
-      headers.join(','), // Header row
-      ...rows.map(row =>
-        headers.map(header => {
-          const value = row[header];
-          // Quote on newline as well as comma/quote — an unquoted newline splits
-          // the record and shifts every later column.
-          if (typeof value === 'string' && /[",\n\r]/.test(value)) {
-            return `"${value.replace(/"/g, '""')}"`;
-          }
-          return value;
-        }).join(',')
-      )
+      fields.map(field => csvCell(field.label)).join(','),
+      ...rows.map(row => fields.map(field => csvCell(row[field.key])).join(','))
     ];
 
     const csvContent = '\uFEFF' + csvRows.join('\n'); // Add BOM for Excel

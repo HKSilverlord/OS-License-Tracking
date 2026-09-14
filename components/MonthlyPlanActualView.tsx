@@ -310,6 +310,20 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
   const [pinnedMonth, setPinnedMonth] = useState<number | null>(null);
   const columnCoordsRef = useRef<Record<number, number>>({});
 
+  const hoursUnit = t('monthlyPlanActual.unit.hours', 'hrs');
+  const salesUnit = t('monthlyPlanActual.unit.sales', '10k JPY');
+
+  /** Translated headings, with the unit each column is actually in. */
+  const csvColumns = [
+    { key: 'month', label: t('csv.month', 'Month') },
+    { key: 'monthLabel', label: t('csv.monthName', 'Month name') },
+    { key: 'capacityLine', label: `${t('monthlyPlanActual.capacityLine', 'Capacity')} (${hoursUnit})` },
+    { key: 'workingHoursPlan', label: `${t('monthlyPlanActual.workingPlan', 'Working hours (Plan)')} (${hoursUnit})` },
+    { key: 'workingHoursActual', label: `${t('monthlyPlanActual.workingActual', 'Working hours (Actual)')} (${hoursUnit})` },
+    { key: 'salesPlan', label: `${t('monthlyPlanActual.salesPlan', 'Sales (Plan)')} (${salesUnit})` },
+    { key: 'salesActual', label: `${t('monthlyPlanActual.salesActual', 'Sales (Actual)')} (${salesUnit})` },
+  ];
+
   const [showColorPicker, setShowColorPicker] = useState(false);
   // Colours live behind the shared preference helper (U8): the localStorage key is unchanged
   // so existing user picks survive (see `migrateChartColors`), and every set() persists.
@@ -389,6 +403,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
               targetId="monthly-plan-actual-chart"
               filename={`monthly_plan_actual_${currentYear}`}
               data={monthlyData}
+              csvColumns={csvColumns}
             />
           </div>
         </div>
