@@ -420,7 +420,8 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
               {totalRows.map((row, i) => {
                 const last = i === totalRows.length - 1;
                 const edge = last ? 'border-b border-slate-200 dark:border-slate-700' : '';
-                const tone = row.strong ? 'font-semibold text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400';
+                // Actual figures in blue, as in the charts; the plan recedes.
+                const tone = row.strong ? 'font-semibold text-blue-700 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400';
                 return (
                   <tr key={row.key}>
                     {i === 0 && (
@@ -497,19 +498,19 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
                     </td>
                   </tr>
                   <tr>
-                    <th scope="row" className={`${SURFACE} ${ROW_END} border-r border-r-slate-100 px-2 py-1.5 text-left text-[12px] font-medium text-slate-900 dark:border-r-slate-800 dark:text-white`}>
+                    <th scope="row" className={`${SURFACE} ${ROW_END} border-r border-r-slate-100 px-2 py-1.5 text-left text-[12px] font-medium text-blue-700 dark:border-r-slate-800 dark:text-blue-300`}>
                       {actualLabel}
                     </th>
                     {monthlyData.map((d, idx) => (
-                      <td key={idx} className={`${SURFACE} ${ROW_END} ${NUM} font-medium text-slate-900 dark:text-white`}>
+                      <td key={idx} className={`${SURFACE} ${ROW_END} ${NUM} font-medium text-blue-700 dark:text-blue-300`}>
                         {d.actual > 0 ? nf(d.actual) : <Dash />}
                       </td>
                     ))}
-                    <td className={`${SURFACE} ${ROW_END} ${NUM} border-l border-l-slate-100 font-semibold text-slate-900 dark:border-l-slate-800 dark:text-white`}>
+                    <td className={`${SURFACE} ${ROW_END} ${NUM} border-l border-l-slate-100 font-semibold text-blue-700 dark:border-l-slate-800 dark:text-blue-300`}>
                       {totalActual > 0 ? nf(totalActual) : <Dash />}
                     </td>
                     <td
-                      className={`${SURFACE} ${ROW_END} ${NUM} border-l border-l-slate-100 font-semibold text-slate-900 dark:border-l-slate-800 dark:text-white ${actualPriceNote ? 'cursor-help underline decoration-slate-300 decoration-dotted underline-offset-4 dark:decoration-slate-600' : ''}`}
+                      className={`${SURFACE} ${ROW_END} ${NUM} border-l border-l-slate-100 font-semibold text-blue-700 dark:border-l-slate-800 dark:text-blue-300 ${actualPriceNote ? 'cursor-help underline decoration-slate-300 decoration-dotted underline-offset-4 dark:decoration-slate-600' : ''}`}
                       title={actualPriceNote}
                     >
                       {revenue.actual > 0 ? nf(Math.round(revenue.actual)) : <Dash />}

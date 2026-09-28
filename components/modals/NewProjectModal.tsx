@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { dbService } from '../../services/dbService';
 import { Project, ProjectStatus } from '../../types';
 import { DEFAULT_UNIT_PRICE } from '../../constants';
@@ -73,8 +74,15 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
   const update = <K extends keyof NewProjectForm>(key: K, value: NewProjectForm[K]) =>
     setForm(prev => ({ ...prev, [key]: value }));
 
-  const handleSubmit = async (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!form.name.trim()) {
+      // `required` lets a name of only spaces through: empty it, and the browser asks for one.
+      const formElement = event.currentTarget;
+      flushSync(() => update('name', ''));
+      formElement.reportValidity();
+      return;
+    }
     if (!(form.plan_price > 0)) {
       setPriceMissing(true);
       planPriceRef.current?.focus();

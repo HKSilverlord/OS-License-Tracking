@@ -6,6 +6,7 @@ import { ExportButton } from './ExportButton';
 import { CurrentMonthBadge } from './CurrentMonthBadge';
 import { SeriesStyleButton, SeriesStyleCheck, type SeriesStyle } from './SeriesStyleButton';
 import { YearControl, YearExportButton } from './YearControl';
+import { Button } from './ui/Button';
 import { buttonClasses } from './ui/buttonClasses';
 import { Card, CardHeader, WithYear } from './ui/Card';
 import { EmptyState } from './ui/EmptyState';
@@ -377,7 +378,8 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
     );
   }
 
-  if (!hasLoaded) {
+  // Any failed load, not only the first: the chart still on screen is another year's.
+  if (error) {
     return (
       <Page {...header}>
         <Card>
@@ -386,9 +388,9 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
             title={t('empty.loadFailedTitle', 'Could not load this year')}
             description={t('empty.loadFailedHint', 'The request did not come back. Check the connection and try again.')}
             actions={
-              <button type="button" onClick={reload} className={buttonClasses('secondary')}>
+              <Button variant="secondary" onClick={reload} isLoading={loading}>
                 {t('buttons.retry', 'Try again')}
-              </button>
+              </Button>
             }
           />
         </Card>

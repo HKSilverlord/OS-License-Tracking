@@ -112,6 +112,10 @@ const ProjectPicker: React.FC<ProjectPickerProps> = ({ projects, selected, onCha
           type="search"
           value={query}
           onChange={event => setQuery(event.target.value)}
+          // Inside the editor's form: Enter here would save the period mid-search.
+          onKeyDown={event => {
+            if (event.key === 'Enter') event.preventDefault();
+          }}
           placeholder={t('searchPlaceholder', 'Search by name, code or type')}
           aria-label={t('searchProjects', 'Search projects')}
           className="pl-9"

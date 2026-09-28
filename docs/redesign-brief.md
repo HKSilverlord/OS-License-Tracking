@@ -27,7 +27,8 @@ mark is a vector icon (`components/ui/AppIcon.tsx`, `public/favicon.svg`).
    orange marks this month, and red and green mean below and above plan. Colour is never
    decoration, and never the only signal: arrows, signs and words carry the same meaning.
 4. **One way to do each thing.** One year control per page, in the page header. One
-   export menu per card. One save for the tracking table, with `Ctrl S`.
+   export menu per card. One save for the tracking table, with `Ctrl S`. Projects are
+   put in order in one place, Project tracking, and every other table follows that order.
 5. **Friendly empty and error states.** Every empty state says what is missing and offers
    the next step. Every error says what happened in plain words, keeps what the user
    entered, and offers "Try again".

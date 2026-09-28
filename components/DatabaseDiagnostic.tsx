@@ -117,7 +117,7 @@ export const DatabaseDiagnostic: React.FC = () => {
       title: t('diagnostic.repair.confirmTitle', 'Repair missing links?'),
       message: t(
         'diagnostic.repair.confirmMessage',
-        'Every project that names a period but is not linked to it gets linked, at its current prices. Nothing is changed or deleted.',
+        'Every project linked to no period gets linked to the period recorded on it, at its current prices. Nothing is changed or deleted.',
       ),
       confirmLabel: t('diagnostic.repair.confirm', 'Repair'),
     });
@@ -260,7 +260,7 @@ export const DatabaseDiagnostic: React.FC = () => {
     return (
       <p className="flex items-center gap-1.5 text-[13px] text-slate-600 dark:text-slate-300">
         <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500 dark:text-emerald-400" aria-hidden="true" />
-        {t('diagnostic.repair.nothing', 'Nothing to repair: every project that names a period is linked to it.')}
+        {t('diagnostic.repair.nothing', 'Nothing to repair: every project is linked to at least one period.')}
       </p>
     );
   };
@@ -296,7 +296,7 @@ export const DatabaseDiagnostic: React.FC = () => {
             title={t('diagnostic.repair.title', 'Missing project links')}
             description={t(
               'diagnostic.repair.desc',
-              'A project shows up in a period only once it is linked to it. This finds projects that name a period without being linked to it, and links them.',
+              'A project shows up in a period only once it is linked to it. This finds projects linked to no period at all, and links each one to the period recorded on it.',
             )}
           />
           <div className="mt-5 flex flex-col items-start gap-4">
