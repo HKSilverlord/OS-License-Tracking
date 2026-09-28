@@ -42,10 +42,14 @@ type SortConfig = { key: SortKey; direction: 'asc' | 'desc' };
 
 const MANUAL_ORDER: SortConfig = { key: 'display_order', direction: 'asc' };
 
-/** Column widths in px. The first three stay put while the months scroll. */
+/**
+ * Column widths in px. From `xl` the first three stay put while the months
+ * scroll, so No. and Excl. leave room for their sort buttons and the longest
+ * heading (Vietnamese): a cell wider than its width would slide under the next.
+ */
 const W = {
-  no: 48,
-  excl: 72,
+  no: 56,
+  excl: 80,
   name: 224,
   notes: 200,
   software: 150,
@@ -65,28 +69,29 @@ const SURFACE =
   'bg-white group-hover:bg-slate-50 dark:bg-slate-900 ' +
   'dark:group-hover:bg-[color-mix(in_oklab,var(--color-slate-900),var(--color-slate-800)_55%)]';
 
-/* On a phone the project name and Plan/Actual stay frozen: No. and Excl.
-   would take a third of the screen. From `sm` up all four are frozen. The
-   offsets are W.no, W.no + W.excl and the name's right edge; Tailwind needs
-   them written out. */
-const STICKY_NO = 'sm:sticky sm:left-0 sm:z-10';
-const STICKY_EXCL = 'sm:sticky sm:left-[48px] sm:z-10';
-const STICKY_NAME = 'sticky left-0 z-10 sm:left-[120px]';
-const NAME_WIDTH = 'w-[128px] min-w-[128px] max-w-[128px] sm:w-[224px] sm:min-w-[224px] sm:max-w-[224px]';
+/* The project name and Plan/Actual are always frozen. No., Excl. and the
+   actions column join them only from `xl`: below that, with the sidebar open,
+   they would leave no room for a single month. The name is narrow until `lg`.
+   The offsets are W.no, W.no + W.excl and the name's right edge; Tailwind
+   needs them written out. */
+const STICKY_NO = 'xl:sticky xl:left-0 xl:z-10';
+const STICKY_EXCL = 'xl:sticky xl:left-[56px] xl:z-10';
+const STICKY_NAME = 'sticky left-0 z-10 xl:left-[136px]';
+const NAME_WIDTH = 'w-[128px] min-w-[128px] max-w-[128px] lg:w-[224px] lg:min-w-[224px] lg:max-w-[224px]';
 /* Rate and any detail columns slide under it, so a row always says what it is. */
-const STICKY_KIND = 'sticky left-[128px] z-10 sm:left-[344px]';
+const STICKY_KIND = 'sticky left-[128px] z-10 lg:left-[224px] xl:left-[360px]';
 
 const HEAD =
   'sticky top-0 z-20 h-10 border-b border-slate-200 bg-white px-2 text-[12px] font-medium text-slate-500 ' +
   'dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400';
 /* Header cells frozen both ways sit above the rest. HEAD is already sticky
    to the top, so a left offset is all it takes to freeze one sideways. */
-const HEAD_NO = 'sm:left-0 sm:z-30';
-const HEAD_EXCL = 'sm:left-[48px] sm:z-30';
-const HEAD_NAME = 'left-0 z-30! sm:left-[120px]';
-const HEAD_KIND = 'left-[128px] z-30! sm:left-[344px]';
-/* Frozen on the right from `sm` up; on a phone its width goes to the months. */
-const HEAD_ACTIONS = 'sm:right-0 z-30!';
+const HEAD_NO = 'xl:left-0 xl:z-30';
+const HEAD_EXCL = 'xl:left-[56px] xl:z-30';
+const HEAD_NAME = 'left-0 z-30! xl:left-[136px]';
+const HEAD_KIND = 'left-[128px] z-30! lg:left-[224px] xl:left-[360px]';
+/* Frozen on the right from `xl` up; below that its width goes to the months. */
+const HEAD_ACTIONS = 'xl:right-0 z-30!';
 
 /** Where the grid ends a project: a hairline under its Actual row. */
 const ROW_END = 'border-b border-slate-100 dark:border-slate-800';
@@ -144,12 +149,12 @@ const ariaSort = (sort: SortConfig, key: SortKey): React.AriaAttributes['aria-so
   sort.key === key ? (sort.direction === 'asc' ? 'ascending' : 'descending') : undefined;
 
 /**
- * On a phone No., Excl. and Rate are not frozen, and would fill the screen
- * before the first month. The table opens with the Plan/Actual column
- * against the name instead; from `sm` up everything fits from the left edge.
+ * Below `xl` No., Excl. and Rate are not frozen, and would fill the table
+ * before the first month. The table opens with the Plan/Actual column against
+ * the name instead; from `xl` up everything fits from the left edge.
  */
 const openAtKindColumn = (table: HTMLTableElement | null) => {
-  if (!table || window.matchMedia('(min-width: 640px)').matches) return;
+  if (!table || window.matchMedia('(min-width: 1280px)').matches) return;
   // Measured once the web font is in: the columns before it size to their text.
   void document.fonts.ready.then(() => {
     const scroller = table.parentElement;
@@ -982,7 +987,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
   } else {
     // The scroll padding keeps a focused cell out from under the frozen header and columns.
     body = (
-      <div ref={scrollContainerRef} className="min-h-0 flex-1 scroll-pt-10 scroll-pl-[200px] overflow-auto custom-scrollbar sm:scroll-pl-[416px] sm:scroll-pr-[52px]">
+      <div ref={scrollContainerRef} className="min-h-0 flex-1 scroll-pt-10 scroll-pl-[200px] overflow-auto custom-scrollbar lg:scroll-pl-[296px] xl:scroll-pl-[432px] xl:scroll-pr-[52px]">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <table key={currentPeriodLabel} ref={openAtKindColumn} className="w-full min-w-max border-separate border-spacing-0">
             <thead>
@@ -1142,7 +1147,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
                         {planTotal === 0 ? <span className="text-slate-300 dark:text-slate-600">–</span> : nf(planTotal)}
                       </td>
                       {isAdmin && (
-                        <td rowSpan={2} style={{ width: W.actions, minWidth: W.actions }} className={`${SURFACE} ${ROW_END} sm:sticky sm:right-0 z-10 border-l border-slate-100 px-1 py-1.5 text-center align-top dark:border-slate-800`}>
+                        <td rowSpan={2} style={{ width: W.actions, minWidth: W.actions }} className={`${SURFACE} ${ROW_END} xl:sticky xl:right-0 z-10 border-l border-slate-100 px-1 py-1.5 text-center align-top dark:border-slate-800`}>
                           <ProjectActionsMenu
                             projectName={project.name}
                             onEdit={() => setEditingProject(project)}
