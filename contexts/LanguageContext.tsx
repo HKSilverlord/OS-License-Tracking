@@ -57,7 +57,8 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     activeLanguage = language;
-    document.documentElement.lang = language;
+    // 'vn' is the app's own key; the page is tagged with the real code, 'vi'.
+    document.documentElement.lang = language === 'vn' ? 'vi' : language;
     try {
       window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
     } catch {

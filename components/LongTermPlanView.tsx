@@ -366,7 +366,7 @@ export const LongTermPlanView: React.FC = () => {
           title={
             <>
               {t('longTermPlan.title', 'OS business long-term plan')}{' '}
-              <span className="font-normal tabular-nums text-slate-500 dark:text-slate-400">{range}</span>
+              <span className="whitespace-nowrap font-normal tabular-nums text-slate-500 dark:text-slate-400">{range}</span>
             </>
           }
           description={t('longTermPlan.chartDesc', 'Sales on the left axis, average hourly rate on the right')}
