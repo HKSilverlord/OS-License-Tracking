@@ -397,6 +397,26 @@ const revealExportOnly = (root: HTMLElement): HTMLElement[] => {
 };
 
 /**
+ * Boxes inside the capture target that scroll sideways, such as a chart too
+ * wide for a phone that scrolls inside its card. The image wants the whole
+ * chart, not the part in view, so the capture widens the target by what they
+ * hide and lets them spill.
+ */
+const sidewaysScrollers = (root: HTMLElement): HTMLElement[] => {
+  const view = root.ownerDocument.defaultView;
+  if (!view) return [];
+  return Array.from(root.querySelectorAll('*')).filter((el): el is HTMLElement => {
+    if (!isHtmlElement(el) || el.scrollWidth <= el.clientWidth + 1) return false;
+    const { overflowX } = view.getComputedStyle(el);
+    return overflowX === 'auto' || overflowX === 'scroll';
+  });
+};
+
+/** How much wider the target is with every sideways scroller showing all of itself. */
+const hiddenSideways = (root: HTMLElement): number =>
+  Math.max(0, ...sidewaysScrollers(root).map(el => el.scrollWidth - el.clientWidth));
+
+/**
  * Browsers cap how big a canvas may be. Chrome and Safari refuse anything over
  * ~268M device pixels (and 16384 px on either side); past the cap they hand back
  * a canvas that is blank or never paints, so the export "succeeds" with an empty
@@ -448,6 +468,16 @@ const capturedSize = (element: HTMLElement): { width: number; height: number } =
   };
 };
 
+/** The top-left `width` x `height` of a canvas, as a canvas of that size. */
+const trimCanvas = (canvas: HTMLCanvasElement, width: number, height: number): HTMLCanvasElement => {
+  if (width >= canvas.width && height >= canvas.height) return canvas;
+  const trimmed = document.createElement('canvas');
+  trimmed.width = Math.min(width, canvas.width);
+  trimmed.height = Math.min(height, canvas.height);
+  trimmed.getContext('2d')?.drawImage(canvas, 0, 0);
+  return trimmed;
+};
+
 /**
  * Shared html2canvas capture for every image export in the app.
  *
@@ -474,7 +504,8 @@ const capturePass = async (
   html2canvas: typeof import('html2canvas').default,
   element: HTMLElement,
   size: CaptureSize,
-  scale: number
+  scale: number,
+  widen: boolean
 ): Promise<{ canvas: HTMLCanvasElement; cloneSize: CaptureSize | null }> => {
   let cloneSize: CaptureSize | null = null;
 
@@ -512,6 +543,14 @@ const capturePass = async (
       if (exportsOnLightBackground()) clonedDoc.documentElement.classList.remove('dark');
       revealExportOnly(clonedEl);
       clonedEl.querySelectorAll(HOVER_ONLY).forEach(node => node.remove());
+      if (widen) {
+        sidewaysScrollers(clonedEl).forEach(el => {
+          el.scrollLeft = 0;
+          el.style.overflowX = 'visible';
+        });
+        clonedEl.style.width = `${size.width}px`;
+        clonedEl.style.maxWidth = 'none';
+      }
       await resolveOklchColors(clonedDoc);
       settleTextForCanvas(clonedEl);
       unclipSingleLineText(clonedEl);
@@ -557,8 +596,11 @@ const capture = async (
   const revealed = revealExportOnly(element);
   const showHover = hideHoverOnly(element);
   let size = capturedSize(element);
+  const sideways = hiddenSideways(element);
   showHover();
   revealed.forEach(el => { el.hidden = true; });
+  size = { ...size, width: size.width + sideways };
+  const widen = sideways > 0;
 
   if (size.width === 0 || size.height === 0) {
     throw new Error(
@@ -567,9 +609,8 @@ const capture = async (
   }
 
   let scale = fitScale(size.width, size.height, requested);
-  const first = await capturePass(html2canvas, element, size, scale);
-  const cloneSize = first.cloneSize;
-  let canvas = first.canvas;
+  let pass = await capturePass(html2canvas, element, size, scale, widen);
+  const cloneSize = pass.cloneSize;
 
   // If the clone laid out bigger than the live element did, the first pass has
   // already lost whatever fell outside. Redo it at the size that actually got
@@ -585,7 +626,21 @@ const capture = async (
       height: Math.max(size.height, cloneSize.height),
     };
     scale = fitScale(size.width, size.height, requested);
-    ({ canvas } = await capturePass(html2canvas, element, size, scale));
+    pass = await capturePass(html2canvas, element, size, scale, widen);
+  }
+  let { canvas } = pass;
+
+  // If it laid out SMALLER, the canvas has a blank band where the difference
+  // was. The export buttons are left out of the copy, and on a phone, where
+  // they wrap onto a row of their own, that row came out as an empty strip
+  // along the bottom of the image. Trim the canvas to what was painted.
+  const painted = pass.cloneSize;
+  if (painted && (painted.width < size.width - 1 || painted.height < size.height - 1)) {
+    size = {
+      width: Math.min(size.width, painted.width),
+      height: Math.min(size.height, painted.height),
+    };
+    canvas = trimCanvas(canvas, Math.round(size.width * scale), Math.round(size.height * scale));
   }
 
   // A canvas the browser refused to allocate at the requested size comes back
@@ -704,10 +759,12 @@ export const exportChartToSVG = async (elementId: string, filename: string = 'ch
   }
 
   try {
-    // Take the Recharts surface by name rather than the first <svg> in the
-    // container: a heading icon inside the export target is also an <svg>, and
-    // picking it up exports a 24x24 glyph instead of the chart.
+    // Take the chart's own surface, the one directly inside the Recharts
+    // wrapper, rather than the first <svg> in the container: a heading icon is
+    // also an <svg>, and each legend dot is an `svg.recharts-surface` too, so the
+    // first of either exported an 8px dot instead of the chart.
     const svgElement =
+      chartContainer.querySelector('.recharts-wrapper > svg.recharts-surface') ??
       chartContainer.querySelector('svg.recharts-surface') ??
       chartContainer.querySelector('svg');
 
