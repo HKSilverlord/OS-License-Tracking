@@ -65,13 +65,16 @@ const SURFACE =
   'bg-white group-hover:bg-slate-50 dark:bg-slate-900 ' +
   'dark:group-hover:bg-[color-mix(in_oklab,var(--color-slate-900),var(--color-slate-800)_55%)]';
 
-/* On a phone only the project name stays frozen: No. and Excl. would take
-   a third of the screen. From `sm` up all three are frozen. The offsets are
-   W.no and W.no + W.excl; Tailwind needs them written out. */
+/* On a phone the project name and Plan/Actual stay frozen: No. and Excl.
+   would take a third of the screen. From `sm` up all four are frozen. The
+   offsets are W.no, W.no + W.excl and the name's right edge; Tailwind needs
+   them written out. */
 const STICKY_NO = 'sm:sticky sm:left-0 sm:z-10';
 const STICKY_EXCL = 'sm:sticky sm:left-[48px] sm:z-10';
 const STICKY_NAME = 'sticky left-0 z-10 sm:left-[120px]';
-const NAME_WIDTH = 'w-[152px] min-w-[152px] max-w-[152px] sm:w-[224px] sm:min-w-[224px] sm:max-w-[224px]';
+const NAME_WIDTH = 'w-[128px] min-w-[128px] max-w-[128px] sm:w-[224px] sm:min-w-[224px] sm:max-w-[224px]';
+/* Rate and any detail columns slide under it, so a row always says what it is. */
+const STICKY_KIND = 'sticky left-[128px] z-10 sm:left-[344px]';
 
 const HEAD =
   'sticky top-0 z-20 h-10 border-b border-slate-200 bg-white px-2 text-[12px] font-medium text-slate-500 ' +
@@ -81,6 +84,7 @@ const HEAD =
 const HEAD_NO = 'sm:left-0 sm:z-30';
 const HEAD_EXCL = 'sm:left-[48px] sm:z-30';
 const HEAD_NAME = 'left-0 z-30! sm:left-[120px]';
+const HEAD_KIND = 'left-[128px] z-30! sm:left-[344px]';
 /* Frozen on the right from `sm` up; on a phone its width goes to the months. */
 const HEAD_ACTIONS = 'sm:right-0 z-30!';
 
@@ -140,8 +144,8 @@ const ariaSort = (sort: SortConfig, key: SortKey): React.AriaAttributes['aria-so
   sort.key === key ? (sort.direction === 'asc' ? 'ascending' : 'descending') : undefined;
 
 /**
- * On a phone only the name is frozen, and No., Excl. and Rate would fill the
- * screen before the first month. The table opens with the Plan/Actual column
+ * On a phone No., Excl. and Rate are not frozen, and would fill the screen
+ * before the first month. The table opens with the Plan/Actual column
  * against the name instead; from `sm` up everything fits from the left edge.
  */
 const openAtKindColumn = (table: HTMLTableElement | null) => {
@@ -972,7 +976,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
   } else {
     // The scroll padding keeps a focused cell out from under the frozen header and columns.
     body = (
-      <div ref={scrollContainerRef} className="min-h-0 flex-1 scroll-pt-10 scroll-pl-[152px] overflow-auto custom-scrollbar sm:scroll-pl-[344px] sm:scroll-pr-[52px]">
+      <div ref={scrollContainerRef} className="min-h-0 flex-1 scroll-pt-10 scroll-pl-[200px] overflow-auto custom-scrollbar sm:scroll-pl-[416px] sm:scroll-pr-[52px]">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <table key={currentPeriodLabel} ref={openAtKindColumn} className="w-full min-w-max border-separate border-spacing-0">
             <thead>
@@ -1004,7 +1008,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
                   {t('tracker.rate', 'Rate')}
                   <span className="block text-[11px] font-normal text-slate-400 dark:text-slate-500">{t('unit.yenPerHour', 'JPY/h')}</span>
                 </th>
-                <th scope="col" data-col="kind" style={{ width: W.kind, minWidth: W.kind }} className={`${HEAD} border-r`}>
+                <th scope="col" data-col="kind" style={{ width: W.kind, minWidth: W.kind }} className={`${HEAD} ${HEAD_KIND} border-r`}>
                   <span className="sr-only">{t('tracker.rowKind', 'Plan or actual')}</span>
                 </th>
                 {months.map(m => (
@@ -1124,7 +1128,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
                       <td className={`${SURFACE} px-2 py-1 text-right text-[13px] tabular-nums text-slate-400 dark:text-slate-500`}>
                         {nf(prices.plan)}
                       </td>
-                      <td className={`${SURFACE} border-r border-slate-100 px-2 py-1 text-[12px] text-slate-500 dark:border-slate-800 dark:text-slate-400`}>
+                      <td className={`${SURFACE} ${STICKY_KIND} border-r border-slate-100 px-2 py-1 text-[12px] text-slate-500 dark:border-slate-800 dark:text-slate-400`}>
                         {planLabel}
                       </td>
                       {months.map(m => hourCell(m, 'planned_hours'))}
@@ -1152,7 +1156,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
                       <td className={`${SURFACE} ${ROW_END} px-2 py-1 text-right text-[13px] tabular-nums text-slate-600 dark:text-slate-300`}>
                         {nf(prices.actual)}
                       </td>
-                      <td className={`${SURFACE} ${ROW_END} border-r border-r-slate-100 px-2 py-1 text-[12px] font-medium text-slate-900 dark:border-r-slate-800 dark:text-white`}>
+                      <td className={`${SURFACE} ${STICKY_KIND} ${ROW_END} border-r border-r-slate-100 px-2 py-1 text-[12px] font-medium text-slate-900 dark:border-r-slate-800 dark:text-white`}>
                         {actualLabel}
                       </td>
                       {months.map(m => hourCell(m, 'actual_hours'))}
