@@ -61,7 +61,8 @@ export async function runDetailedDiagnostic(): Promise<DetailedDiagnosticResult>
     const { data: periods, error: periodsError } = await supabase
       .from('periods')
       .select('label, year, half, created_at')
-      .order('year', { ascending: false });
+      .order('year', { ascending: false })
+      .order('half', { ascending: true });
 
     if (periodsError) {
       result.errors.push(`Periods error: ${periodsError.message}`);
@@ -88,14 +89,15 @@ export async function runDetailedDiagnostic(): Promise<DetailedDiagnosticResult>
       result.periodProjects.total = count || 0;
       result.periodProjects.sample = periodProjects || [];
 
-      // Count by period
-      if (periodProjects) {
-        const byPeriod: Record<string, number> = {};
-        periodProjects.forEach(pp => {
-          byPeriod[pp.period_label] = (byPeriod[pp.period_label] || 0) + 1;
-        });
-        result.periodProjects.byPeriod = byPeriod;
-      }
+      // Counted per period, exactly: the sample above is only the newest ten
+      // links, and tallying it reported "10" for a period holding forty.
+      const labels: string[] = result.periods.list.map(p => p.label);
+      const perPeriod = await Promise.all(labels.map(label =>
+        supabase.from('period_projects').select('*', { count: 'exact', head: true }).eq('period_label', label)
+      ));
+      labels.forEach((label, i) => {
+        result.periodProjects.byPeriod[label] = perPeriod[i].count || 0;
+      });
 
       console.log(`✓ Period-Projects Links: ${result.periodProjects.total} total`);
     }
@@ -118,14 +120,14 @@ export async function runDetailedDiagnostic(): Promise<DetailedDiagnosticResult>
       result.monthlyRecords.total = count || 0;
       result.monthlyRecords.sample = records || [];
 
-      // Count by year
-      if (records) {
-        const byYear: Record<number, number> = {};
-        records.forEach(r => {
-          byYear[r.year] = (byYear[r.year] || 0) + 1;
-        });
-        result.monthlyRecords.byYear = byYear;
-      }
+      // Per year that has a period, counted exactly (the sample is ten rows).
+      const years: number[] = Array.from(new Set<number>(result.periods.list.map(p => p.year))).sort((a, b) => b - a);
+      const perYear = await Promise.all(years.map(year =>
+        supabase.from('monthly_records').select('*', { count: 'exact', head: true }).eq('year', year)
+      ));
+      years.forEach((year, i) => {
+        result.monthlyRecords.byYear[year] = perYear[i].count || 0;
+      });
 
       console.log(`✓ Monthly Records: ${result.monthlyRecords.total} total`);
     }
