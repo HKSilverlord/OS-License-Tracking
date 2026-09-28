@@ -13,7 +13,7 @@ import { useNumberFormat, localeTagFor } from '../hooks/useNumberFormat';
 import { useToast } from '../contexts/ToastContext';
 import { ExportButton } from './ExportButton';
 import { YearControl, YearExportButton } from './YearControl';
-import { buttonClasses } from './ui/Button';
+import { buttonClasses } from './ui/buttonClasses';
 import { Card, cardClasses, WithYear } from './ui/Card';
 import { EmptyState } from './ui/EmptyState';
 import { Page } from './ui/Page';
