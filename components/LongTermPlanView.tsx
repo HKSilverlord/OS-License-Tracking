@@ -4,7 +4,7 @@ import { ArrowRight, ClipboardList } from 'lucide-react';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, TooltipContentProps, LabelList } from 'recharts';
 import { ChartColorButton } from './ChartColorButton';
 import { ExportButton } from './ExportButton';
-import { buttonClasses } from './ui/Button';
+import { buttonClasses } from './ui/buttonClasses';
 import { Card, CardHeader } from './ui/Card';
 import { EmptyState } from './ui/EmptyState';
 import { Page } from './ui/Page';

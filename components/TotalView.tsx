@@ -9,7 +9,7 @@ import { CurrentMonthBadge } from './CurrentMonthBadge';
 import { SeriesStyleButton, SeriesStyleCheck, type SeriesStyle } from './SeriesStyleButton';
 import { YearControl, YearExportButton } from './YearControl';
 import { Badge } from './ui/Badge';
-import { buttonClasses } from './ui/Button';
+import { buttonClasses } from './ui/buttonClasses';
 import { Card, CardHeader, WithYear } from './ui/Card';
 import { EmptyState } from './ui/EmptyState';
 import { Select } from './ui/Field';

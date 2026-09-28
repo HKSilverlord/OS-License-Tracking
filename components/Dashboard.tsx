@@ -25,7 +25,7 @@ import { formatVariance } from '../utils/variance';
 import { useUserRole } from '../contexts/UserRoleContext';
 import { computeYearlyCost, useCatiaStore } from '../stores/useCatiaStore';
 import { CHART_PALETTE, useChartPref } from '../utils/chartColorPrefs';
-import { buttonClasses } from './ui/Button';
+import { buttonClasses } from './ui/buttonClasses';
 import { Card, CardHeader, WithYear } from './ui/Card';
 import { EmptyState } from './ui/EmptyState';
 import { Input } from './ui/Field';
