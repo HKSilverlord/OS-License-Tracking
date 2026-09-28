@@ -20,6 +20,7 @@ import { ChartColorButton } from './ChartColorButton';
 import { YearControl, YearExportButton } from './YearControl';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useNumberFormat } from '../hooks/useNumberFormat';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { formatVariance } from '../utils/variance';
 import { useUserRole } from '../contexts/UserRoleContext';
 import { computeYearlyCost, useCatiaStore } from '../stores/useCatiaStore';
@@ -80,6 +81,40 @@ const migrateChartColors = (raw: unknown): DashboardChartColors | null => {
 
 /** recharts 3 `LabelFormatter` receives `RenderableText`, which is not exported from the package root. */
 type ChartLabelValue = string | number | boolean | null | undefined;
+
+/**
+ * The figure at the end of a cumulative line, the one number that chart is read
+ * for: a label on every month ran into the other line's. It goes below its
+ * point where the other line is higher, and never past the plot's right edge.
+ */
+const EndLabel = ({ x = 0, y = 0, value, index, lastIndex, other, color, bold = false, format }: {
+  x?: number;
+  y?: number;
+  value?: ChartLabelValue;
+  index?: number;
+  lastIndex: number;
+  /** The other line, month by month. */
+  other: (number | null)[];
+  color: string;
+  bold?: boolean;
+  format: (value: ChartLabelValue) => string;
+}) => {
+  if (index !== lastIndex || typeof value !== 'number' || value <= 0) return null;
+  const rival = other[index];
+  const below = typeof rival === 'number' && rival > value;
+  return (
+    <text
+      x={x}
+      y={below ? y + 18 : y - 10}
+      textAnchor={index === other.length - 1 ? 'end' : 'middle'}
+      fill={color}
+      fontSize={11}
+      fontWeight={bold ? 700 : 500}
+    >
+      {format(value)}
+    </text>
+  );
+};
 
 const TOOLTIP_STYLE = {
   contentStyle: {
@@ -202,6 +237,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
   const catiaSyncStatus = useCatiaStore(s => s.syncStatus);
 
   useCatiaHydration();
+
+  // Per-bar figures need room: on a phone the bars' own labels ran together.
+  const roomForBarLabels = useMediaQuery('(min-width: 640px)');
+
+  // The actual line stops at this month; after it there is nothing yet to add.
+  const today = new Date();
+  const lastRealMonth = today.getFullYear() === currentYear
+    ? today.getMonth() + 1
+    : today.getFullYear() > currentYear ? 12 : 0;
+  const cumulativeChart = accumulatedStats.map((d, i) => ({
+    ...d,
+    accActualRevenue: i < lastRealMonth ? d.accActualRevenue : null,
+  }));
+  const accPlans = cumulativeChart.map(d => d.accPlannedRevenue);
+  const accActuals = cumulativeChart.map(d => d.accActualRevenue);
 
   const { format: nf, formatDecimal: nfDecimal, formatYen: fmt } = useNumberFormat();
   /** Bar/line data labels stay in 万 (10k JPY) units, as the slides they end up on use. */
@@ -564,17 +614,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
           />
           <div className="mt-5 h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats} margin={{ top: 16, right: 4, left: -8, bottom: 0 }}>
+              <BarChart data={stats} margin={{ top: 16, right: 4, left: -8, bottom: 0 }} aria-label={`${t('dashboard.chart.monthly', 'Monthly revenue')} ${currentYear}`}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_PALETTE.grid} />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={AXIS_TICK} />
                 <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} tickFormatter={(val: number) => `${nf(Math.round(val / 10000))}${manYen}`} />
                 <Tooltip formatter={(val: number) => fmt(val)} cursor={{ fill: 'rgba(148,163,184,0.12)' }} {...TOOLTIP_STYLE} />
                 <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '12px', color: CHART_PALETTE.labelNeutral }} />
                 <Bar dataKey="plannedRevenue" name={planShort} fill={chartColors.planRevenue} radius={[4, 4, 0, 0]}>
-                  <LabelList dataKey="plannedRevenue" position="top" formatter={manLabel} fontSize={10} fill={chartColors.planRevenue} />
+                  {roomForBarLabels && (
+                    <LabelList dataKey="plannedRevenue" position="top" formatter={manLabel} fontSize={10} fill={chartColors.planRevenue} />
+                  )}
                 </Bar>
                 <Bar dataKey="actualRevenue" name={actualShort} fill={chartColors.actualRevenue} radius={[4, 4, 0, 0]}>
-                  <LabelList dataKey="actualRevenue" position="top" formatter={manLabel} fontSize={10} fill={chartColors.actualRevenue} fontWeight="bold" />
+                  {roomForBarLabels && (
+                    <LabelList dataKey="actualRevenue" position="top" formatter={manLabel} fontSize={10} fill={chartColors.actualRevenue} fontWeight="bold" />
+                  )}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -605,7 +659,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
           />
           <div className="mt-5 h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={accumulatedStats} margin={{ top: 16, right: 8, left: -8, bottom: 0 }}>
+              <ComposedChart data={cumulativeChart} margin={{ top: 16, right: 8, left: -8, bottom: 0 }} aria-label={`${t('dashboard.charts.cumulative', 'Cumulative revenue')} ${currentYear}`}>
                 <defs>
                   <linearGradient id="dashboardAccActual" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor={chartColors.accActual} stopOpacity={0.16} />
@@ -615,7 +669,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_PALETTE.grid} />
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={AXIS_TICK} />
                 <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} tickFormatter={(val: number) => `${nf(Math.round(val / 10000))}${manYen}`} />
-                <Tooltip formatter={(val: number) => fmt(val)} {...TOOLTIP_STYLE} />
+                <Tooltip formatter={val => (typeof val === 'number' ? fmt(val) : '–')} {...TOOLTIP_STYLE} />
                 <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '12px', color: CHART_PALETTE.labelNeutral }} />
                 <Area
                   type="monotone"
@@ -626,7 +680,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
                   fillOpacity={1}
                   strokeWidth={2}
                 >
-                  <LabelList dataKey="accActualRevenue" position="top" formatter={manLabel} fontSize={10} fill={chartColors.accActual} fontWeight="bold" offset={10} />
+                  <LabelList
+                    dataKey="accActualRevenue"
+                    content={<EndLabel lastIndex={lastRealMonth - 1} other={accPlans} color={chartColors.accActual} bold format={v => `${manLabel(v)}${manYen}`} />}
+                  />
                 </Area>
                 <Line
                   type="monotone"
@@ -637,7 +694,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
                   strokeWidth={2}
                   dot={false}
                 >
-                  <LabelList dataKey="accPlannedRevenue" position="top" formatter={manLabel} fontSize={10} fill={chartColors.accPlan} offset={-10} />
+                  <LabelList
+                    dataKey="accPlannedRevenue"
+                    content={<EndLabel lastIndex={accPlans.length - 1} other={accActuals} color={chartColors.accPlan} format={v => `${manLabel(v)}${manYen}`} />}
+                  />
                 </Line>
               </ComposedChart>
             </ResponsiveContainer>

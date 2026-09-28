@@ -63,7 +63,8 @@ export const CardHeader: React.FC<CardHeaderProps> = ({
         <p className="mt-0.5 text-[13px] leading-5 text-slate-500 dark:text-slate-400">{description}</p>
       )}
     </div>
-    {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+    {/* Not shrink-0: on a phone the controls wrap inside the card rather than past its edge. */}
+    {actions && <div className="flex max-w-full flex-wrap items-center gap-2">{actions}</div>}
   </div>
 );
 
