@@ -17,6 +17,7 @@ export const ja: Record<string, string> = {
   'chartExport.notFound': 'チャートが見つかりません。出力されませんでした',
   'chart.customizeColors': 'グラフの色',
   'chart.highlightCurrentMonth': '今月を表示',
+  'chart.showCapacityValues': '能力線の数値を表示',
   'chart.thisMonth': '今月',
   'chart.toggleSeries': 'この系列の表示を切り替え',
   'chart.field.color': '色',
