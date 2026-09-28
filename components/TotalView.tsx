@@ -124,9 +124,24 @@ const signed = (delta: number, language: string, format: (value: number) => stri
 /** Recharts' default gap between the two bars of a month. */
 const BAR_GAP = 4;
 
-/** A figure's rough width: the chart has no layout to measure before it draws. */
-const figureWidth = (text: string, style: SeriesStyle): number =>
-  text.length * style.fontSize * (style.bold ? 0.62 : 0.56) + (style.stroke ? 3 : 0);
+let measuring: { context: CanvasRenderingContext2D | null; family: string } | null = null;
+
+/**
+ * A figure's width, measured in the page's font on a canvas: the chart has no
+ * layout to measure before it draws. A per-character guess ran a third wide,
+ * which lifted figures that had room where they were.
+ */
+const figureWidth = (text: string, style: SeriesStyle): number => {
+  const halo = style.stroke ? 3 : 0;
+  measuring ??= {
+    context: document.createElement('canvas').getContext('2d'),
+    family: getComputedStyle(document.body).fontFamily,
+  };
+  const { context, family } = measuring;
+  if (!context) return text.length * style.fontSize * (style.bold ? 0.62 : 0.56) + halo;
+  context.font = `${style.bold ? 'bold' : 'normal'} ${style.fontSize}px ${family}`;
+  return context.measureText(text).width + halo;
+};
 
 /**
  * Value label for a <LabelList content=…>, optionally outlined in the card colour.
