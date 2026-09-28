@@ -75,11 +75,12 @@ async function exportChartAsImage(elementId: string, filename: string) {
 }
 ```
 
-### Section Export (SectionExportMenu)
-The `SectionExportMenu` component provides export buttons for any section:
-- Export as PNG
-- Export as CSV
-- Copy to clipboard
+### Card Export (ExportButton)
+Every exportable card carries its own `ExportButton` in its header, with the
+capture id on the whole card so the image includes the title and year:
+- Copy as an image (the button itself, one click)
+- Save as PNG / SVG, download CSV (behind the chevron)
+- Light background toggle (`utils/exportPrefs.ts`)
 
 ### Known Issues
 - ⚠️ X-axis labels can disappear on export if container is too narrow
