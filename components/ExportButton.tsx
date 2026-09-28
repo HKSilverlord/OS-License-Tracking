@@ -10,6 +10,7 @@ import {
 } from '../utils/chartExport';
 import { useExportPrefs } from '../utils/exportPrefs';
 import { useLanguage } from '../contexts/LanguageContext';
+import { Menu, MenuCheckItem, MenuItem, MenuLabel, MenuSeparator } from './ui/Menu';
 
 interface ExportButtonProps {
   /** id of the element to capture — a chart panel, a section, a table. */
@@ -37,22 +38,20 @@ interface ExportButtonProps {
   className?: string;
 }
 
-const PRIMARY_BASE =
-  'flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed';
-
-const ITEM =
-  'w-full text-left px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-3 transition-colors';
+const SEGMENT =
+  'inline-flex h-8 items-center gap-1.5 text-[13px] font-medium transition-colors duration-150 ' +
+  'disabled:pointer-events-none disabled:opacity-50';
 
 /**
  * The one export control in the app.
  *
  * Copying an image is what people actually do here — several times a day, to
  * paste a chart into a slide or a chat — so it is the button itself, one click,
- * in the same place on every view. The formats nobody reaches for daily (PNG,
- * SVG, CSV) and the export preferences live behind the chevron.
+ * in the same place on every card. The formats nobody reaches for daily (PNG,
+ * SVG, CSV) and the export preference live behind the chevron.
  *
- * Marked `data-html2canvas-ignore` so the control never photographs itself: on
- * the dashboard it sits inside the very section it captures.
+ * Marked `data-html2canvas-ignore` so the control never photographs itself: it
+ * sits inside the very card it captures.
  */
 export const ExportButton: React.FC<ExportButtonProps> = ({
   targetId,
@@ -67,28 +66,12 @@ export const ExportButton: React.FC<ExportButtonProps> = ({
 }) => {
   const { t } = useLanguage();
   const [prefs, setPrefs] = useExportPrefs();
-  const [isOpen, setIsOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [state, setState] = useState<'idle' | 'busy' | 'done'>('idle');
-  const rootRef = useRef<HTMLDivElement | null>(null);
+  const chevronRef = useRef<HTMLButtonElement>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const onPointerDown = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setIsOpen(false);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsOpen(false);
-    };
-    document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [isOpen]);
-
-  // The 2s "Copied!" reset must not fire into an unmounted component: this sits
+  // The 2s "Copied" reset must not fire into an unmounted component: this sits
   // on views the user can navigate away from mid-countdown.
   useEffect(() => () => {
     if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
@@ -112,113 +95,96 @@ export const ExportButton: React.FC<ExportButtonProps> = ({
   const run = (action: () => void) => () => {
     onBeforeCapture?.();
     action();
-    setIsOpen(false);
   };
 
-  const primaryTone = state === 'done'
-    ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800';
+  const hasCsv = Boolean(onExportCsv || data);
+  const copyLabel = state === 'busy'
+    ? t('export.capturing', 'Capturing…')
+    : state === 'done'
+      ? t('export.copied', 'Copied')
+      : t('buttons.copy', 'Copy');
 
   return (
     <div
-      ref={rootRef}
       data-html2canvas-ignore="true"
-      className={`relative inline-flex ${className}`}
+      className={`inline-flex shrink-0 rounded-lg border border-slate-200 bg-white shadow-sm shadow-slate-900/[0.04] dark:border-slate-700 dark:bg-slate-900 dark:shadow-none ${className}`}
     >
-      <div className="inline-flex rounded-lg border border-slate-300 dark:border-slate-700 shadow-sm overflow-hidden">
-        <button
-          type="button"
-          onClick={handleCopy}
-          disabled={disabled || state === 'busy'}
-          title={t('export.copyAsImage', 'Copy to Clipboard')}
-          className={`${PRIMARY_BASE} ${primaryTone}`}
+      <button
+        type="button"
+        onClick={handleCopy}
+        disabled={disabled || state === 'busy'}
+        title={t('export.copyAsImage', 'Copy as an image')}
+        aria-live="polite"
+        className={`${SEGMENT} rounded-l-[7px] px-2.5 ${
+          state === 'done'
+            ? 'text-emerald-600 dark:text-emerald-400'
+            : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white'
+        }`}
+      >
+        {state === 'busy'
+          ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" aria-hidden="true" />
+          : state === 'done'
+            ? <Check className="h-4 w-4" aria-hidden="true" />
+            : <Copy className="h-4 w-4 text-slate-400" aria-hidden="true" />}
+        <span>{copyLabel}</span>
+      </button>
+
+      <button
+        ref={chevronRef}
+        type="button"
+        onClick={() => setMenuOpen(open => !open)}
+        disabled={disabled}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        aria-label={t('export.moreFormats', 'More export formats')}
+        title={t('export.moreFormats', 'More export formats')}
+        className={`${SEGMENT} rounded-r-[7px] border-l border-slate-200 px-1.5 text-slate-400 hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200`}
+      >
+        <ChevronDown className={`h-4 w-4 transition-transform duration-150 ${menuOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+      </button>
+
+      <Menu
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        anchorRef={chevronRef}
+        minWidth={224}
+        label={t('export.options', 'Export')}
+      >
+        <MenuLabel>{t('export.options', 'Export')}</MenuLabel>
+        <MenuItem
+          icon={<ImageIcon />}
+          onSelect={run(() => exportChartToPNG(targetId, generateChartFilename(filename, 'png')))}
         >
-          {state === 'busy'
-            ? <Loader2 className="w-4 h-4 animate-spin text-slate-500 dark:text-slate-400" />
-            : state === 'done'
-              ? <Check className="w-4 h-4" />
-              : <Copy className="w-4 h-4 text-slate-500 dark:text-slate-400" />}
-          <span>
-            {state === 'busy'
-              ? t('export.capturing', 'Capturing…')
-              : state === 'done'
-                ? t('export.copied', 'Copied!')
-                : t('buttons.copy', 'Copy')}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setIsOpen(open => !open)}
-          disabled={disabled}
-          aria-haspopup="menu"
-          aria-expanded={isOpen}
-          aria-label={t('export.moreFormats', 'More export formats')}
-          title={t('export.moreFormats', 'More export formats')}
-          className="flex items-center px-1.5 border-l border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          {t('export.savePNG', 'Save as PNG')}
+        </MenuItem>
+        {allowSvg && (
+          <MenuItem
+            icon={<Shapes />}
+            onSelect={run(() => exportChartToSVG(targetId, generateChartFilename(filename, 'svg')))}
+          >
+            {t('export.saveSVG', 'Save as SVG')}
+          </MenuItem>
+        )}
+        {hasCsv && (
+          <MenuItem
+            icon={<FileSpreadsheet />}
+            onSelect={() => {
+              if (onExportCsv) return onExportCsv();
+              if (data) exportChartDataToCSV(data, generateChartFilename(`${filename}_data`, 'csv'), csvColumns);
+            }}
+          >
+            {t('export.downloadData', 'Download data (CSV)')}
+          </MenuItem>
+        )}
+        <MenuSeparator />
+        <MenuCheckItem
+          checked={prefs.lightBackground}
+          onChange={lightBackground => setPrefs({ lightBackground })}
+          closeOnSelect={false}
         >
-          <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-        </button>
-      </div>
-
-      {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-64 origin-top-right bg-white dark:bg-slate-900 rounded-lg shadow-xl ring-1 ring-black/5 dark:ring-white/10 z-50 animate-in fade-in zoom-in-95 duration-100">
-          <div className="py-1" role="menu" aria-orientation="vertical">
-            <div className="px-3 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
-              {t('export.options', 'Export Options')}
-            </div>
-
-            <button
-              type="button"
-              role="menuitem"
-              className={ITEM}
-              onClick={run(() => exportChartToPNG(targetId, generateChartFilename(filename, 'png')))}
-            >
-              <ImageIcon className="w-4 h-4" />
-              <span>{t('export.savePNG', 'Save as PNG')}</span>
-            </button>
-
-            {allowSvg && (
-              <button
-                type="button"
-                role="menuitem"
-                className={ITEM}
-                onClick={run(() => exportChartToSVG(targetId, generateChartFilename(filename, 'svg')))}
-              >
-                <Shapes className="w-4 h-4" />
-                <span>{t('export.saveSVG', 'Save as SVG')}</span>
-              </button>
-            )}
-
-            {(onExportCsv || data) && (
-              <button
-                type="button"
-                role="menuitem"
-                className={ITEM}
-                onClick={run(() => {
-                  if (onExportCsv) return onExportCsv();
-                  if (data) exportChartDataToCSV(data, generateChartFilename(`${filename}_data`, 'csv'), csvColumns);
-                })}
-              >
-                <FileSpreadsheet className="w-4 h-4" />
-                <span>{t('export.downloadData', 'Download Excel/CSV')}</span>
-              </button>
-            )}
-
-            <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
-
-            <label className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">
-              <input
-                type="checkbox"
-                className="w-4 h-4 accent-blue-600"
-                checked={prefs.lightBackground}
-                onChange={event => setPrefs({ lightBackground: event.target.checked })}
-              />
-              <span>{t('export.lightBackground', 'Light background')}</span>
-            </label>
-          </div>
-        </div>
-      )}
+          {t('export.lightBackground', 'Light background')}
+        </MenuCheckItem>
+      </Menu>
     </div>
   );
 };

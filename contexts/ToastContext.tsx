@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { createPortal } from 'react-dom';
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react';
 import { useLanguage } from './LanguageContext';
+import { Button } from '../components/ui/Button';
 
 export type ToastKind = 'success' | 'error' | 'info' | 'warning';
 
@@ -104,17 +105,10 @@ const KIND_ICON: Record<ToastKind, IconComponent> = {
 };
 
 const KIND_ACCENT: Record<ToastKind, string> = {
-  success: 'text-emerald-600 dark:text-emerald-400',
-  error: 'text-rose-600 dark:text-rose-400',
-  warning: 'text-amber-600 dark:text-amber-400',
-  info: 'text-sky-600 dark:text-sky-400',
-};
-
-const KIND_BORDER: Record<ToastKind, string> = {
-  success: 'border-emerald-300 dark:border-emerald-700',
-  error: 'border-rose-300 dark:border-rose-700',
-  warning: 'border-amber-300 dark:border-amber-700',
-  info: 'border-sky-300 dark:border-sky-700',
+  success: 'text-emerald-500 dark:text-emerald-400',
+  error: 'text-rose-500 dark:text-rose-400',
+  warning: 'text-amber-500 dark:text-amber-400',
+  info: 'text-blue-500 dark:text-blue-400',
 };
 
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -190,7 +184,8 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     [],
   );
 
-  // Escape cancels the confirm dialog wherever focus happens to be.
+  // Escape cancels the confirm dialog wherever focus happens to be. Capture
+  // phase, so a dialog underneath (which skips handled keys) stays open.
   useEffect(() => {
     if (!confirmOpts) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -199,8 +194,8 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         closeConfirm(false);
       }
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
   }, [confirmOpts, closeConfirm]);
 
   // Initial focus: the safe choice first when the action is destructive.
@@ -233,8 +228,10 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   );
 
   const toastStack = createPortal(
+    // Along the bottom edge, where it covers no page title or control: centred
+    // on a phone within reach of a thumb, bottom-right on a desktop.
     <div
-      className="fixed top-4 right-4 z-[10000] flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2 pointer-events-none"
+      className="pointer-events-none fixed inset-x-3 bottom-3 z-[10000] flex flex-col items-center gap-2 sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-[22rem] sm:items-stretch"
       aria-live="polite"
       aria-atomic="false"
     >
@@ -245,10 +242,10 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             key={item.id}
             role={item.kind === 'error' ? 'alert' : 'status'}
             onClick={() => dismiss(item.id)}
-            className={`pointer-events-auto flex cursor-pointer items-start gap-2 rounded-lg border ${KIND_BORDER[item.kind]} bg-white dark:bg-slate-900 px-3 py-2 shadow-lg shadow-slate-900/10 dark:shadow-black/40`}
+            className="pointer-events-auto flex w-full max-w-[26rem] cursor-pointer items-start gap-3 rounded-xl bg-white/95 py-3 pl-3.5 pr-2 shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/[0.07] backdrop-blur-xl animate-fade-up dark:bg-slate-800/95 dark:shadow-black/40 dark:ring-white/10"
           >
-            <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${KIND_ACCENT[item.kind]}`} />
-            <span className="flex-1 text-sm leading-snug text-slate-900 dark:text-slate-100 break-words">
+            <Icon className={`mt-px h-[18px] w-[18px] shrink-0 ${KIND_ACCENT[item.kind]}`} />
+            <span className="flex-1 break-words text-sm leading-5 text-slate-800 dark:text-slate-100">
               {item.message}
             </span>
             <button
@@ -258,7 +255,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 dismiss(item.id);
               }}
               aria-label={t('common.close', 'Close')}
-              className="shrink-0 rounded p-0.5 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-500"
+              className="-my-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -273,53 +270,41 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     confirmOpts &&
     createPortal(
       <div
-        className="fixed inset-0 z-[10001] flex items-center justify-center bg-slate-900/50 dark:bg-slate-950/70 p-4"
+        className="fixed inset-0 z-[10001] flex items-end justify-center bg-slate-950/40 backdrop-blur-[2px] animate-fade-in sm:items-center sm:p-6"
         onMouseDown={event => {
           if (event.target === event.currentTarget) closeConfirm(false);
         }}
       >
         <div
-          role="dialog"
+          role="alertdialog"
           aria-modal="true"
           aria-labelledby="toast-confirm-title"
           aria-describedby="toast-confirm-message"
           tabIndex={-1}
           onKeyDown={handleDialogKeyDown}
-          className="w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-xl"
+          className="w-full rounded-t-2xl bg-white p-5 shadow-2xl shadow-slate-950/20 ring-1 ring-slate-900/5 animate-slide-in-up sm:max-w-sm sm:rounded-2xl sm:p-6 sm:animate-scale-in dark:bg-slate-900 dark:ring-white/10"
         >
-          <h2
-            id="toast-confirm-title"
-            className="text-base font-semibold text-slate-900 dark:text-slate-100"
-          >
+          <h2 id="toast-confirm-title" className="text-[17px] font-semibold leading-6 text-slate-900 dark:text-white">
             {confirmOpts.title}
           </h2>
           <p
             id="toast-confirm-message"
-            className="mt-2 whitespace-pre-line text-sm text-slate-600 dark:text-slate-300"
+            className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600 dark:text-slate-300"
           >
             {confirmOpts.message}
           </p>
-          <div className="mt-5 flex justify-end gap-2">
-            <button
-              ref={cancelButtonRef}
-              type="button"
-              onClick={() => closeConfirm(false)}
-              className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-500"
-            >
+          <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button ref={cancelButtonRef} variant="secondary" onClick={() => closeConfirm(false)} className="w-full sm:w-auto">
               {confirmOpts.cancelLabel ?? t('common.cancel', 'Cancel')}
-            </button>
-            <button
+            </Button>
+            <Button
               ref={confirmButtonRef}
-              type="button"
+              variant={confirmOpts.danger ? 'danger' : 'primary'}
               onClick={() => closeConfirm(true)}
-              className={
-                confirmOpts.danger
-                  ? 'rounded-lg border border-rose-600 dark:border-rose-500 bg-rose-600 dark:bg-rose-600 px-3 py-1.5 text-sm font-medium text-white dark:text-white hover:bg-rose-700 dark:hover:bg-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-400 dark:focus:ring-rose-500'
-                  : 'rounded-lg border border-blue-600 dark:border-blue-500 bg-blue-600 dark:bg-blue-600 px-3 py-1.5 text-sm font-medium text-white dark:text-white hover:bg-blue-700 dark:hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-500'
-              }
+              className="w-full sm:w-auto"
             >
               {confirmOpts.confirmLabel ?? t('common.confirm', 'Confirm')}
-            </button>
+            </Button>
           </div>
         </div>
       </div>,

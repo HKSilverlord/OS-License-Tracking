@@ -1,80 +1,30 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Link } from 'react-router-dom';
+import { ArrowRight, ClipboardList } from 'lucide-react';
 import { Project, MonthlyRecord } from '../types';
 import { dbService } from '../services/dbService';
 import { buildPriceIndex, lookupPrices } from '../services/pricing';
 import type { PriceIndex } from '../services/pricing';
-import { formatCurrency } from '../utils/helpers';
-import { TABLE_COLUMN_WIDTHS, STICKY_CLASSES } from '../utils/tableStyles';
 import { exportTableToCSV, generateCSVFilename } from '../utils/csvExport';
-import { Check, GripVertical, ListChecks, RefreshCw } from 'lucide-react';
-import { Link } from 'react-router-dom';
-import { ExportButton } from './ExportButton';
-import { EmptyStatePage, emptyStateActionClass } from './ui/EmptyState';
-import { RefreshBar } from './ui/RefreshBar';
+import { plural } from '../utils/plural';
 import { createLogger } from '../utils/logger';
 import { useLanguage } from '../contexts/LanguageContext';
-import { useNumberFormat } from '../hooks/useNumberFormat';
+import { useNumberFormat, localeTagFor } from '../hooks/useNumberFormat';
 import { useToast } from '../contexts/ToastContext';
+import { ExportButton } from './ExportButton';
+import { YearControl, YearExportButton } from './YearControl';
+import { buttonClasses } from './ui/Button';
+import { Card, cardClasses, WithYear } from './ui/Card';
+import { EmptyState } from './ui/EmptyState';
+import { Page } from './ui/Page';
+import { RefreshBar } from './ui/RefreshBar';
 import { Skeleton } from './ui/Skeleton';
-import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-  useSortable,
-  arrayMove,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 
 const log = createLogger('YearlyDataView');
 
 interface YearlyDataViewProps {
   currentYear: number;
 }
-
-type SortableHandleProps = Pick<ReturnType<typeof useSortable>, 'attributes' | 'listeners'>;
-
-const SortableRowContext = React.createContext<SortableHandleProps | null>(null);
-
-const SortableYearlyBody: React.FC<{
-  project: Project;
-  children: React.ReactNode;
-}> = ({ project, children }) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: project.id,
-  });
-
-  const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.9 : 1,
-    position: isDragging ? 'relative' : undefined,
-    zIndex: isDragging ? 50 : undefined,
-  };
-
-  return (
-    <tbody ref={setNodeRef} style={style} className={isDragging ? 'bg-blue-50/50 dark:bg-blue-900/20' : 'bg-white dark:bg-slate-900'}>
-      <SortableRowContext.Provider value={{ attributes, listeners }}>
-        {children}
-      </SortableRowContext.Provider>
-    </tbody>
-  );
-};
-
-const DragHandle = () => {
-  const context = React.useContext(SortableRowContext);
-  return (
-    <td rowSpan={2} className="sticky left-0 z-50 bg-white dark:bg-slate-900 w-8 px-1 text-center cursor-grab active:cursor-grabbing border-b border-slate-200 dark:border-slate-700" {...context?.attributes} {...context?.listeners}>
-      <GripVertical className="w-4 h-4 text-slate-400 dark:text-slate-500 mx-auto" />
-    </td>
-  );
-};
 
 /** Revenue of one project for the whole year, priced per (period, project). */
 interface ProjectRevenue {
@@ -86,6 +36,30 @@ const EMPTY_PRICE_INDEX: PriceIndex = buildPriceIndex([], []);
 
 /** Referentially stable so hooks that map over it can list it as a dependency. */
 const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+/** Column widths in px, matching Project tracking so the two tables read alike. */
+const W = { no: 48, kind: 96, month: 76, total: 88, revenue: 124 } as const;
+
+/* Frozen cells stay opaque while the months slide under them, hover included. */
+const SURFACE =
+  'bg-white group-hover:bg-slate-50 dark:bg-slate-900 ' +
+  'dark:group-hover:bg-[color-mix(in_oklab,var(--color-slate-900),var(--color-slate-800)_55%)]';
+/* The year's totals: a quieter band pinned under the column headings. */
+const TOTALS = 'bg-slate-50 dark:bg-[color-mix(in_oklab,var(--color-slate-900),var(--color-slate-800)_70%)]';
+
+/* On a phone only the project name stays frozen; from `sm` up, No. does too. */
+const STICKY_NO = 'sm:sticky sm:left-0 sm:z-10';
+const STICKY_NAME = 'sticky left-0 z-10 sm:left-[48px]';
+const NAME_WIDTH = 'w-[152px] min-w-[152px] max-w-[152px] sm:w-[224px] sm:min-w-[224px] sm:max-w-[224px]';
+
+const HEAD =
+  'h-10 border-b border-slate-200 bg-white px-2 text-[12px] font-medium text-slate-500 ' +
+  'dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400';
+
+const ROW_END = 'border-b border-slate-100 dark:border-slate-800';
+const NUM = 'px-2 py-1.5 text-right text-[13px] tabular-nums';
+
+const Dash = () => <span className="font-normal text-slate-300 dark:text-slate-600">–</span>;
 
 export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) => {
   const { t, language } = useLanguage();
@@ -101,43 +75,12 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
   const [loadError, setLoadError] = useState(false);
   /** After the first year has landed, later loads refresh in place. */
   const loadedOnceRef = useRef(false);
-  const [isEditMode, setIsEditMode] = useState(false);
 
-  const dragOffset = isEditMode ? 32 : 0;
-
-  const sensors = useSensors(useSensor(PointerSensor));
-
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    const oldIndex = projects.findIndex(p => p.id === active.id);
-    const newIndex = projects.findIndex(p => p.id === over.id);
-    const reordered = arrayMove(projects, oldIndex, newIndex);
-
-    setProjects(reordered);
-
-    const updates = reordered.map((p, i) => ({ id: p.id, display_order: i + 1 }));
-    try {
-      await dbService.updateProjectDisplayOrders(updates);
-    } catch (e) {
-      log.error('Failed to save order:', e);
-      toast.error(t('toast.saveFailed', 'Save failed'));
-    }
-  };
-
-  // Use shared table styling constants
-  const { no: LEFT_NO_WIDTH, nameReadOnly: LEFT_NAME_WIDTH } = TABLE_COLUMN_WIDTHS;
-  const { leftCell: stickyLeftClass, leftHeader: stickyLeftHeaderClass, header: stickyHeaderZ, corner: stickyCornerZ } = STICKY_CLASSES;
-
-  // U1 routed every view's year through one shell control, so a user can change
-  // year faster than a request completes. Without this guard an older response
-  // lands after a newer one and the view shows the wrong year's numbers.
+  // Years can change faster than a request completes; the sequence number
+  // drops any response that is no longer for the year on screen.
   const loadSeqRef = useRef(0);
 
-  // `t` is memoised per language, so making it a dependency of the fetch would
-  // refetch the year's data on every language switch. The ref keeps the error
-  // toast localised without tying data loading to the language.
+  // `t` is read through a ref so a language switch does not refetch the year.
   const tRef = useRef(t);
   useEffect(() => {
     tRef.current = t;
@@ -169,7 +112,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
         groupedRecords[r.project_id].push(r);
       });
 
-      // Show projects with >0 hours first, then group by display_order
+      // Projects with hours first, each group in the order set in Project tracking.
       relevantProjects.sort((a, b) => {
         const aTotal = Object.values(groupedRecords[a.id] ?? {})
           .reduce((s, r) => s + (r.planned_hours ?? 0) + (r.actual_hours ?? 0), 0);
@@ -201,6 +144,13 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    // In place: an edit somewhere else must not blank the table being read.
+    const handleDataUpdated = () => fetchData({ silent: true });
+    window.addEventListener('dataUpdated', handleDataUpdated);
+    return () => window.removeEventListener('dataUpdated', handleDataUpdated);
+  }, [fetchData]);
+
   /**
    * A1/A2 — revenue is summed PER RECORD, priced with the (period_label, project_id) price.
    * A project at 2,500 JPY/h in 2025-H1 and 2,300 JPY/h in 2025-H2 yields
@@ -222,9 +172,17 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
     return totals;
   }, [projects, records, priceIndex]);
 
+  const yearRevenue = useMemo(
+    () => Object.values(projectRevenues).reduce(
+      (sum, r) => ({ plan: sum.plan + r.plan, actual: sum.actual + r.actual }),
+      { plan: 0, actual: 0 }
+    ),
+    [projectRevenues]
+  );
+
   /**
-   * Tooltip listing the per-period unit price of a project, but only when the periods of the
-   * year disagree — that is exactly the case the old per-project price map used to flatten.
+   * The per-period prices behind a revenue figure, but only when the periods
+   * of the year disagree — the case a single price would hide.
    */
   const priceBreakdown = (projectId: string, kind: 'plan' | 'actual'): string | undefined => {
     if (periodLabels.length < 2) return undefined;
@@ -234,28 +192,27 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
     }));
     const distinct = new Set(entries.map(e => e.value));
     if (distinct.size < 2) return undefined;
-    return entries.map(e => `${e.label}: ${formatCurrency(e.value)}`).join(' / ');
+    const unit = t('unit.yenPerHour', 'JPY/h');
+    return entries.map(e => `${e.label}: ${nf(e.value)} ${unit}`).join(' / ');
   };
 
-  // Compute monthly totals for all projects in this year
-  const monthlyTotals = useMemo(() => {
-    const totals = months.map(m => {
-      let planSum = 0;
-      let actualSum = 0;
-      projects.forEach(project => {
-        const projRecords = records[project.id] || [];
-        const rec = projRecords.find(r => r.month === m);
-        if (rec) {
-          planSum += rec.planned_hours || 0;
-          actualSum += rec.actual_hours || 0;
-        }
-      });
-      return { month: m, plan: planSum, actual: actualSum };
-    });
-    return totals;
-  }, [projects, records]);
+  const hasSplitPrices = projects.some(project =>
+    priceBreakdown(project.id, 'plan') !== undefined || priceBreakdown(project.id, 'actual') !== undefined
+  );
 
-  // Compute accumulated (running) totals from monthlyTotals
+  const monthlyTotals = useMemo(() => months.map(m => {
+    let plan = 0;
+    let actual = 0;
+    projects.forEach(project => {
+      const rec = (records[project.id] || []).find(r => r.month === m);
+      if (rec) {
+        plan += rec.planned_hours || 0;
+        actual += rec.actual_hours || 0;
+      }
+    });
+    return { month: m, plan, actual };
+  }), [projects, records]);
+
   const accumulatedTotals = useMemo(() => {
     let runningPlan = 0;
     let runningActual = 0;
@@ -266,313 +223,304 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
     });
   }, [monthlyTotals]);
 
-  // Listen for data updates from other tabs
-  useEffect(() => {
-    const handleDataUpdated = () => {
-      // In place: an edit somewhere else must not blank the table being read.
-      fetchData({ silent: true });
-    };
+  const yearPlan = monthlyTotals.reduce((sum, m) => sum + m.plan, 0);
+  const yearActual = monthlyTotals.reduce((sum, m) => sum + m.actual, 0);
 
-    window.addEventListener('dataUpdated', handleDataUpdated);
-    return () => window.removeEventListener('dataUpdated', handleDataUpdated);
-  }, [fetchData]);
+  const planLabel = t('tracker.planShort', 'Plan');
+  const actualLabel = t('tracker.actualShort', 'Actual');
+  const thisMonth = new Date().getFullYear() === currentYear ? new Date().getMonth() + 1 : null;
 
-  // CSV Export Function
+  const formatMonthLabel = (month: number) => {
+    if (language === 'ja') return `${month}月`;
+    if (language === 'vn') return `Tháng ${month}`;
+    return new Date(2000, month - 1).toLocaleString(localeTagFor(language), { month: 'short' });
+  };
+
+  // The CSV is built here because its headings are translated.
   const handleExportCSV = () => {
     const headers = [
-      t('tracker.code'),
-      t('tracker.projectName'),
-      t('totalView.tableHeader.type'),
+      t('tracker.code', 'Code'),
+      t('tracker.projectName', 'Company name'),
+      t('tracker.rowKind', 'Plan or actual'),
       ...months.map(m => m.toString()),
-      t('totalView.tableHeader.total'),
-      t('totalView.tableHeader.revenue')
+      t('tracker.total', 'Total'),
+      t('totalView.tableHeader.revenue', 'Revenue (JPY)'),
     ];
 
     const rows: string[][] = [];
-
-    // Use current state 'projects' which is already filtered correctly
     projects.forEach(project => {
       const projRecords = records[project.id] || [];
       const monthlyData = months.map(m => {
         const r = projRecords.find(rec => rec.month === m);
         return { plan: r?.planned_hours || 0, actual: r?.actual_hours || 0 };
       });
-
       const totalPlan = monthlyData.reduce((sum, d) => sum + d.plan, 0);
       const totalActual = monthlyData.reduce((sum, d) => sum + d.actual, 0);
       const revenue = projectRevenues[project.id] ?? { plan: 0, actual: 0 };
 
-      // Plan row
-      const planRow = [
+      rows.push([
         project.code,
         project.name,
-        t('tracker.planShort'),
+        planLabel,
         ...monthlyData.map(d => d.plan > 0 ? d.plan.toString() : '-'),
         totalPlan > 0 ? totalPlan.toString() : '-',
-        revenue.plan > 0 ? revenue.plan.toString() : '-'
-      ];
-
-      // Actual row
-      const actualRow = [
+        revenue.plan > 0 ? revenue.plan.toString() : '-',
+      ]);
+      rows.push([
         project.code,
         project.name,
-        t('tracker.actualShort'),
+        actualLabel,
         ...monthlyData.map(d => d.actual > 0 ? d.actual.toString() : '-'),
         totalActual > 0 ? totalActual.toString() : '-',
-        revenue.actual > 0 ? revenue.actual.toString() : '-'
-      ];
-
-      rows.push(planRow);
-      rows.push(actualRow);
+        revenue.actual > 0 ? revenue.actual.toString() : '-',
+      ]);
     });
 
     exportTableToCSV(headers, rows, generateCSVFilename(`yearly_data_${currentYear}`));
   };
 
+  const header = {
+    title: t('nav.yearlyData', 'Annual data'),
+    description: t('yearly.desc', 'Hours and revenue of every project, month by month'),
+    actions: (
+      <>
+        <YearControl />
+        <YearExportButton />
+      </>
+    ),
+  };
+
   if (loading && !loadedOnceRef.current) {
     return (
-      <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-4 md:p-6 overflow-hidden">
-        <div className="flex-1 min-h-0 bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-200 dark:border-slate-800 p-4">
-          <Skeleton.Table rows={8} cols={6} />
-          <span className="sr-only text-slate-500 dark:text-slate-400">{t('common.loading', 'Loading…')}</span>
-        </div>
-      </div>
+      <Page {...header} layout="fill" maxWidth="full">
+        <Card padding="none" className="p-4" role="status" aria-busy="true" aria-label={t('common.loading', 'Loading…')}>
+          <Skeleton.Table rows={8} cols={8} />
+        </Card>
+      </Page>
     );
   }
 
   // Without a guard the table still draws its header and four total rows, all
-  // reading `-`, which is what a broken year looks like too.
+  // reading `–`, which is what a broken year looks like too.
   if (loadError && !loading) {
     return (
-      <EmptyStatePage
-        tone="error"
-        title={t('empty.loadFailedTitle', 'Could not load this year')}
-        description={t('empty.loadFailedHint', 'The request did not come back. Check the connection and try again.')}
-        actions={
-          <button type="button" onClick={() => fetchData()} className={emptyStateActionClass}>
-            <RefreshCw className="w-4 h-4" />
-            {t('buttons.retry', 'Try again')}
-          </button>
-        }
-      />
+      <Page {...header}>
+        <Card>
+          <EmptyState
+            tone="error"
+            title={t('empty.loadFailedTitle', 'Could not load this year')}
+            description={t('empty.loadFailedHint', 'The request did not come back. Check the connection and try again.')}
+            actions={
+              <button type="button" onClick={() => fetchData()} className={buttonClasses('secondary')}>
+                {t('buttons.retry', 'Try again')}
+              </button>
+            }
+          />
+        </Card>
+      </Page>
     );
   }
 
   if (projects.length === 0 && !loading) {
     return (
-      <EmptyStatePage
-        title={t('empty.noDataTitle', 'No hours recorded for {year} yet').replace('{year}', String(currentYear))}
-        description={t('empty.noDataHint', 'Enter planned and actual hours in Project Tracking, or pick another year in the bar above.')}
-        actions={
-          <Link to="/tracking" className={emptyStateActionClass}>
-            {t('empty.goToTracking', 'Go to Project Tracking')}
-          </Link>
-        }
-      />
+      <Page {...header}>
+        <Card>
+          <EmptyState
+            icon={ClipboardList}
+            title={t('empty.noDataTitle', 'No hours recorded for {year} yet').replace('{year}', String(currentYear))}
+            description={t('empty.noDataHint', 'Enter planned and actual hours in Project tracking, or choose another year.')}
+            actions={
+              <Link to="/tracking" className={buttonClasses('secondary')}>
+                {t('empty.goToTracking', 'Go to Project tracking')}
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+            }
+          />
+        </Card>
+      </Page>
     );
   }
 
-  return (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-4 md:p-6 overflow-hidden space-y-6">
+  const totalRows: { key: string; label: string; strong: boolean; values: number[]; total?: number; revenue?: number }[] = [
+    { key: 'plan', label: planLabel, strong: false, values: monthlyTotals.map(m => m.plan), total: yearPlan, revenue: yearRevenue.plan },
+    { key: 'actual', label: actualLabel, strong: true, values: monthlyTotals.map(m => m.actual), total: yearActual, revenue: yearRevenue.actual },
+    { key: 'accPlan', label: t('dashboard.chart.accPlan', 'Cumulative plan'), strong: false, values: accumulatedTotals.map(m => m.accPlan) },
+    { key: 'accActual', label: t('dashboard.chart.accActual', 'Cumulative actual'), strong: true, values: accumulatedTotals.map(m => m.accActual) },
+  ];
 
-      {/* Table Section */}
-      <div className="flex-1 min-h-0 flex flex-col bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-200 dark:border-slate-800">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
-          <h3 className="text-md font-bold text-slate-700 dark:text-slate-100">
-            {t('totalView.tableHeader.title', 'Yearly Data Table')} - {currentYear}
-          </h3>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setIsEditMode(!isEditMode)}
-              className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors shadow-sm border ${
-                isEditMode
-                  ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-200 dark:hover:bg-blue-900/60'
-                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'
-              }`}
-            >
-              {isEditMode ? <Check className="w-4 h-4" /> : <ListChecks className="w-4 h-4" />}
-              <span className="hidden sm:inline">{isEditMode ? t('tracker.done', '完了') : t('tracker.editOrder', '順序を編集')}</span>
-            </button>
-            {/* No SVG: this target is an HTML table, not a Recharts surface.
-                The CSV is built here because its columns are translated. */}
-            <ExportButton
-              targetId="yearly-data-table"
-              filename={`yearly_data_${currentYear}`}
-              onExportCsv={handleExportCSV}
-              allowSvg={false}
-              disabled={loading}
-            />
-          </div>
+  return (
+    <Page {...header} layout="fill" maxWidth="full">
+      <section
+        aria-label={t('totalView.tableHeader.title', 'Annual data table')}
+        className={`${cardClasses} flex min-h-0 flex-1 flex-col overflow-hidden animate-fade-up`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+          <p className="text-[13px] text-slate-500 dark:text-slate-400">
+            {plural(t, 'yearly.projectCount', projects.length, '{count} projects')}
+            {hasSplitPrices && (
+              <span className="hidden md:inline">
+                {' · '}
+                {t('yearly.splitPrices', 'Some prices change between periods; point at a revenue figure to see them')}
+              </span>
+            )}
+          </p>
+          {/* No SVG: the target is an HTML table, not a chart. */}
+          <ExportButton
+            targetId="yearly-data-table"
+            filename={`yearly_data_${currentYear}`}
+            onExportCsv={handleExportCSV}
+            allowSvg={false}
+            disabled={loading}
+          />
         </div>
         {loading && <RefreshBar />}
+
         {/* The old year stays readable while the new one loads; it is dimmed so
             nobody reads it as the year they just picked. */}
-        <div className={`flex-1 min-h-0 overflow-auto relative isolate custom-scrollbar transition-opacity duration-200 ${loading ? 'opacity-40' : ''}`}>
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={projects.map(p => p.id)} strategy={verticalListSortingStrategy}>
-              <table id="yearly-data-table" className="w-full min-w-max border-separate border-spacing-0">
-                <thead className="bg-slate-50 dark:bg-slate-800 sticky top-0 z-40">
-                  <tr>
-                    {isEditMode && <th scope="col" style={{ left: 0, width: '32px' }} className={`px-1 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ}`}></th>}
-                    <th scope="col" style={{ left: dragOffset, width: `${LEFT_NO_WIDTH}px` }} className={`px-3 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                      {t('tracker.no')}
-                    </th>
-                    <th scope="col" style={{ left: dragOffset + LEFT_NO_WIDTH, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                      {t('tracker.projectName')}
-                    </th>
-                <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800`}>
-                  {t('totalView.tableHeader.type')}
+        <div className={`relative isolate min-h-0 flex-1 overflow-auto custom-scrollbar transition-opacity duration-200 ${loading ? 'opacity-40' : ''}`}>
+          <table id="yearly-data-table" className="w-full min-w-max border-separate border-spacing-0">
+            {/* On screen the page header says what this is; an exported image
+                has no page around it, so it carries its own title and year. */}
+            <caption hidden data-export-only className="caption-top px-3 pb-3 pt-1 text-left text-[15px] font-semibold text-slate-900 dark:text-white">
+              <WithYear year={currentYear}>{t('nav.yearlyData', 'Annual data')}</WithYear>
+            </caption>
+            <thead className="sticky top-0 z-20">
+              <tr>
+                <th scope="col" style={{ width: W.no, minWidth: W.no }} className={`${HEAD} ${STICKY_NO} text-center`}>
+                  {t('tracker.no', 'No.')}
                 </th>
-
+                <th scope="col" className={`${HEAD} ${STICKY_NAME} ${NAME_WIDTH} border-r px-3 text-left`}>
+                  {t('tracker.projectName', 'Company name')}
+                </th>
+                <th scope="col" style={{ width: W.kind, minWidth: W.kind }} className={`${HEAD} border-r`}>
+                  <span className="sr-only">{t('tracker.rowKind', 'Plan or actual')}</span>
+                </th>
                 {months.map(m => (
-                  <th key={m} scope="col" className={`px-2 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider w-20 border-b border-r border-slate-200 dark:border-slate-700 ${stickyHeaderZ}`}>
-                    {language === 'ja' ? `${m}月` : m}
+                  <th
+                    key={m}
+                    scope="col"
+                    style={{ width: W.month, minWidth: W.month }}
+                    aria-current={m === thisMonth ? 'date' : undefined}
+                    title={m === thisMonth ? t('tracker.thisMonth', 'This month') : undefined}
+                    className={`${HEAD} text-right ${m === thisMonth ? 'text-orange-600! dark:text-orange-400!' : ''}`}
+                  >
+                    {m === thisMonth && <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-current align-middle" aria-hidden="true" />}
+                    {formatMonthLabel(m)}
                   </th>
                 ))}
-                <th scope="col" className={`px-2 py-3 text-center text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider border-b border-l border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/80`}>
-                  {t('totalView.tableHeader.total')}
+                <th scope="col" style={{ width: W.total, minWidth: W.total }} className={`${HEAD} border-l text-right`}>
+                  {t('tracker.total', 'Total')}
                 </th>
-                <th scope="col" className={`px-2 py-3 text-center text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider border-b border-l border-slate-200 dark:border-slate-700 bg-amber-50 dark:bg-amber-900/20`}>
-                  {t('totalView.tableHeader.revenue')}
+                <th scope="col" style={{ width: W.revenue, minWidth: W.revenue }} className={`${HEAD} border-l text-right`}>
+                  {t('yearly.revenue', 'Revenue')}
+                  <span className="block text-[11px] font-normal text-slate-400 dark:text-slate-500">{t('csv.unitCurrency', 'JPY')}</span>
                 </th>
               </tr>
 
-              {/* Summary Row: Plan Total */}
-              <tr className="bg-slate-100 dark:bg-slate-800 border-b border-slate-300 dark:border-slate-700">
-                {isEditMode && <td rowSpan={4} style={{ left: 0, width: '32px' }} className={`px-1 py-2 border-b border-slate-300 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ} bg-slate-100 dark:bg-slate-800`}></td>}
-                <td style={{ left: dragOffset, width: `${LEFT_NO_WIDTH}px` }} className={`px-3 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 text-center border-b border-slate-300 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ} bg-slate-100 dark:bg-slate-800`} rowSpan={4}>
-                  Σ
-                </td>
-                <td style={{ left: dragOffset + LEFT_NO_WIDTH, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 border-b border-slate-300 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ} bg-slate-100 dark:bg-slate-800`} rowSpan={4}>
-                  {t('totalView.tableHeader.total', 'TOTAL')}
-                </td>
-                <td className="px-2 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400 text-center border-r border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
-                  {t('tracker.planShort')}
-                </td>
-                {monthlyTotals.map((d, idx) => (
-                  <td key={`sp-${idx}`} className="px-1 py-2 text-xs font-bold text-right text-slate-600 dark:text-slate-300 border-r border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
-                    {d.plan > 0 ? nf(d.plan) : '-'}
-                  </td>
-                ))}
-                <td className="px-2 py-2 border-l border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800"></td>
-                <td className="px-2 py-2 border-l border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800"></td>
-              </tr>
-
-              {/* Summary Row: Actual Total */}
-              <tr className="bg-blue-50/60 dark:bg-blue-900/30 border-b-2 border-slate-300 dark:border-slate-700">
-                <td className="px-2 py-2 text-xs font-bold text-blue-600 dark:text-blue-400 text-center border-r border-b-2 border-slate-300 dark:border-slate-700 bg-blue-50/60 dark:bg-blue-900/30">
-                  {t('tracker.actualShort')}
-                </td>
-                {monthlyTotals.map((d, idx) => (
-                  <td key={`sa-${idx}`} className="px-1 py-2 text-xs font-bold text-right text-blue-700 dark:text-blue-300 border-r border-b-2 border-slate-300 dark:border-slate-700 bg-blue-50/60 dark:bg-blue-900/30">
-                    {d.actual > 0 ? nf(d.actual) : '-'}
-                  </td>
-                ))}
-                <td className="px-2 py-2 border-l border-b-2 border-slate-300 dark:border-slate-700 bg-blue-50/60 dark:bg-blue-900/30"></td>
-                <td className="px-2 py-2 border-l border-b-2 border-slate-300 dark:border-slate-700 bg-blue-50/60 dark:bg-blue-900/30"></td>
-              </tr>
-
-              {/* Summary Row: Accumulated Plan Total */}
-              <tr className="bg-slate-100 dark:bg-slate-800 border-b border-slate-300 dark:border-slate-700">
-                <td className="px-2 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400 text-center border-r border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
-                  {`${t('tracker.planShort')} (${t('tracker.accumulated', 'Acc.')})`}
-                </td>
-                {accumulatedTotals.map((d, idx) => (
-                  <td key={`sap-${idx}`} className="px-1 py-2 text-xs font-bold text-right text-slate-600 dark:text-slate-300 border-r border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
-                    {d.accPlan > 0 ? nf(d.accPlan) : '-'}
-                  </td>
-                ))}
-                <td className="px-2 py-2 border-l border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800"></td>
-                <td className="px-2 py-2 border-l border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800"></td>
-              </tr>
-
-              {/* Summary Row: Accumulated Actual Total */}
-              <tr className="bg-blue-50/60 dark:bg-blue-900/30 border-b-2 border-slate-400 dark:border-slate-600">
-                <td className="px-2 py-2 text-xs font-bold text-blue-600 dark:text-blue-400 text-center border-r border-b-2 border-slate-400 dark:border-slate-600 bg-blue-50/60 dark:bg-blue-900/30">
-                  {`${t('tracker.actualShort')} (${t('tracker.accumulated', 'Acc.')})`}
-                </td>
-                {accumulatedTotals.map((d, idx) => (
-                  <td key={`saa-${idx}`} className="px-1 py-2 text-xs font-bold text-right text-blue-700 dark:text-blue-300 border-r border-b-2 border-slate-400 dark:border-slate-600 bg-blue-50/60 dark:bg-blue-900/30">
-                    {d.accActual > 0 ? nf(d.accActual) : '-'}
-                  </td>
-                ))}
-                <td className="px-2 py-2 border-l border-b-2 border-slate-400 dark:border-slate-600 bg-blue-50/60 dark:bg-blue-900/30"></td>
-                <td className="px-2 py-2 border-l border-b-2 border-slate-400 dark:border-slate-600 bg-blue-50/60 dark:bg-blue-900/30"></td>
-              </tr>
-            </thead>
-              {projects.map((project, index) => {
-                const projRecords = records[project.id] || [];
-                const monthlyData = months.map(m => {
-                  const r = projRecords.find(rec => rec.month === m);
-                  return { plan: r?.planned_hours || 0, actual: r?.actual_hours || 0 };
-                });
-
-                const totalPlan = monthlyData.reduce((sum, d) => sum + d.plan, 0);
-                const totalActual = monthlyData.reduce((sum, d) => sum + d.actual, 0);
-
-                // Per-record, per-period pricing (A1/A2) — never a single flattened price.
-                const revenue = projectRevenues[project.id] ?? { plan: 0, actual: 0 };
-                const planPriceNote = priceBreakdown(project.id, 'plan');
-                const actualPriceNote = priceBreakdown(project.id, 'actual');
-
+              {totalRows.map((row, i) => {
+                const last = i === totalRows.length - 1;
+                const edge = last ? 'border-b border-slate-200 dark:border-slate-700' : '';
+                const tone = row.strong ? 'font-semibold text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400';
                 return (
-                  <SortableYearlyBody key={project.id} project={project}>
-                    {/* Plan Row */}
-                    <tr className="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                      {isEditMode && <DragHandle />}
-                      <td rowSpan={2} style={{ left: dragOffset, width: `${LEFT_NO_WIDTH}px` }} className={`px-3 py-3 text-sm font-medium text-slate-900 dark:text-slate-100 border-b border-slate-200 dark:border-slate-700 ${stickyLeftClass} align-top text-center`}>
-                        {index + 1}
-                      </td>
-                      <td rowSpan={2} style={{ left: dragOffset + LEFT_NO_WIDTH, width: `${LEFT_NAME_WIDTH}px` }} className={`px-3 py-3 text-sm text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 ${stickyLeftClass} align-top`}>
-                        <div className="truncate w-44" title={project.name}>{project.name}</div>
-                      </td>
-                      <td className="px-2 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400 text-center border-r border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-                        {t('tracker.planShort')}
-                      </td>
-                      {monthlyData.map((d, idx) => (
-                        <td key={`p-${idx}`} className="px-1 py-2 text-xs text-right text-slate-500 dark:text-slate-400 border-r border-b border-slate-200 dark:border-slate-700">
-                          {d.plan > 0 ? nf(d.plan) : '-'}
+                  <tr key={row.key}>
+                    {i === 0 && (
+                      <>
+                        <td rowSpan={totalRows.length} className={`${TOTALS} ${STICKY_NO} border-b border-slate-200 px-1 py-2 text-center align-top text-[13px] text-slate-400 dark:border-slate-700 dark:text-slate-500`}>
+                          <span aria-hidden="true">Σ</span>
                         </td>
-                      ))}
-                      <td className="px-2 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 text-right border-l border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-                        {totalPlan > 0 ? nf(totalPlan) : '-'}
+                        <th scope="rowgroup" rowSpan={totalRows.length} className={`${TOTALS} ${STICKY_NAME} ${NAME_WIDTH} border-b border-r border-slate-200 px-3 py-2 text-left align-top text-[13px] font-semibold text-slate-900 dark:border-slate-700 dark:text-white`}>
+                          {t('yearly.allProjects', 'All projects')}
+                        </th>
+                      </>
+                    )}
+                    <th scope="row" className={`${TOTALS} ${edge} border-r border-r-slate-200 px-2 py-1.5 text-left text-[12px] font-medium leading-4 text-slate-500 dark:border-r-slate-700 dark:text-slate-400`}>
+                      {row.label}
+                    </th>
+                    {row.values.map((value, idx) => (
+                      <td key={idx} className={`${TOTALS} ${edge} ${NUM} ${tone}`}>
+                        {value > 0 ? nf(value) : <Dash />}
                       </td>
-                      <td
-                        className="px-2 py-2 text-xs font-bold text-amber-700 dark:text-amber-400 text-right border-l border-b border-slate-200 dark:border-slate-700 bg-amber-50/30 dark:bg-amber-900/20"
-                        title={planPriceNote}
-                      >
-                        {revenue.plan > 0 ? formatCurrency(revenue.plan) : '-'}
-                      </td>
-                    </tr>
-
-                    {/* Actual Row */}
-                    <tr className="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                      <td className="px-2 py-2 text-xs font-bold text-blue-600 dark:text-blue-400 text-center border-r border-b border-slate-200 dark:border-slate-700 bg-blue-50/30 dark:bg-blue-900/20">
-                        {t('tracker.actualShort')}
-                      </td>
-                      {monthlyData.map((d, idx) => (
-                        <td key={`a-${idx}`} className={`px-1 py-2 text-xs text-right border-r border-b border-slate-200 dark:border-slate-700 font-medium ${d.actual > 0 ? 'text-blue-700 dark:text-blue-400 bg-blue-50/10 dark:bg-blue-900/10' : 'text-slate-400 dark:text-slate-500'}`}>
-                          {d.actual > 0 ? nf(d.actual) : '-'}
-                        </td>
-                      ))}
-                      <td className="px-2 py-2 text-xs font-bold text-blue-700 dark:text-blue-400 text-right border-l border-b border-slate-200 dark:border-slate-700 bg-blue-50/30 dark:bg-blue-900/20">
-                        {totalActual > 0 ? nf(totalActual) : '-'}
-                      </td>
-                      <td
-                        className="px-2 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-400 text-right border-l border-b border-slate-200 dark:border-slate-700 bg-emerald-50/30 dark:bg-emerald-900/20"
-                        title={actualPriceNote}
-                      >
-                        {revenue.actual > 0 ? formatCurrency(revenue.actual) : '-'}
-                      </td>
-                    </tr>
-                  </SortableYearlyBody>
+                    ))}
+                    <td className={`${TOTALS} ${edge} ${NUM} ${tone} border-l border-l-slate-200 dark:border-l-slate-700`}>
+                      {row.total === undefined ? null : row.total > 0 ? nf(row.total) : <Dash />}
+                    </td>
+                    <td className={`${TOTALS} ${edge} ${NUM} ${tone} border-l border-l-slate-200 dark:border-l-slate-700`}>
+                      {row.revenue === undefined ? null : row.revenue > 0 ? nf(Math.round(row.revenue)) : <Dash />}
+                    </td>
+                  </tr>
                 );
               })}
-              </table>
-            </SortableContext>
-          </DndContext>
+            </thead>
+
+            {projects.map((project, index) => {
+              const projRecords = records[project.id] || [];
+              const monthlyData = months.map(m => {
+                const r = projRecords.find(rec => rec.month === m);
+                return { plan: r?.planned_hours || 0, actual: r?.actual_hours || 0 };
+              });
+              const totalPlan = monthlyData.reduce((sum, d) => sum + d.plan, 0);
+              const totalActual = monthlyData.reduce((sum, d) => sum + d.actual, 0);
+
+              // Per-record, per-period pricing (A1/A2) — never a single flattened price.
+              const revenue = projectRevenues[project.id] ?? { plan: 0, actual: 0 };
+              const planPriceNote = priceBreakdown(project.id, 'plan');
+              const actualPriceNote = priceBreakdown(project.id, 'actual');
+
+              return (
+                <tbody key={project.id} className="group">
+                  <tr>
+                    <td rowSpan={2} style={{ width: W.no, minWidth: W.no }} className={`${SURFACE} ${STICKY_NO} ${ROW_END} px-1 py-2 text-center align-top text-[13px] tabular-nums text-slate-400 dark:text-slate-500`}>
+                      <span className="inline-block pt-0.5">{index + 1}</span>
+                    </td>
+                    <th scope="rowgroup" rowSpan={2} className={`${SURFACE} ${STICKY_NAME} ${NAME_WIDTH} ${ROW_END} border-r border-r-slate-200 px-3 py-2 text-left align-top font-normal dark:border-r-slate-800`}>
+                      <span className="line-clamp-2 text-[13px] font-medium leading-5 text-slate-900 dark:text-white" title={project.name}>
+                        {project.name}
+                      </span>
+                      <span className="mt-0.5 block font-mono text-[11px] text-slate-400 dark:text-slate-500">{project.code}</span>
+                    </th>
+                    <th scope="row" className={`${SURFACE} border-r border-slate-100 px-2 py-1.5 text-left text-[12px] font-normal text-slate-500 dark:border-slate-800 dark:text-slate-400`}>
+                      {planLabel}
+                    </th>
+                    {monthlyData.map((d, idx) => (
+                      <td key={idx} className={`${SURFACE} ${NUM} text-slate-500 dark:text-slate-400`}>
+                        {d.plan > 0 ? nf(d.plan) : <Dash />}
+                      </td>
+                    ))}
+                    <td className={`${SURFACE} ${NUM} border-l border-slate-100 text-slate-500 dark:border-slate-800 dark:text-slate-400`}>
+                      {totalPlan > 0 ? nf(totalPlan) : <Dash />}
+                    </td>
+                    <td
+                      className={`${SURFACE} ${NUM} border-l border-slate-100 text-slate-500 dark:border-slate-800 dark:text-slate-400 ${planPriceNote ? 'cursor-help underline decoration-slate-300 decoration-dotted underline-offset-4 dark:decoration-slate-600' : ''}`}
+                      title={planPriceNote}
+                    >
+                      {revenue.plan > 0 ? nf(Math.round(revenue.plan)) : <Dash />}
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row" className={`${SURFACE} ${ROW_END} border-r border-r-slate-100 px-2 py-1.5 text-left text-[12px] font-medium text-slate-900 dark:border-r-slate-800 dark:text-white`}>
+                      {actualLabel}
+                    </th>
+                    {monthlyData.map((d, idx) => (
+                      <td key={idx} className={`${SURFACE} ${ROW_END} ${NUM} font-medium text-slate-900 dark:text-white`}>
+                        {d.actual > 0 ? nf(d.actual) : <Dash />}
+                      </td>
+                    ))}
+                    <td className={`${SURFACE} ${ROW_END} ${NUM} border-l border-l-slate-100 font-semibold text-slate-900 dark:border-l-slate-800 dark:text-white`}>
+                      {totalActual > 0 ? nf(totalActual) : <Dash />}
+                    </td>
+                    <td
+                      className={`${SURFACE} ${ROW_END} ${NUM} border-l border-l-slate-100 font-semibold text-slate-900 dark:border-l-slate-800 dark:text-white ${actualPriceNote ? 'cursor-help underline decoration-slate-300 decoration-dotted underline-offset-4 dark:decoration-slate-600' : ''}`}
+                      title={actualPriceNote}
+                    >
+                      {revenue.actual > 0 ? nf(Math.round(revenue.actual)) : <Dash />}
+                    </td>
+                  </tr>
+                </tbody>
+              );
+            })}
+          </table>
         </div>
-      </div>
-    </div>
+      </section>
+    </Page>
   );
 };

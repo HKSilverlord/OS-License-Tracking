@@ -1,25 +1,36 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { TrendingUp, Palette } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Link } from 'react-router-dom';
+import { ArrowRight, ClipboardList } from 'lucide-react';
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, TooltipContentProps, LabelList } from 'recharts';
+import { ChartColorButton } from './ChartColorButton';
 import { ExportButton } from './ExportButton';
-import { useLanguage } from '../contexts/LanguageContext';
-import { useNumberFormat } from '../hooks/useNumberFormat';
-import type { TranslateFn } from '../contexts/LanguageContext';
-import { useToast } from '../contexts/ToastContext';
-import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
+import { buttonClasses } from './ui/Button';
+import { Card, CardHeader } from './ui/Card';
+import { EmptyState } from './ui/EmptyState';
+import { Page } from './ui/Page';
+import { RefreshBar } from './ui/RefreshBar';
 import { Skeleton } from './ui/Skeleton';
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipContentProps, LabelList } from 'recharts';
+import { useLanguage } from '../contexts/LanguageContext';
+import { useToast } from '../contexts/ToastContext';
+import { useNumberFormat } from '../hooks/useNumberFormat';
+import { useIsDarkTheme } from '../hooks/useDarkMode';
 import { dbService } from '../services/dbService';
+import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
+import { chartTheme } from '../utils/chartTheme';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger('LongTermPlanView');
 
-// Long-term plan data interface
+/** The years the plan covers. */
+const START_YEAR = 2024;
+const END_YEAR = 2030;
+
 interface LongTermPlanData {
   year: number;
-  salesPlan: number | null;      // 売上計画（万円）
-  salesActual: number | null;    // 売上実績（万円）
-  hourlyRatePlan: number | null; // 平均時給計画（千円/時）
-  hourlyRateActual: number | null; // 平均時給実績（千円/時）
+  salesPlan: number | null;        // 売上計画（万円）
+  salesActual: number | null;      // 売上実績（万円）
+  hourlyRatePlan: number | null;   // 平均時給計画（円/時）
+  hourlyRateActual: number | null; // 平均時給実績（円/時）
 }
 
 /** Row shape handed to Recharts (nulls become undefined so the lines break instead of dropping to 0). */
@@ -38,7 +49,19 @@ interface ChartColors {
   hourlyRateActual: string;
 }
 
-/** Theme-safe mid-tones (U8) — legible on both bg-white and bg-slate-900. */
+type SeriesKey = keyof ChartColors;
+
+const SERIES_KEYS: readonly SeriesKey[] = ['salesPlan', 'salesActual', 'hourlyRatePlan', 'hourlyRateActual'];
+
+/** Sales are columns on the left axis; the hourly rates are lines on the right. */
+const SERIES_SHAPE: Record<SeriesKey, 'bar' | 'line'> = {
+  salesPlan: 'bar',
+  salesActual: 'bar',
+  hourlyRatePlan: 'line',
+  hourlyRateActual: 'line',
+};
+
+/** Theme-safe mid-tones, legible on both bg-white and bg-slate-900. */
 const DEFAULT_CHART_COLORS: ChartColors = {
   salesPlan: CHART_PALETTE.neutral,
   salesActual: CHART_PALETTE.plan,
@@ -52,7 +75,7 @@ const isColorString = (value: unknown): value is string =>
 /** Merges a previously stored preference over the defaults, dropping anything unusable. */
 const migrateChartColors = (raw: unknown): ChartColors | null => {
   if (raw === null || typeof raw !== 'object') return null;
-  const saved = raw as Partial<Record<keyof ChartColors, unknown>>;
+  const saved = raw as Partial<Record<SeriesKey, unknown>>;
   return {
     salesPlan: isColorString(saved.salesPlan) ? saved.salesPlan : DEFAULT_CHART_COLORS.salesPlan,
     salesActual: isColorString(saved.salesActual) ? saved.salesActual : DEFAULT_CHART_COLORS.salesActual,
@@ -67,72 +90,109 @@ const makeFormatLabel = (nf: (value: number) => string) =>
     typeof value === 'number' ? nf(value) : String(value ?? '');
 
 /**
- * Tooltip body. Module scope on purpose: declared inside the view it would be a
+ * An axis top a little above the largest value, on a round step, with the
+ * ticks to match. The axes used to be fixed at 8,000 and 4,000, so a year
+ * above either was cut off at the top of the plot.
+ */
+const niceAxis = (values: number[], fallback: number): { max: number; ticks: number[] } => {
+  const largest = Math.max(0, ...values);
+  if (largest === 0) {
+    const step = fallback / 8;
+    return { max: fallback, ticks: Array.from({ length: 9 }, (_, i) => i * step) };
+  }
+  const rough = (largest * 1.15) / 8;
+  const magnitude = 10 ** Math.floor(Math.log10(rough));
+  const step = [1, 2, 2.5, 5, 10].map(f => f * magnitude).find(s => s >= rough) ?? 10 * magnitude;
+  const max = Math.ceil((largest * 1.15) / step) * step;
+  const ticks: number[] = [];
+  for (let value = 0; value <= max + step / 2; value += step) ticks.push(Math.round(value));
+  return { max, ticks };
+};
+
+const Swatch = ({ color, shape }: { color: string; shape: 'bar' | 'line' }) =>
+  shape === 'bar'
+    ? <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: color }} />
+    : <span aria-hidden="true" className="w-4 shrink-0" style={{ borderTop: `2px solid ${color}` }} />;
+
+/**
+ * A rate line's value, on the side of its point away from the other rate line.
+ * The two averages usually sit a few hundred yen apart, so with both labels
+ * above their points one was printed over the other's marker.
+ */
+const RateLabel = ({ x = 0, y = 0, value, index = 0, other, color, bold = false, nf }: {
+  x?: number | string;
+  y?: number | string;
+  value?: unknown;
+  index?: number;
+  other: (number | undefined)[];
+  /** Not `fill`: Recharts overwrites that prop when it clones the label. */
+  color: string;
+  bold?: boolean;
+  nf: (value: number) => string;
+}) => {
+  if (typeof value !== 'number') return null;
+  const theirs = other[index];
+  // On a tie the plan goes below, so the actual keeps the more visible spot.
+  const below = theirs !== undefined && (theirs > value || (theirs === value && !bold));
+  return (
+    <text
+      x={Number(x)}
+      y={Number(y) + (below ? 18 : -10)}
+      textAnchor="middle"
+      fontSize={bold ? 11 : 10}
+      fontWeight={bold ? 'bold' : undefined}
+      fill={color}
+    >
+      {nf(value)}
+    </text>
+  );
+};
+
+/**
+ * Hover card. Module scope on purpose: declared inside the view it would be a
  * new component type on every render and React would remount it. Recharts fills
  * in `active` / `payload` when it clones the element, so they are optional here.
  */
-const CustomTooltip = ({ active, payload, chartColors, t, nf }: Partial<TooltipContentProps<number, string>> & {
+const HoverCard = ({ active, payload, chartColors, labels, units, nf }: Partial<TooltipContentProps<number, string>> & {
   chartColors: ChartColors;
-  t: TranslateFn;
+  labels: Record<SeriesKey, string>;
+  units: Record<SeriesKey, string>;
   nf: (value: number) => string;
 }) => {
   if (!active || !payload || payload.length === 0) return null;
-
   const data = payload[0]?.payload as LongTermChartRow | undefined;
   if (!data) return null;
 
-  return (
-    <div className="bg-white dark:bg-slate-900 p-3 border border-slate-300 dark:border-slate-700 rounded-lg shadow-lg">
-      <p className="font-semibold text-slate-800 dark:text-slate-100 mb-2 border-b border-slate-200 dark:border-slate-800 pb-1">
-        {t('longTermPlan.year', '年度')}: {data.year}
-      </p>
-      <div className="space-y-1.5 text-sm">
-        {/* Sales Data */}
-        {data.salesPlan !== undefined && (
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesPlan }}></div>
-              <span className="text-slate-700 dark:text-slate-400">{t('longTermPlan.salesPlan', '売上計画')}:</span>
-            </div>
-            <span className="font-medium text-slate-900 dark:text-slate-100">{nf(data.salesPlan)} {t('longTermPlan.unit.sales', '万円')}</span>
-          </div>
-        )}
-
-        {data.salesActual !== undefined && (
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesActual }}></div>
-              <span className="text-slate-700 dark:text-slate-400">{t('longTermPlan.salesActual', '売上実績')}:</span>
-            </div>
-            <span className="font-medium text-slate-900 dark:text-slate-100">{nf(data.salesActual)} {t('longTermPlan.unit.sales', '万円')}</span>
-          </div>
-        )}
-
-        {/* Hourly Rate Data */}
-        {(data.hourlyRatePlan !== undefined || data.hourlyRateActual !== undefined) && (
-          <div className="border-t border-slate-200 dark:border-slate-800 pt-2 mt-2"></div>
-        )}
-
-        {data.hourlyRatePlan !== undefined && (
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.hourlyRatePlan }}></div>
-              <span className="text-slate-700 dark:text-slate-400">{t('longTermPlan.hourlyRatePlan', '平均時給計画')}:</span>
-            </div>
-            <span className="font-medium text-slate-900 dark:text-slate-100">{nf(data.hourlyRatePlan)} {t('longTermPlan.unit.hourlyRate', '千円/時')}</span>
-          </div>
-        )}
-
-        {data.hourlyRateActual !== undefined && (
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.hourlyRateActual }}></div>
-              <span className="text-slate-700 dark:text-slate-400">{t('longTermPlan.hourlyRateActual', '平均時給実績')}:</span>
-            </div>
-            <span className="font-medium text-slate-900 dark:text-slate-100">{nf(data.hourlyRateActual)} {t('longTermPlan.unit.hourlyRate', '千円/時')}</span>
-          </div>
-        )}
+  const row = (key: SeriesKey) => {
+    const value = data[key];
+    if (value === undefined) return null;
+    return (
+      <div key={key} className="flex items-center justify-between gap-6">
+        <span className="flex min-w-0 items-center gap-2 text-slate-500 dark:text-slate-400">
+          <Swatch color={chartColors[key]} shape={SERIES_SHAPE[key]} />
+          {labels[key]}
+        </span>
+        <span className="whitespace-nowrap font-medium tabular-nums text-slate-900 dark:text-slate-100">
+          {nf(value)} <span className="font-normal text-slate-400 dark:text-slate-500">{units[key]}</span>
+        </span>
       </div>
+    );
+  };
+  const hasRates = data.hourlyRatePlan !== undefined || data.hourlyRateActual !== undefined;
+
+  return (
+    <div className="min-w-[240px] rounded-xl bg-white p-3 text-[13px] shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/10 dark:bg-slate-900 dark:shadow-black/40 dark:ring-white/10">
+      <p className="mb-2 font-semibold tabular-nums text-slate-900 dark:text-white">{data.year}</p>
+      <div className="space-y-1">
+        {row('salesPlan')}
+        {row('salesActual')}
+      </div>
+      {hasRates && (
+        <div className="mt-2 space-y-1 border-t border-slate-100 pt-2 dark:border-slate-800">
+          {row('hourlyRatePlan')}
+          {row('hourlyRateActual')}
+        </div>
+      )}
     </div>
   );
 };
@@ -142,262 +202,296 @@ export const LongTermPlanView: React.FC = () => {
   const { format: nf } = useNumberFormat();
   const formatLabel = useMemo(() => makeFormatLabel(nf), [nf]);
   const toast = useToast();
+  const isDark = useIsDarkTheme();
+  const theme = useMemo(() => chartTheme(isDark), [isDark]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const loadedOnceRef = useRef(false);
+  const loadSeqRef = useRef(0);
   const [longTermData, setLongTermData] = useState<LongTermPlanData[]>([]);
-  const [showColorPicker, setShowColorPicker] = useState(false);
 
-  // Colours live behind the shared preference helper (U8): the localStorage key is unchanged
-  // so existing user picks survive, but the defaults are now theme-safe.
-  const [chartColors, setChartColors] = useChartPref<ChartColors>(
+  // The localStorage key is unchanged, so earlier picks survive.
+  const [chartColors, setChartColors, resetChartColors] = useChartPref<ChartColors>(
     'longTermPlan_chartColors',
     DEFAULT_CHART_COLORS,
     migrateChartColors,
   );
 
-  // `t` is memoised per language. Making it a dependency of the fetch would
-  // refetch on every language switch, so the ref keeps the error toast localised
-  // without tying data loading to the language.
+  // `t` is read through a ref: a language switch must not refetch seven years of aggregates.
   const tRef = useRef(t);
   useEffect(() => {
     tRef.current = t;
   }, [t]);
 
-  // Fetch real data from Supabase
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const startYear = 2024;
-        const endYear = 2030;
-
-        const data = await dbService.getYearlyAggregatedData(startYear, endYear);
-        setLongTermData(data);
-      } catch (error) {
-        log.error('Failed to load long-term plan data:', error);
-        toast.error(tRef.current('toast.loadFailed', 'Failed to load data'));
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-    // `toast` is stable (the provider memoises it), so this still runs once.
-    // `t` is read through tRef instead: it changes on every language switch and
-    // must not retrigger a fetch of 2020-2030 aggregates.
+  /** `silent` keeps the chart on screen while the request runs. */
+  const fetchData = useCallback(async (options?: { silent?: boolean }) => {
+    const seq = ++loadSeqRef.current;
+    if (!options?.silent) setLoading(true);
+    try {
+      const data = await dbService.getYearlyAggregatedData(START_YEAR, END_YEAR);
+      if (seq !== loadSeqRef.current) return;
+      setLongTermData(data);
+      setLoadError(false);
+      loadedOnceRef.current = true;
+    } catch (error) {
+      if (seq !== loadSeqRef.current) return;
+      log.error('Failed to load long-term plan data:', error);
+      setLoadError(true);
+      if (!options?.silent) toast.error(tRef.current('toast.loadFailed', 'Failed to load data'));
+    } finally {
+      if (seq === loadSeqRef.current) setLoading(false);
+    }
   }, [toast]);
 
-  // Chart data preparation - convert nulls to undefined for Recharts
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    // Hours saved in another view change this year's column.
+    const handleDataUpdated = () => { void fetchData({ silent: true }); };
+    window.addEventListener('dataUpdated', handleDataUpdated);
+    return () => window.removeEventListener('dataUpdated', handleDataUpdated);
+  }, [fetchData]);
+
   const salesUnit = t('longTermPlan.unit.sales', '10k JPY');
-  const rateUnit = t('longTermPlan.unit.hourlyRate', 'k JPY/hr');
+  const rateUnit = t('longTermPlan.unit.hourlyRate', 'JPY/h');
+
+  const labels: Record<SeriesKey, string> = {
+    salesPlan: t('longTermPlan.salesPlan', 'Sales plan'),
+    salesActual: t('longTermPlan.salesActual', 'Sales actual'),
+    hourlyRatePlan: t('longTermPlan.hourlyRatePlan', 'Avg. hourly rate, plan'),
+    hourlyRateActual: t('longTermPlan.hourlyRateActual', 'Avg. hourly rate, actual'),
+  };
+  const units: Record<SeriesKey, string> = {
+    salesPlan: salesUnit,
+    salesActual: salesUnit,
+    hourlyRatePlan: rateUnit,
+    hourlyRateActual: rateUnit,
+  };
 
   /** Translated headings, with the unit each column is actually in. */
   const csvColumns = [
     { key: 'year', label: t('longTermPlan.year', 'Year') },
-    { key: 'salesPlan', label: `${t('longTermPlan.salesPlan', 'Sales (Plan)')} (${salesUnit})` },
-    { key: 'salesActual', label: `${t('longTermPlan.salesActual', 'Sales (Actual)')} (${salesUnit})` },
-    { key: 'hourlyRatePlan', label: `${t('longTermPlan.hourlyRatePlan', 'Hourly rate (Plan)')} (${rateUnit})` },
-    { key: 'hourlyRateActual', label: `${t('longTermPlan.hourlyRateActual', 'Hourly rate (Actual)')} (${rateUnit})` },
+    ...SERIES_KEYS.map(key => ({ key, label: `${labels[key]} (${units[key]})` })),
   ];
 
-  const chartData = useMemo<LongTermChartRow[]>(() => {
-    return longTermData.map(d => ({
-      year: d.year.toString(),
-      salesPlan: d.salesPlan ?? undefined,
-      salesActual: d.salesActual ?? undefined,
-      hourlyRatePlan: d.hourlyRatePlan ?? undefined,
-      hourlyRateActual: d.hourlyRateActual ?? undefined,
-    }));
-  }, [longTermData]);
+  const chartData = useMemo<LongTermChartRow[]>(() => longTermData.map(d => ({
+    year: d.year.toString(),
+    salesPlan: d.salesPlan ?? undefined,
+    salesActual: d.salesActual ?? undefined,
+    hourlyRatePlan: d.hourlyRatePlan ?? undefined,
+    hourlyRateActual: d.hourlyRateActual ?? undefined,
+  })), [longTermData]);
 
-  if (loading) {
+  const planRates = useMemo(() => chartData.map(d => d.hourlyRatePlan), [chartData]);
+  const actualRates = useMemo(() => chartData.map(d => d.hourlyRateActual), [chartData]);
+
+  const salesAxis = useMemo(
+    () => niceAxis(chartData.flatMap(d => [d.salesPlan ?? 0, d.salesActual ?? 0]), 8000),
+    [chartData]
+  );
+  const rateAxis = useMemo(
+    () => niceAxis(chartData.flatMap(d => [d.hourlyRatePlan ?? 0, d.hourlyRateActual ?? 0]), 4000),
+    [chartData]
+  );
+
+  const hasData = longTermData.some(d => (d.salesPlan ?? 0) > 0 || (d.salesActual ?? 0) > 0);
+  const range = `${START_YEAR}–${END_YEAR}`;
+
+  const header = {
+    title: t('nav.longTermPlan', 'Long-term plan'),
+    description: t('longTermPlan.desc', 'Sales and the average hourly rate, year by year'),
+  };
+
+  if (loading && !loadedOnceRef.current) {
     return (
-      <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-4 md:p-6 overflow-hidden">
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex-1 flex flex-col gap-4">
-          <Skeleton className="h-5 w-56" />
-          <Skeleton className="flex-1 min-h-[240px] w-full" />
-          <span className="sr-only text-slate-500 dark:text-slate-400">{t('common.loading', 'Loading…')}</span>
-        </div>
-      </div>
+      <Page {...header}>
+        <Card padding="lg" role="status" aria-busy="true" aria-label={t('common.loading', 'Loading…')}>
+          <div aria-hidden="true">
+            <Skeleton className="h-5 w-64" />
+            <Skeleton className="mt-2 h-4 w-80 max-w-full" />
+            <Skeleton className="mt-6 h-[max(360px,calc(100dvh-17rem))] w-full" />
+          </div>
+        </Card>
+      </Page>
+    );
+  }
+
+  if (loadError && !loadedOnceRef.current) {
+    return (
+      <Page {...header}>
+        <Card>
+          <EmptyState
+            tone="error"
+            title={t('longTermPlan.loadFailedTitle', 'Could not load the long-term plan')}
+            description={t('empty.loadFailedHint', 'The request did not come back. Check the connection and try again.')}
+            actions={
+              <button type="button" onClick={() => { void fetchData(); }} className={buttonClasses('secondary')}>
+                {t('buttons.retry', 'Try again')}
+              </button>
+            }
+          />
+        </Card>
+      </Page>
+    );
+  }
+
+  if (!hasData && !loading) {
+    return (
+      <Page {...header}>
+        <Card>
+          <EmptyState
+            icon={ClipboardList}
+            title={t('longTermPlan.emptyTitle', 'No sales for {range} yet').replace('{range}', range)}
+            description={t('longTermPlan.emptyHint', 'Each year’s sales come from the hours recorded in Project tracking.')}
+            actions={
+              <Link to="/tracking" className={buttonClasses('secondary')}>
+                {t('empty.goToTracking', 'Go to Project tracking')}
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+            }
+          />
+        </Card>
+      </Page>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-4 md:p-6 overflow-hidden">
-      {/* Chart Section - Full Page */}
-      <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex-1 flex flex-col min-h-0">
-        <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-          <h3 className="text-md font-bold text-slate-700 dark:text-slate-100 flex items-center">
-            <TrendingUp className="w-4 h-4 mr-2 text-blue-600 dark:text-blue-400" />
-            {t('longTermPlan.title', 'OS事業長期計画')}
-          </h3>
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={() => setShowColorPicker(!showColorPicker)}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 dark:bg-purple-700 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors"
-              title={t('chart.customizeColors', 'Customize chart colors')}
-            >
-              <Palette className="w-4 h-4" />
-              {t('chart.colors', 'Colors')}
-            </button>
+    <Page {...header}>
+      {/* The card is the capture target: an exported image carries its title,
+          range and key along with the plot. */}
+      <Card id="long-term-plan-chart" padding="lg" className="animate-fade-up">
+        <CardHeader
+          title={
+            <>
+              {t('longTermPlan.title', 'OS business long-term plan')}{' '}
+              <span className="font-normal tabular-nums text-slate-400 dark:text-slate-500">{range}</span>
+            </>
+          }
+          description={t('longTermPlan.chartDesc', 'Sales on the left axis, average hourly rate on the right')}
+          actions={
+            <>
+              <ChartColorButton
+                rows={SERIES_KEYS.map(key => ({
+                  label: labels[key],
+                  value: chartColors[key],
+                  onChange: (value: string) => setChartColors(prev => ({ ...prev, [key]: value })),
+                }))}
+                onReset={resetChartColors}
+              />
+              <ExportButton
+                targetId="long-term-plan-chart"
+                filename="long_term_plan"
+                data={chartData}
+                csvColumns={csvColumns}
+                disabled={loading}
+              />
+            </>
+          }
+        />
 
-            <ExportButton
-              targetId="long-term-plan-chart"
-              filename="long_term_plan"
-              data={chartData}
-              csvColumns={csvColumns}
-            />
+        {loading && <RefreshBar className="mt-4" />}
+
+        <div className={`transition-opacity duration-200 ${loading ? 'opacity-40' : ''}`}>
+          <ul className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-600 dark:text-slate-300">
+            {SERIES_KEYS.map(key => (
+              <li key={key} className="flex items-center gap-2">
+                <Swatch color={chartColors[key]} shape={SERIES_SHAPE[key]} />
+                {labels[key]}
+              </li>
+            ))}
+          </ul>
+
+          <div className="-mx-2 mt-3 overflow-x-auto px-2 custom-scrollbar">
+            <div className="h-[max(360px,calc(100dvh-20rem))] min-w-[560px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={chartData} margin={{ top: 24, right: 8, left: 8, bottom: 4 }}>
+                  <CartesianGrid vertical={false} stroke={theme.grid} yAxisId="left" />
+
+                  <XAxis
+                    dataKey="year"
+                    tickLine={false}
+                    axisLine={{ stroke: theme.line }}
+                    tick={{ fontSize: 12, fontWeight: 600, fill: theme.text }}
+                    tickMargin={8}
+                  />
+                  <YAxis
+                    yAxisId="left"
+                    orientation="left"
+                    domain={[0, salesAxis.max]}
+                    ticks={salesAxis.ticks}
+                    width={72}
+                    tickLine={false}
+                    axisLine={{ stroke: theme.line }}
+                    tick={{ fontSize: 11, fill: theme.muted }}
+                    tickFormatter={nf}
+                    label={{
+                      value: t('longTermPlan.axis.sales', 'Sales (10k JPY)'),
+                      angle: -90,
+                      position: 'insideLeft',
+                      style: { fontSize: 12, fontWeight: 600, fill: chartColors.salesActual, textAnchor: 'middle' },
+                    }}
+                  />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    domain={[0, rateAxis.max]}
+                    ticks={rateAxis.ticks}
+                    width={72}
+                    tickLine={false}
+                    axisLine={{ stroke: theme.line }}
+                    tick={{ fontSize: 11, fill: theme.muted }}
+                    tickFormatter={nf}
+                    label={{
+                      value: t('longTermPlan.axis.hourlyRate', 'Avg. hourly rate (JPY/h)'),
+                      angle: 90,
+                      position: 'insideRight',
+                      style: { fontSize: 12, fontWeight: 600, fill: chartColors.hourlyRateActual, textAnchor: 'middle' },
+                    }}
+                  />
+
+                  <Tooltip
+                    cursor={{ fill: theme.focus }}
+                    content={<HoverCard chartColors={chartColors} labels={labels} units={units} nf={nf} />}
+                  />
+
+                  <Bar yAxisId="left" dataKey="salesPlan" name={labels.salesPlan} fill={chartColors.salesPlan} radius={[4, 4, 0, 0]} maxBarSize={60}>
+                    <LabelList dataKey="salesPlan" position="top" formatter={formatLabel} fontSize={10} fill={chartColors.salesPlan} />
+                  </Bar>
+                  <Bar yAxisId="left" dataKey="salesActual" name={labels.salesActual} fill={chartColors.salesActual} radius={[4, 4, 0, 0]} maxBarSize={60}>
+                    <LabelList dataKey="salesActual" position="top" formatter={formatLabel} fontSize={11} fill={chartColors.salesActual} fontWeight="bold" />
+                  </Bar>
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="hourlyRatePlan"
+                    name={labels.hourlyRatePlan}
+                    stroke={chartColors.hourlyRatePlan}
+                    strokeWidth={3}
+                    dot={{ fill: chartColors.hourlyRatePlan, r: 5 }}
+                    connectNulls={false}
+                  >
+                    <LabelList dataKey="hourlyRatePlan" content={<RateLabel other={actualRates} color={chartColors.hourlyRatePlan} nf={nf} />} />
+                  </Line>
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="hourlyRateActual"
+                    name={labels.hourlyRateActual}
+                    stroke={chartColors.hourlyRateActual}
+                    strokeWidth={3}
+                    dot={{ fill: chartColors.hourlyRateActual, r: 5 }}
+                    connectNulls={false}
+                  >
+                    <LabelList dataKey="hourlyRateActual" content={<RateLabel other={planRates} color={chartColors.hourlyRateActual} bold nf={nf} />} />
+                  </Line>
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
-
-
-        {/* Color Picker Section */}
-        {
-          showColorPicker && (
-            <div className="mb-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
-              <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">
-                <Palette className="w-4 h-4" />
-                {t('chart.customizeColors', 'Customize chart colors')}
-              </h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {([
-                  { key: 'salesPlan', label: t('longTermPlan.salesPlan', '売上計画') },
-                  { key: 'salesActual', label: t('longTermPlan.salesActual', '売上実績') },
-                  { key: 'hourlyRatePlan', label: t('longTermPlan.hourlyRatePlan', '平均時給計画') },
-                  { key: 'hourlyRateActual', label: t('longTermPlan.hourlyRateActual', '平均時給実績') },
-                ] as const).map(({ key, label }) => (
-                  <div key={key} className="flex flex-col gap-1">
-                    <label className="text-xs font-medium text-slate-600 dark:text-slate-400">{label}</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        aria-label={label}
-                        value={chartColors[key]}
-                        onChange={(e) => setChartColors({ ...chartColors, [key]: e.target.value })}
-                        className="w-10 h-8 rounded border border-slate-300 dark:border-slate-600 cursor-pointer p-0"
-                      />
-                      <input
-                        type="text"
-                        aria-label={label}
-                        value={chartColors[key]}
-                        onChange={(e) => setChartColors({ ...chartColors, [key]: e.target.value })}
-                        className="flex-1 px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )
-        }
-
-        {/* Chart Container */}
-        <div id="long-term-plan-chart" className="flex-1 min-h-0">
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart
-              data={chartData}
-              margin={{ top: 20, right: 60, left: 20, bottom: 20 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_PALETTE.grid} />
-
-              {/* X-Axis: Years */}
-              <XAxis
-                dataKey="year"
-                fontSize={12}
-                label={{ value: t('longTermPlan.axis.year', '年度'), position: 'insideBottom', offset: -10 }}
-              />
-
-              {/* Y1-Axis (Left): Sales in 万円 */}
-              <YAxis
-                yAxisId="left"
-                orientation="left"
-                fontSize={11}
-                domain={[0, 8000]}
-                ticks={[0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000]}
-                label={{
-                  value: t('longTermPlan.axis.sales', '売上額（万円）'),
-                  angle: -90,
-                  position: 'insideLeft',
-                  style: { fill: chartColors.salesActual }
-                }}
-              />
-
-              {/* Y2-Axis (Right): Hourly Rate in 千円/時 */}
-              <YAxis
-                yAxisId="right"
-                orientation="right"
-                fontSize={11}
-                domain={[0, 4000]}
-                ticks={[0, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000]}
-                label={{
-                  value: t('longTermPlan.axis.hourlyRate', '平均時給（千円/時）'),
-                  angle: 90,
-                  position: 'insideRight',
-                  style: { fill: chartColors.hourlyRateActual }
-                }}
-              />
-
-              <Tooltip content={<CustomTooltip chartColors={chartColors} t={t} nf={nf} />} />
-              <Legend
-                verticalAlign="top"
-                height={36}
-                wrapperStyle={{ paddingBottom: '10px' }}
-              />
-
-              {/* Series 1: Sales Plan - Column (Y1) */}
-              <Bar
-                yAxisId="left"
-                dataKey="salesPlan"
-                name={t('longTermPlan.legend.salesPlan', '売上計画（万円）')}
-                fill={chartColors.salesPlan}
-                radius={[4, 4, 0, 0]}
-                maxBarSize={60}
-              >
-                <LabelList dataKey="salesPlan" position="top" formatter={formatLabel} fontSize={10} fill={chartColors.salesPlan} />
-              </Bar>
-
-              {/* Series 2: Sales Actual - Column (Y1) */}
-              <Bar
-                yAxisId="left"
-                dataKey="salesActual"
-                name={t('longTermPlan.legend.salesActual', '売上実績（万円）')}
-                fill={chartColors.salesActual}
-                radius={[4, 4, 0, 0]}
-                maxBarSize={60}
-              >
-                <LabelList dataKey="salesActual" position="top" formatter={formatLabel} fontSize={11} fill={chartColors.salesActual} fontWeight="bold" />
-              </Bar>
-
-              {/* Series 3: Hourly Rate Plan - Line (Y2) */}
-              <Line
-                yAxisId="right"
-                type="monotone"
-                dataKey="hourlyRatePlan"
-                name={t('longTermPlan.legend.hourlyRatePlan', '平均時給計画')}
-                stroke={chartColors.hourlyRatePlan}
-                strokeWidth={3}
-                dot={{ fill: chartColors.hourlyRatePlan, r: 5 }}
-                connectNulls={false}
-              >
-                <LabelList dataKey="hourlyRatePlan" position="top" formatter={formatLabel} fontSize={10} fill={chartColors.hourlyRatePlan} offset={10} />
-              </Line>
-
-              {/* Series 4: Hourly Rate Actual - Line (Y2) */}
-              <Line
-                yAxisId="right"
-                type="monotone"
-                dataKey="hourlyRateActual"
-                name={t('longTermPlan.legend.hourlyRateActual', '平均時給実績')}
-                stroke={chartColors.hourlyRateActual}
-                strokeWidth={3}
-                dot={{ fill: chartColors.hourlyRateActual, r: 5 }}
-                connectNulls={false}
-              >
-                <LabelList dataKey="hourlyRateActual" position="top" formatter={formatLabel} fontSize={11} fill={chartColors.hourlyRateActual} fontWeight="bold" offset={10} />
-              </Line>
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      </div >
-    </div >
+      </Card>
+    </Page>
   );
 };

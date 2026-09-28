@@ -1,176 +1,217 @@
-
-import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { dbService } from '../../services/dbService';
-import { ProjectStatus } from '../../types';
+import { Project, ProjectStatus } from '../../types';
 import { DEFAULT_UNIT_PRICE } from '../../constants';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../../contexts/ToastContext';
 import { createLogger } from '../../utils/logger';
+import { describePeriod } from '../../utils/period';
+import { Button } from '../ui/Button';
+import { Field, Input, Textarea } from '../ui/Field';
+import { Modal } from '../ui/Modal';
 
 const log = createLogger('NewProjectModal');
 
 interface NewProjectModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    onSuccess: () => void;
-    initialCode: string;
-    currentPeriod: string;
+  isOpen: boolean;
+  onClose: () => void;
+  /** Receives the created project, so the caller can show it. */
+  onSuccess: (project: Project) => void;
+  /** Shown for reference; empty means the service assigns one on save. */
+  initialCode: string;
+  currentPeriod: string;
 }
 
 interface NewProjectForm {
-    code: string;
-    name: string;
-    type: string;
-    status: ProjectStatus;
-    software: string;
-    /** JPY per hour used for planned revenue. Written to `projects` AND `period_projects`. */
-    plan_price: number;
-    /** JPY per hour used for actual revenue. Written to `projects` AND `period_projects`. */
-    actual_price: number;
+  code: string;
+  name: string;
+  type: string;
+  status: ProjectStatus;
+  software: string;
+  /** JPY per hour used for planned revenue. Written to `projects` AND `period_projects`. */
+  plan_price: number;
+  /** JPY per hour used for actual revenue. Written to `projects` AND `period_projects`. */
+  actual_price: number;
 }
 
 const emptyForm = (): NewProjectForm => ({
-    code: '',
-    name: '',
-    type: '',
-    status: ProjectStatus.ACTIVE,
-    software: 'AutoCAD',
-    plan_price: DEFAULT_UNIT_PRICE,
-    actual_price: DEFAULT_UNIT_PRICE
+  code: '',
+  name: '',
+  type: '',
+  status: ProjectStatus.ACTIVE,
+  software: 'AutoCAD',
+  plan_price: DEFAULT_UNIT_PRICE,
+  actual_price: DEFAULT_UNIT_PRICE,
 });
 
 /** Parses a number input without ever producing NaN. */
 const parsePrice = (raw: string): number => {
-    const parsed = Number.parseInt(raw, 10);
-    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 };
 
-const INPUT_CLASS =
-    'block w-full border border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm ' +
-    'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 ' +
-    'placeholder:text-slate-400 dark:placeholder:text-slate-500 ' +
-    'focus:ring-blue-500 focus:border-blue-500';
-
 export const NewProjectModal: React.FC<NewProjectModalProps> = ({
-    isOpen,
-    onClose,
-    onSuccess,
-    initialCode,
-    currentPeriod
+  isOpen,
+  onClose,
+  onSuccess,
+  initialCode,
+  currentPeriod,
 }) => {
-    const { t } = useLanguage();
-    const toast = useToast();
-    const [newProject, setNewProject] = useState<NewProjectForm>(emptyForm);
-    const [submitting, setSubmitting] = useState(false);
+  const { t } = useLanguage();
+  const toast = useToast();
+  const formId = useId();
+  const planPriceRef = useRef<HTMLInputElement>(null);
+  const [form, setForm] = useState<NewProjectForm>(emptyForm);
+  const [priceMissing, setPriceMissing] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-    useEffect(() => {
-        if (isOpen) {
-            setNewProject(prev => ({ ...prev, code: initialCode }));
-        }
-    }, [isOpen, initialCode]);
+  // A draft left by closing the dialog is kept; only the code is refreshed.
+  useEffect(() => {
+    if (isOpen) setForm(prev => ({ ...prev, code: initialCode }));
+  }, [isOpen, initialCode]);
 
-    const handleCreateProject = async (e: React.FormEvent) => {
-        e.preventDefault();
+  const update = <K extends keyof NewProjectForm>(key: K, value: NewProjectForm[K]) =>
+    setForm(prev => ({ ...prev, [key]: value }));
 
-        if (!(newProject.plan_price > 0)) {
-            toast.error(t('modals.project.priceRequired', 'Plan price is required'));
-            return;
-        }
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!(form.plan_price > 0)) {
+      setPriceMissing(true);
+      planPriceRef.current?.focus();
+      return;
+    }
 
-        setSubmitting(true);
-        try {
-            await dbService.createProject({
-                code: newProject.code,
-                name: newProject.name,
-                type: newProject.type,
-                software: newProject.software,
-                status: newProject.status,
-                period: currentPeriod,
-                plan_price: newProject.plan_price,
-                actual_price: newProject.actual_price
-            });
+    setSubmitting(true);
+    try {
+      const created = await dbService.createProject({
+        code: form.code,
+        name: form.name.trim(),
+        type: form.type.trim(),
+        software: form.software.trim(),
+        status: form.status,
+        period: currentPeriod,
+        plan_price: form.plan_price,
+        actual_price: form.actual_price,
+      });
 
-            // Reset form
-            setNewProject(emptyForm());
+      setForm(emptyForm());
+      onSuccess(created);
+      toast.success(t('modals.project.created', 'Project created'));
+      window.dispatchEvent(new CustomEvent('dataUpdated'));
+      onClose();
+    } catch (err) {
+      log.error('Failed to create project', err);
+      toast.error(t('modals.project.createFailed', 'Failed to create project'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-            onSuccess();
-            toast.success(t('modals.project.created', 'Project created'));
-            window.dispatchEvent(new CustomEvent('dataUpdated'));
-            onClose();
-        } catch (err) {
-            log.error('Failed to create project', err);
-            toast.error(t('modals.project.createFailed', 'Failed to create project'));
-        } finally {
-            setSubmitting(false);
-        }
-    };
+  return (
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      dismissible={!submitting}
+      title={t('modals.project.title', 'New project')}
+      description={
+        <>
+          {t('modals.project.addsTo', 'Adds to {period}').replace('{period}', describePeriod(currentPeriod, t))}
+          {form.code && <span className="font-mono text-slate-400 dark:text-slate-500"> · {form.code}</span>}
+        </>
+      }
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={submitting}>
+            {t('common.cancel', 'Cancel')}
+          </Button>
+          <Button type="submit" form={formId} isLoading={submitting}>
+            {t('modals.project.submit', 'Create project')}
+          </Button>
+        </>
+      }
+    >
+      <form id={formId} onSubmit={handleSubmit} className="space-y-4">
+        <Field label={t('modals.project.name', 'Company name')}>
+          {id => (
+            <Input
+              id={id}
+              required
+              autoComplete="off"
+              value={form.name}
+              onChange={event => update('name', event.target.value)}
+            />
+          )}
+        </Field>
 
-    if (!isOpen) return null;
+        <Field label={t('modals.project.type', 'Business content')}>
+          {id => (
+            <Input
+              id={id}
+              autoComplete="off"
+              value={form.type}
+              onChange={event => update('type', event.target.value)}
+              placeholder={t('modals.project.typePlaceholder', 'Mechanical design')}
+            />
+          )}
+        </Field>
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 p-4 backdrop-blur-sm">
-            <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-lg animate-in fade-in zoom-in duration-200">
-                <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                    <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200">{t('modals.project.title')}</h3>
-                    <button type="button" onClick={onClose} aria-label={t('common.close', 'Close')}>
-                        <X className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300" />
-                    </button>
-                </div>
-                <form onSubmit={handleCreateProject} className="p-6 space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 uppercase mb-1">{t('modals.project.code')}</label>
-                            <input required readOnly type="text" className="block w-full border border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed focus:ring-blue-500 focus:border-blue-500" value={newProject.code} />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 uppercase mb-1">{t('modals.project.name')}</label>
-                            <input required type="text" className={INPUT_CLASS} value={newProject.name} onChange={e => setNewProject({ ...newProject, name: e.target.value })} />
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 uppercase mb-1">{t('modals.project.type')}</label>
-                            <input type="text" className={INPUT_CLASS} value={newProject.type} onChange={e => setNewProject({ ...newProject, type: e.target.value })} placeholder={t('modals.project.typePlaceholder')} />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 uppercase mb-1">{t('modals.project.software')}</label>
-                            <input type="text" className={INPUT_CLASS} value={newProject.software} onChange={e => setNewProject({ ...newProject, software: e.target.value })} placeholder={t('modals.project.softwarePlaceholder')} />
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label htmlFor="new-project-plan-price" className="block text-xs font-medium text-slate-700 dark:text-slate-300 uppercase mb-1">{t('modals.project.planPrice', 'Plan price (JPY/h)')}</label>
-                            <input
-                                id="new-project-plan-price"
-                                required
-                                type="number"
-                                min={0}
-                                step={1}
-                                className={`${INPUT_CLASS} font-mono`}
-                                value={newProject.plan_price}
-                                onChange={e => setNewProject({ ...newProject, plan_price: parsePrice(e.target.value) })}
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor="new-project-actual-price" className="block text-xs font-medium text-slate-700 dark:text-slate-300 uppercase mb-1">{t('modals.project.actualPrice', 'Actual price (JPY/h)')}</label>
-                            <input
-                                id="new-project-actual-price"
-                                type="number"
-                                min={0}
-                                step={1}
-                                className={`${INPUT_CLASS} font-mono`}
-                                value={newProject.actual_price}
-                                onChange={e => setNewProject({ ...newProject, actual_price: parsePrice(e.target.value) })}
-                            />
-                        </div>
-                    </div>
-                    <div className="pt-4 flex justify-end space-x-3">
-                        <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md">{t('modals.actions.cancel')}</button>
-                        <button type="submit" disabled={submitting} className="px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-60 disabled:cursor-not-allowed">{t('modals.project.submit')}</button>
-                    </div>
-                </form>
-            </div>
+        <Field
+          label={t('modals.project.software', 'Software')}
+          hint={t('editProject.softwareHint', 'Separate several with commas or new lines.')}
+        >
+          {id => (
+            <Textarea
+              id={id}
+              rows={2}
+              className="min-h-[64px]"
+              value={form.software}
+              onChange={event => update('software', event.target.value)}
+              placeholder={t('editProject.softwarePlaceholder', 'AutoCAD, Revit, …')}
+            />
+          )}
+        </Field>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field
+            label={t('details.planPrice', 'Plan price')}
+            aside={t('unit.yenPerHour', 'JPY/h')}
+            error={priceMissing ? t('modals.project.priceRequired', 'Enter a plan price above zero.') : undefined}
+          >
+            {id => (
+              <Input
+                ref={planPriceRef}
+                id={id}
+                required
+                type="number"
+                inputMode="numeric"
+                min={0}
+                step={1}
+                className="text-right tabular-nums no-spinner"
+                aria-invalid={priceMissing || undefined}
+                value={form.plan_price}
+                onChange={event => {
+                  update('plan_price', parsePrice(event.target.value));
+                  setPriceMissing(false);
+                }}
+              />
+            )}
+          </Field>
+          <Field label={t('details.actualPrice', 'Actual price')} aside={t('unit.yenPerHour', 'JPY/h')}>
+            {id => (
+              <Input
+                id={id}
+                type="number"
+                inputMode="numeric"
+                min={0}
+                step={1}
+                className="text-right tabular-nums no-spinner"
+                value={form.actual_price}
+                onChange={event => update('actual_price', parsePrice(event.target.value))}
+              />
+            )}
+          </Field>
         </div>
-    );
+      </form>
+    </Modal>
+  );
 };

@@ -1,22 +1,23 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  Calendar,
-  Plus,
-  Search,
-  X,
-  Edit2,
-  Trash2,
-  Loader2
-} from 'lucide-react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { CalendarRange, ChevronRight, Plus, Search } from 'lucide-react';
 import { dbService } from '../services/dbService';
-import { Project } from '../types';
+import type { Project } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
-import { useToast, useConfirm } from '../contexts/ToastContext';
+import { useConfirm, useToast } from '../contexts/ToastContext';
 import { useUserRole } from '../contexts/UserRoleContext';
-import { motion } from 'framer-motion';
-import type { Variants } from 'framer-motion';
-import { Skeleton } from './ui/Skeleton';
 import { createLogger } from '../utils/logger';
+import { getCurrentPeriod } from '../utils/helpers';
+import { describePeriod, halfMonths, nextPeriod, parsePeriod, periodLabel } from '../utils/period';
+import type { Half } from '../utils/period';
+import { Button } from './ui/Button';
+import { Card } from './ui/Card';
+import { EmptyState } from './ui/EmptyState';
+import { Field, Input } from './ui/Field';
+import { Modal } from './ui/Modal';
+import { Page } from './ui/Page';
+import { SegmentedControl } from './ui/SegmentedControl';
+import { Skeleton } from './ui/Skeleton';
+import { plural } from '../utils/plural';
 
 const log = createLogger('PeriodManagement');
 
@@ -30,10 +31,406 @@ const isDuplicateKeyError = (error: unknown): boolean =>
 interface PeriodWithCount {
   label: string;
   year: number;
-  half: 'H1' | 'H2';
+  half: Half;
   created_at: string;
   project_count: number;
 }
+
+type EditorState =
+  | { mode: 'create'; year: number; half: Half; selected: string[] }
+  | {
+      mode: 'edit';
+      period: PeriodWithCount;
+      /** The projects in the period when the editor opened; null while loading. */
+      initialIds: string[] | null;
+      selected: string[];
+    };
+
+const HALVES: readonly Half[] = ['H1', 'H2'];
+const MIN_YEAR = 2000;
+const MAX_YEAR = 2099;
+
+/** Periods arranged as the years they belong to, newest year first. */
+const groupByYear = (periods: PeriodWithCount[]) => {
+  const years = new Map<number, Partial<Record<Half, PeriodWithCount>>>();
+  for (const period of periods) {
+    const halves = years.get(period.year) ?? {};
+    halves[period.half] = period;
+    years.set(period.year, halves);
+  }
+  return [...years.entries()].sort(([a], [b]) => b - a);
+};
+
+/* ------------------------------------------------------------------------- */
+
+interface ProjectPickerProps {
+  projects: Project[];
+  selected: string[];
+  onChange: (ids: string[]) => void;
+  loading?: boolean;
+  /** Offered beside "Select all": filling the list from another period. */
+  extraAction?: React.ReactNode;
+}
+
+/** A searchable checklist of every project. Select all and Clear act on what the search shows. */
+const ProjectPicker: React.FC<ProjectPickerProps> = ({ projects, selected, onChange, loading = false, extraAction }) => {
+  const { t } = useLanguage();
+  const [query, setQuery] = useState('');
+  const selectedSet = useMemo(() => new Set(selected), [selected]);
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return projects;
+    return projects.filter(project =>
+      [project.name, project.code, project.type, project.software].some(value => value?.toLowerCase().includes(q)),
+    );
+  }, [projects, query]);
+
+  const toggle = (id: string) =>
+    onChange(selectedSet.has(id) ? selected.filter(value => value !== id) : [...selected, id]);
+
+  const selectVisible = () => onChange(Array.from(new Set([...selected, ...visible.map(project => project.id)])));
+
+  const clearVisible = () => {
+    const hidden = new Set(visible.map(project => project.id));
+    onChange(selected.filter(id => !hidden.has(id)));
+  };
+
+  if (projects.length === 0 && !loading) {
+    return (
+      <p className="rounded-xl bg-slate-50 px-4 py-5 text-center text-sm leading-6 text-slate-500 dark:bg-slate-800/50 dark:text-slate-400">
+        {t('periodManagement.noProjects', 'No projects yet. After creating this period, add them in Project Tracking.')}
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+        <Input
+          type="search"
+          value={query}
+          onChange={event => setQuery(event.target.value)}
+          placeholder={t('searchPlaceholder', 'Search by name, code or type')}
+          aria-label={t('searchProjects', 'Search projects')}
+          className="pl-9"
+          disabled={loading}
+        />
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <p className="text-[13px] text-slate-500 tabular-nums dark:text-slate-400" aria-live="polite">
+          {t('periodManagement.selectedCount', '{count} of {total} selected')
+            .replace('{count}', String(selected.length))
+            .replace('{total}', String(projects.length))}
+        </p>
+        <div className="-mr-2 flex flex-wrap items-center">
+          {extraAction}
+          <Button variant="ghost" size="sm" onClick={selectVisible} disabled={loading || visible.length === 0}>
+            {t('selectAll', 'Select all')}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={clearVisible} disabled={loading || selected.length === 0}>
+            {t('periodManagement.clear', 'Clear')}
+          </Button>
+        </div>
+      </div>
+
+      <div className="max-h-[min(22rem,42dvh)] overflow-y-auto rounded-xl border border-slate-200 custom-scrollbar dark:border-slate-800">
+        {loading ? (
+          <div className="space-y-3 p-3" aria-busy="true">
+            {Array.from({ length: 5 }, (_, index) => (
+              <div key={index} className="flex items-center gap-3">
+                <Skeleton className="h-4 w-4 rounded" />
+                <Skeleton className="h-4 flex-1" />
+              </div>
+            ))}
+          </div>
+        ) : visible.length === 0 ? (
+          <p className="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+            {t('periodManagement.noMatch', 'No projects match “{query}”.').replace('{query}', query.trim())}
+          </p>
+        ) : (
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+            {visible.map(project => {
+              const detail = [project.type, project.software?.replace(/\s*[\n,、]\s*/g, ', ')]
+                .filter(Boolean)
+                .join(' · ');
+              return (
+                <li key={project.id}>
+                  <label className="flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                    <input
+                      type="checkbox"
+                      checked={selectedSet.has(project.id)}
+                      onChange={() => toggle(project.id)}
+                      className="h-4 w-4 shrink-0 cursor-pointer rounded accent-blue-600"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-baseline gap-2">
+                        <span className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{project.name}</span>
+                        <span className="shrink-0 font-mono text-[11px] text-slate-400 dark:text-slate-500">{project.code}</span>
+                      </span>
+                      {detail && (
+                        <span className="block truncate text-xs leading-5 text-slate-500 dark:text-slate-400">{detail}</span>
+                      )}
+                    </span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ------------------------------------------------------------------------- */
+
+interface PeriodEditorProps {
+  editor: EditorState;
+  projects: Project[];
+  existingLabels: ReadonlySet<string>;
+  /** The newest period, offered as a starting selection for a new one. */
+  latestLabel: string | null;
+  submitting: boolean;
+  /** Updates are functions of the latest state: a fetch may finish after further edits. */
+  onChange: (update: (prev: EditorState) => EditorState) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+  onDelete: () => void;
+}
+
+const PeriodEditor: React.FC<PeriodEditorProps> = ({
+  editor,
+  projects,
+  existingLabels,
+  latestLabel,
+  submitting,
+  onChange,
+  onClose,
+  onSubmit,
+  onDelete,
+}) => {
+  const { t } = useLanguage();
+  const toast = useToast();
+  const formId = useId();
+  const [copying, setCopying] = useState(false);
+
+  const isCreate = editor.mode === 'create';
+  const loading = editor.mode === 'edit' && editor.initialIds === null;
+
+  const yearValid = !isCreate || (editor.year >= MIN_YEAR && editor.year <= MAX_YEAR);
+  const targetLabel = isCreate ? periodLabel(editor) : editor.period.label;
+  const alreadyExists = isCreate && yearValid && existingLabels.has(targetLabel);
+
+  // A first period may start empty (there may be no projects to pick yet);
+  // otherwise a period with nothing in it is almost certainly a slip.
+  const needsSelection = projects.length > 0 && editor.selected.length === 0;
+  const removedCount =
+    editor.mode === 'edit' && editor.initialIds
+      ? editor.initialIds.filter(id => !editor.selected.includes(id)).length
+      : 0;
+
+  const canSubmit = !loading && yearValid && !alreadyExists && !needsSelection;
+
+  const setSelected = (selected: string[]) => onChange(prev => ({ ...prev, selected }));
+  const setYear = (year: number) => onChange(prev => (prev.mode === 'create' ? { ...prev, year } : prev));
+  const setHalf = (half: Half) => onChange(prev => (prev.mode === 'create' ? { ...prev, half } : prev));
+
+  const copyFromLatest = async () => {
+    if (!latestLabel || editor.mode !== 'create') return;
+    setCopying(true);
+    try {
+      const inLatest = await dbService.getProjectsForPeriod(latestLabel);
+      setSelected(inLatest.map(project => project.id));
+    } catch (error) {
+      log.error('Failed to load the latest period', error);
+      toast.error(t('alerts.projectsLoadFailed', 'Failed to load projects'));
+    } finally {
+      setCopying(false);
+    }
+  };
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (canSubmit) onSubmit();
+  };
+
+  return (
+    <Modal
+      open
+      size="lg"
+      onClose={onClose}
+      dismissible={!submitting}
+      title={isCreate ? t('createNewPeriod', 'New period') : describePeriod(editor.period.label, t)}
+      description={
+        isCreate
+          ? t('periodManagement.createDescription', 'Pick the half-year, then the projects to track in it.')
+          : t('periodManagement.editDescription', 'Choose the projects tracked in this half-year.')
+      }
+      footer={
+        <>
+          {editor.mode === 'edit' && (
+            <Button variant="danger-quiet" onClick={onDelete} disabled={submitting} className="sm:mr-auto">
+              {t('periodManagement.deletePeriod', 'Delete period')}
+            </Button>
+          )}
+          <Button variant="secondary" onClick={onClose} disabled={submitting}>
+            {t('common.cancel', 'Cancel')}
+          </Button>
+          <Button type="submit" form={formId} isLoading={submitting} disabled={!canSubmit}>
+            {isCreate ? t('createPeriod', 'Create period') : t('common.save', 'Save')}
+          </Button>
+        </>
+      }
+    >
+      <form id={formId} onSubmit={handleSubmit} className="space-y-5">
+        {editor.mode === 'create' && (
+          <div>
+            <div className="grid grid-cols-[minmax(0,7.5rem)_minmax(0,1fr)] items-end gap-3">
+              <Field label={t('year', 'Year')}>
+                {id => (
+                  <Input
+                    id={id}
+                    type="number"
+                    inputMode="numeric"
+                    min={MIN_YEAR}
+                    max={MAX_YEAR}
+                    className="tabular-nums no-spinner"
+                    aria-invalid={!yearValid || alreadyExists || undefined}
+                    value={Number.isNaN(editor.year) ? '' : editor.year}
+                    onChange={event => setYear(Number.parseInt(event.target.value, 10))}
+                  />
+                )}
+              </Field>
+              <div>
+                <p className="mb-1.5 text-[13px] font-medium text-slate-700 dark:text-slate-300">{t('half', 'Half')}</p>
+                <SegmentedControl<Half>
+                  size="lg"
+                  fullWidth
+                  ariaLabel={t('half', 'Half')}
+                  value={editor.half}
+                  onChange={setHalf}
+                  options={HALVES.map(half => ({
+                    value: half,
+                    label: (
+                      <>
+                        {half}
+                        <span className="hidden font-normal text-slate-400 min-[400px]:inline dark:text-slate-500">
+                          {halfMonths(half, t)}
+                        </span>
+                      </>
+                    ),
+                  }))}
+                />
+              </div>
+            </div>
+            {(!yearValid || alreadyExists) && (
+              <p className="mt-2 text-xs text-rose-600 dark:text-rose-400" role="alert">
+                {!yearValid
+                  ? t('periodManagement.yearRange', 'Enter a year from {min} to {max}.')
+                      .replace('{min}', String(MIN_YEAR))
+                      .replace('{max}', String(MAX_YEAR))
+                  : t('periodManagement.exists', '{period} already exists.').replace('{period}', describePeriod(targetLabel, t))}
+              </p>
+            )}
+          </div>
+        )}
+
+        <ProjectPicker
+          projects={projects}
+          selected={editor.selected}
+          loading={loading}
+          onChange={setSelected}
+          extraAction={
+            editor.mode === 'create' && latestLabel && projects.length > 0 ? (
+              <Button variant="ghost" size="sm" onClick={copyFromLatest} isLoading={copying}>
+                {t('periodManagement.copyFrom', 'Same as {period}').replace('{period}', latestLabel.replace('-', ' '))}
+              </Button>
+            ) : undefined
+          }
+        />
+
+        {removedCount > 0 && (
+          <p className="text-[13px] leading-5 text-amber-700 dark:text-amber-400">
+            {plural(t, 'periodManagement.willRemove', removedCount, '{count} projects will be removed from this period, with the prices set for it.')}
+          </p>
+        )}
+      </form>
+    </Modal>
+  );
+};
+
+/* ------------------------------------------------------------------------- */
+
+interface HalfRowProps {
+  year: number;
+  half: Half;
+  period?: PeriodWithCount;
+  isAdmin: boolean;
+  onEdit: (period: PeriodWithCount) => void;
+  onCreate: (year: number, half: Half) => void;
+}
+
+const HalfRow: React.FC<HalfRowProps> = ({ year, half, period, isAdmin, onEdit, onCreate }) => {
+  const { t } = useLanguage();
+
+  const name = (
+    <span className="min-w-0 flex-1">
+      <span className="block text-sm font-semibold text-slate-900 dark:text-white">{half}</span>
+      <span className="block text-[13px] text-slate-500 dark:text-slate-400">{halfMonths(half, t)}</span>
+    </span>
+  );
+
+  if (!period) {
+    return (
+      <li className="flex min-h-[64px] items-center gap-3 px-4 py-3 sm:px-5">
+        {name}
+        <span className="text-[13px] text-slate-400 dark:text-slate-500">
+          {t('periodManagement.notCreated', 'Not set up')}
+        </span>
+        {isAdmin && (
+          <Button variant="secondary" size="sm" onClick={() => onCreate(year, half)}>
+            {t('periodManagement.create', 'Set up')}
+          </Button>
+        )}
+      </li>
+    );
+  }
+
+  const count = (
+    <span className="text-[13px] text-slate-600 tabular-nums dark:text-slate-300">
+      {plural(t, 'periodManagement.projectCount', period.project_count, '{count} projects')}
+    </span>
+  );
+
+  if (!isAdmin) {
+    return (
+      <li className="flex min-h-[64px] items-center gap-3 px-4 py-3 sm:px-5">
+        {name}
+        {count}
+      </li>
+    );
+  }
+
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => onEdit(period)}
+        className="flex min-h-[64px] w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50 sm:px-5 dark:hover:bg-slate-800/50"
+        aria-label={`${describePeriod(period.label, t)} — ${t('periodManagement.editProjects', 'Edit projects')}`}
+      >
+        {name}
+        {count}
+        <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 dark:text-slate-600" aria-hidden="true" />
+      </button>
+    </li>
+  );
+};
+
+/* ------------------------------------------------------------------------- */
 
 export const PeriodManagement: React.FC = () => {
   const { t } = useLanguage();
@@ -41,19 +438,10 @@ export const PeriodManagement: React.FC = () => {
   const confirm = useConfirm();
   const { isAdmin } = useUserRole();
 
-  // State
   const [periods, setPeriods] = useState<PeriodWithCount[]>([]);
   const [allProjects, setAllProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState<PeriodWithCount | null>(null);
-
-  // Form state
-  const [formYear, setFormYear] = useState(new Date().getFullYear());
-  const [formHalf, setFormHalf] = useState<'H1' | 'H2'>('H1');
-  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [editor, setEditor] = useState<EditorState | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // `t` is memoised per language. Making it a dependency of the fetch would
@@ -64,522 +452,230 @@ export const PeriodManagement: React.FC = () => {
     tRef.current = t;
   }, [t]);
 
+  const loadedRef = useRef(false);
   const loadData = useCallback(async () => {
     try {
-      setLoading(true);
       const [periodsData, projectsData] = await Promise.all([
         dbService.getPeriodsWithProjectCount(),
-        dbService.getAllProjectsForPeriodManagement()
+        dbService.getAllProjectsForPeriodManagement(),
       ]);
-      setPeriods(periodsData);
+      setPeriods(periodsData as PeriodWithCount[]);
       setAllProjects(projectsData);
+      loadedRef.current = true;
+      setStatus('ready');
     } catch (error) {
       log.error('Error loading data:', error);
-      toast.error(tRef.current('toast.loadFailed', 'Failed to load data'));
-    } finally {
-      setLoading(false);
+      // A failed refresh keeps the list on screen; a failed first load explains itself.
+      if (loadedRef.current) toast.error(tRef.current('toast.loadFailed', 'Failed to load data'));
+      else setStatus('error');
     }
   }, [toast]);
 
-  // Load data
   useEffect(() => {
-    loadData();
+    void loadData();
   }, [loadData]);
 
-  // Filter projects by search query
-  const filteredProjects = allProjects.filter(project =>
-    project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    project.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    project.type?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  // Toggle project selection
-  const toggleProject = (projectId: string) => {
-    setSelectedProjectIds(prev =>
-      prev.includes(projectId)
-        ? prev.filter(id => id !== projectId)
-        : [...prev, projectId]
-    );
+  const retry = () => {
+    setStatus('loading');
+    void loadData();
   };
 
-  // Select/Deselect all
-  const selectAll = () => {
-    setSelectedProjectIds(filteredProjects.map(p => p.id));
-  };
+  const years = useMemo(() => groupByYear(periods), [periods]);
+  const existingLabels = useMemo(() => new Set(periods.map(period => period.label)), [periods]);
+  // Newest first from the service: year, then half, descending.
+  const latestLabel = periods[0]?.label ?? null;
 
-  const deselectAll = () => {
-    setSelectedProjectIds([]);
-  };
-
-  // Create period
-  const handleCreatePeriod = async () => {
-    if (selectedProjectIds.length === 0) {
-      toast.warning(t('periodManagement.selectProjects', 'Select at least one project'));
+  const openCreate = (year?: number, half?: Half) => {
+    if (year !== undefined && half !== undefined) {
+      setEditor({ mode: 'create', year, half, selected: [] });
       return;
     }
+    const latest = latestLabel ? parsePeriod(latestLabel) : null;
+    const target = latest ? nextPeriod(latest) : { year: getCurrentPeriod().year, half: getCurrentPeriod().type as Half };
+    setEditor({ mode: 'create', ...target, selected: [] });
+  };
 
+  // Stale answers (the editor was closed, or another period opened) are dropped.
+  const editRequestRef = useRef(0);
+  const openEdit = async (period: PeriodWithCount) => {
+    const request = ++editRequestRef.current;
+    setEditor({ mode: 'edit', period, initialIds: null, selected: [] });
     try {
-      setSubmitting(true);
-      await dbService.createPeriodWithProjects(formYear, formHalf, selectedProjectIds);
+      const inPeriod = await dbService.getProjectsForPeriod(period.label);
+      if (editRequestRef.current !== request) return;
+      const ids = inPeriod.map(project => project.id);
+      setEditor({ mode: 'edit', period, initialIds: ids, selected: ids });
+    } catch (error) {
+      if (editRequestRef.current !== request) return;
+      log.error('Error loading period projects:', error);
+      toast.error(t('alerts.projectsLoadFailed', 'Failed to load projects'));
+      setEditor(null);
+    }
+  };
 
-      const periodLabel = `${formYear}-${formHalf}`;
+  const closeEditor = () => {
+    editRequestRef.current += 1;
+    setEditor(null);
+  };
 
-      // Dispatch custom event to notify App.tsx to refresh periods
-      window.dispatchEvent(new CustomEvent('periodCreated', {
-        detail: { periodLabel }
-      }));
-
-      toast.success(t('alerts.periodCreated', 'Period created'));
-      setIsCreateModalOpen(false);
-      resetForm();
+  const handleSubmit = async () => {
+    if (!editor) return;
+    setSubmitting(true);
+    try {
+      if (editor.mode === 'create') {
+        await dbService.createPeriodWithProjects(editor.year, editor.half, editor.selected);
+        // Tells the shell's year catalogue, which then switches to the new period's year.
+        window.dispatchEvent(new CustomEvent('periodCreated', { detail: { periodLabel: periodLabel(editor) } }));
+        toast.success(t('alerts.periodCreated', 'Period created'));
+      } else {
+        await dbService.updatePeriodProjects(editor.period.label, editor.selected);
+        window.dispatchEvent(new CustomEvent('dataUpdated'));
+        toast.success(t('periodManagement.updated', 'Period updated'));
+      }
+      closeEditor();
       await loadData();
     } catch (error) {
-      log.error('Error creating period:', error);
-      if (isDuplicateKeyError(error)) {
-        toast.error(t('alerts.duplicatePeriod', 'This period already exists'));
+      log.error('Error saving period:', error);
+      if (editor.mode === 'create') {
+        toast.error(isDuplicateKeyError(error)
+          ? t('alerts.duplicatePeriod', 'This period already exists')
+          : t('alerts.periodCreateFailed', 'Failed to create period'));
       } else {
-        toast.error(t('alerts.periodCreateFailed', 'Failed to create period'));
+        toast.error(t('periodManagement.updateFailed', 'Failed to update period'));
       }
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Edit period - load existing projects
-  const handleEditClick = async (period: PeriodWithCount) => {
-    try {
-      setSelectedPeriod(period);
-      const periodProjects = await dbService.getProjectsForPeriod(period.label);
-      setSelectedProjectIds(periodProjects.map(p => p.id));
-      setIsEditModalOpen(true);
-    } catch (error) {
-      log.error('Error loading period projects:', error);
-      toast.error(t('alerts.projectsLoadFailed', 'Failed to load projects'));
-    }
-  };
-
-  // Update period projects
-  const handleUpdatePeriod = async () => {
-    if (!selectedPeriod) return;
-
-    try {
-      setSubmitting(true);
-      await dbService.updatePeriodProjects(selectedPeriod.label, selectedProjectIds);
-      toast.success(t('periodManagement.updated', 'Period updated'));
-      setIsEditModalOpen(false);
-      resetForm();
-      await loadData();
-    } catch (error) {
-      log.error('Error updating period:', error);
-      toast.error(t('periodManagement.updateFailed', 'Failed to update period'));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // Delete period
-  const handleDeletePeriod = async (period: PeriodWithCount) => {
+  const handleDelete = async () => {
+    if (!editor || editor.mode !== 'edit') return;
+    const { period } = editor;
+    const name = describePeriod(period.label, t);
     const confirmed = await confirm({
-      title: `${t('delete', 'Delete')} ${period.label}`,
-      message: t('periodManagement.confirmDelete', 'Delete this period and its linked data?'),
+      title: t('periodManagement.confirmDeleteTitle', 'Delete {period}?').replace('{period}', name),
+      message: t(
+        'periodManagement.confirmDelete',
+        'Its project assignments go too, including prices set for this period. The projects and their recorded hours are kept.',
+      ),
       confirmLabel: t('delete', 'Delete'),
-      cancelLabel: t('cancel', 'Cancel'),
-      danger: true
+      cancelLabel: t('common.cancel', 'Cancel'),
+      danger: true,
     });
-
     if (!confirmed) return;
 
+    setSubmitting(true);
     try {
       await dbService.deletePeriod(period.label);
       toast.success(t('periodManagement.deleted', 'Period deleted'));
+      closeEditor();
+      window.dispatchEvent(new CustomEvent('periodsChanged'));
+      window.dispatchEvent(new CustomEvent('dataUpdated'));
       await loadData();
     } catch (error) {
       log.error('Error deleting period:', error);
       toast.error(t('periodManagement.deleteFailed', 'Failed to delete period'));
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  // Reset form
-  const resetForm = () => {
-    setFormYear(new Date().getFullYear());
-    setFormHalf('H1');
-    setSelectedProjectIds([]);
-    setSearchQuery('');
-    setSelectedPeriod(null);
-  };
+  const newPeriodButton = isAdmin && status === 'ready' && (
+    <Button icon={<Plus className="h-4 w-4" aria-hidden="true" />} onClick={() => openCreate()}>
+      {t('createNewPeriod', 'New period')}
+    </Button>
+  );
 
-  // Close modals
-  const closeCreateModal = () => {
-    setIsCreateModalOpen(false);
-    resetForm();
-  };
-
-  const closeEditModal = () => {
-    setIsEditModalOpen(false);
-    resetForm();
-  };
-
-  if (loading) {
-    return (
-      <div className="p-6 space-y-6" aria-busy="true" aria-label={t('common.loading', 'Loading...')}>
-        <div className="space-y-2">
-          <Skeleton className="h-7 w-64" />
-          <Skeleton className="h-4 w-96 max-w-full" />
-        </div>
-        <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-4">
-          <Skeleton.Table rows={5} cols={3} />
-        </div>
+  let content: React.ReactNode;
+  if (status === 'loading') {
+    content = (
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" aria-busy="true" aria-label={t('common.loading', 'Loading…')}>
+        {[0, 1].map(index => (
+          <Card key={index} padding="none">
+            <div className="px-5 py-4"><Skeleton className="h-5 w-16" /></div>
+            <div className="space-y-4 border-t border-slate-100 px-5 py-4 dark:border-slate-800">
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
+            </div>
+          </Card>
+        ))}
+      </div>
+    );
+  } else if (status === 'error') {
+    content = (
+      <Card>
+        <EmptyState
+          tone="error"
+          title={t('periodManagement.loadFailedTitle', 'Could not load the periods')}
+          description={t('empty.loadFailedHint', 'The request did not come back. Check the connection and try again.')}
+          actions={<Button variant="secondary" onClick={retry}>{t('buttons.retry', 'Try again')}</Button>}
+        />
+      </Card>
+    );
+  } else if (years.length === 0) {
+    content = (
+      <Card>
+        <EmptyState
+          icon={CalendarRange}
+          title={t('periodManagement.emptyTitle', 'No periods yet')}
+          description={
+            isAdmin
+              ? t('periodManagement.emptyHint', 'A period is a half-year — H1 is January to June, H2 July to December — with the projects whose hours you track in it. Create the first one to start.')
+              : t('periodManagement.emptyHintViewer', 'A period is a half-year with the projects whose hours are tracked in it. An administrator sets them up.')
+          }
+          actions={newPeriodButton}
+        />
+      </Card>
+    );
+  } else {
+    content = (
+      <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {years.map(([year, halves]) => (
+          <Card key={year} padding="none" className="overflow-hidden">
+            <h2 className="px-4 pb-2 pt-4 text-[15px] font-semibold tabular-nums text-slate-900 sm:px-5 dark:text-white">
+              {year}
+            </h2>
+            <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+              {HALVES.map(half => (
+                <HalfRow
+                  key={half}
+                  year={year}
+                  half={half}
+                  period={halves[half]}
+                  isAdmin={isAdmin}
+                  onEdit={period => { void openEdit(period); }}
+                  onCreate={openCreate}
+                />
+              ))}
+            </ul>
+          </Card>
+        ))}
       </div>
     );
   }
 
-  const containerVariants: Variants = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1
-      }
-    }
-  };
-
-  const itemVariants: Variants = {
-    hidden: { opacity: 0, x: -20 },
-    show: { opacity: 1, x: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
-  };
-
   return (
-    <motion.div 
-      initial={{ opacity: 0 }} 
-      animate={{ opacity: 1 }} 
-      className="p-6 space-y-6"
+    <Page
+      title={t('periodManagement', 'Periods')}
+      description={t('managePeriods', 'Half-years, and the projects tracked in each')}
+      actions={years.length > 0 ? newPeriodButton : undefined}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-            {t('periodManagement', '期間管理 / Period Management')}
-          </h1>
-          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-            {t('managePeriods', 'Create and manage periods with project assignments')}
-          </p>
-        </div>
-        {isAdmin && (
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            {t('createNewPeriod', 'Create New Period')}
-          </button>
-        )}
-      </div>
+      {content}
 
-      {/* Existing Periods List */}
-      <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
-        <div className="p-4 border-b border-slate-200 dark:border-slate-800">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-            {t('existingPeriods', 'Existing Periods')}
-          </h2>
-        </div>
-
-        <motion.div 
-          variants={containerVariants}
-          initial="hidden"
-          animate="show"
-          className="divide-y divide-slate-200 dark:divide-slate-800"
-        >
-          {periods.length === 0 ? (
-            <div className="p-8 text-center text-slate-500 dark:text-slate-400">
-              <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>{t('noPeriodsYet', 'No periods created yet')}</p>
-            </div>
-          ) : (
-            periods.map(period => (
-              <motion.div 
-                key={period.label} 
-                variants={itemVariants}
-                className="p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3">
-                      <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-500" />
-                      <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                        {period.year} {period.half}
-                        <span className="text-sm font-normal text-slate-600 dark:text-slate-400 ml-2">
-                          ({period.half === 'H1' ? t('periodManagement.monthRange.h1') : t('periodManagement.monthRange.h2')})
-                        </span>
-                      </h3>
-                    </div>
-                    <div className="ml-8 mt-2 space-y-1 text-sm text-slate-600 dark:text-slate-400">
-                      <p>
-                        {t('projectCount', 'Projects')}: <span className="font-semibold">{period.project_count}</span>
-                      </p>
-                      <p>
-                        {t('lastUpdated', 'Last updated')}: {new Date(period.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {isAdmin && (
-                      <>
-                        <button
-                          onClick={() => handleEditClick(period)}
-                          className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
-                          title={t('edit', 'Edit')}
-                        >
-                          <Edit2 className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeletePeriod(period)}
-                          className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                          title={t('delete', 'Delete')}
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-            ))
-          )}
-        </motion.div>
-      </div>
-
-      {/* Create Period Modal */}
-      {isCreateModalOpen && (
-        <PeriodFormModal
-          title={t('createNewPeriod', 'Create New Period')}
-          year={formYear}
-          half={formHalf}
-          selectedProjectIds={selectedProjectIds}
-          allProjects={filteredProjects}
-          searchQuery={searchQuery}
+      {editor && (
+        <PeriodEditor
+          editor={editor}
+          projects={allProjects}
+          existingLabels={existingLabels}
+          latestLabel={latestLabel}
           submitting={submitting}
-          onYearChange={setFormYear}
-          onHalfChange={setFormHalf}
-          onSearchChange={setSearchQuery}
-          onToggleProject={toggleProject}
-          onSelectAll={selectAll}
-          onDeselectAll={deselectAll}
-          onSubmit={handleCreatePeriod}
-          onClose={closeCreateModal}
-          t={t}
+          onChange={update => setEditor(prev => (prev ? update(prev) : prev))}
+          onClose={closeEditor}
+          onSubmit={() => { void handleSubmit(); }}
+          onDelete={() => { void handleDelete(); }}
         />
       )}
-
-      {/* Edit Period Modal */}
-      {isEditModalOpen && selectedPeriod && (
-        <PeriodFormModal
-          title={`${t('editPeriod', 'Edit Period')}: ${selectedPeriod.label}`}
-          year={selectedPeriod.year}
-          half={selectedPeriod.half}
-          selectedProjectIds={selectedProjectIds}
-          allProjects={filteredProjects}
-          searchQuery={searchQuery}
-          submitting={submitting}
-          isEditMode={true}
-          onSearchChange={setSearchQuery}
-          onToggleProject={toggleProject}
-          onSelectAll={selectAll}
-          onDeselectAll={deselectAll}
-          onSubmit={handleUpdatePeriod}
-          onClose={closeEditModal}
-          t={t}
-        />
-      )}
-    </motion.div>
-  );
-};
-
-// Period Form Modal Component
-interface PeriodFormModalProps {
-  title: string;
-  year: number;
-  half: 'H1' | 'H2';
-  selectedProjectIds: string[];
-  allProjects: Project[];
-  searchQuery: string;
-  submitting: boolean;
-  isEditMode?: boolean;
-  onYearChange?: (year: number) => void;
-  onHalfChange?: (half: 'H1' | 'H2') => void;
-  onSearchChange: (query: string) => void;
-  onToggleProject: (id: string) => void;
-  onSelectAll: () => void;
-  onDeselectAll: () => void;
-  onSubmit: () => void;
-  onClose: () => void;
-  t: (key: string, fallback: string) => string;
-}
-
-const PeriodFormModal: React.FC<PeriodFormModalProps> = ({
-  title,
-  year,
-  half,
-  selectedProjectIds,
-  allProjects,
-  searchQuery,
-  submitting,
-  isEditMode = false,
-  onYearChange,
-  onHalfChange,
-  onSearchChange,
-  onToggleProject,
-  onSelectAll,
-  onDeselectAll,
-  onSubmit,
-  onClose,
-  t
-}) => {
-  return (
-    <div className="fixed inset-0 bg-slate-900/50 dark:bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col border border-slate-200 dark:border-slate-800">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-800">
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
-          <button
-            onClick={onClose}
-            className="p-1 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Year and Half Selection */}
-          {!isEditMode && (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  {t('year', 'Year')}
-                </label>
-                <input
-                  type="number"
-                  min="2000"
-                  max="2099"
-                  value={year}
-                  onChange={(e) => {
-                    const parsed = parseInt(e.target.value, 10);
-                    if (!Number.isNaN(parsed)) onYearChange?.(parsed);
-                  }}
-                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  {t('half', 'Half')}
-                </label>
-                <select
-                  value={half}
-                  onChange={(e) => onHalfChange?.(e.target.value as 'H1' | 'H2')}
-                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                >
-                  <option value="H1">{t('modals.period.option.h1', 'H1 (Jan-Jun)')}</option>
-                  <option value="H2">{t('modals.period.option.h2', 'Jul-Dec')}</option>
-                </select>
-              </div>
-            </div>
-          )}
-
-          {/* Search */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              {t('searchProjects', 'Search Projects')}
-            </label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 dark:text-slate-500" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => onSearchChange(e.target.value)}
-                placeholder={t('searchPlaceholder', 'Search by name, code, or type...')}
-                className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
-              />
-            </div>
-          </div>
-
-          {/* Select All / Deselect All */}
-          <div className="flex items-center justify-between py-2 border-y border-slate-200 dark:border-slate-800">
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              {selectedProjectIds.length} {t('projectsSelected', 'projects selected')}
-            </span>
-            <div className="flex gap-2">
-              <button
-                onClick={onSelectAll}
-                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors"
-              >
-                {t('selectAll', 'Select All')}
-              </button>
-              <span className="text-slate-300 dark:text-slate-600">|</span>
-              <button
-                onClick={onDeselectAll}
-                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors"
-              >
-                {t('deselectAll', 'Deselect All')}
-              </button>
-            </div>
-          </div>
-
-          {/* Project List */}
-          <div className="border border-slate-200 dark:border-slate-800 rounded-lg max-h-96 overflow-y-auto">
-            {allProjects.length === 0 ? (
-              <div className="p-8 text-center text-slate-500 dark:text-slate-400">
-                <p>{t('noProjectsFound', 'No projects found')}</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-200 dark:divide-slate-800">
-                {allProjects.map(project => (
-                  <label
-                    key={project.id}
-                    className="flex items-center gap-3 p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedProjectIds.includes(project.id)}
-                      onChange={() => onToggleProject(project.id)}
-                      className="w-4 h-4 text-blue-600 dark:text-blue-500 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 rounded focus:ring-blue-500 focus:ring-offset-0 dark:focus:ring-offset-slate-900"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-slate-900 dark:text-slate-100">{project.name}</span>
-                        <span className="text-xs text-slate-500 dark:text-slate-400">({project.code})</span>
-                      </div>
-                      <div className="text-sm text-slate-600 dark:text-slate-400">
-                        {project.type} • {project.software}
-                      </div>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-200 dark:border-slate-800">
-          <button
-            onClick={onClose}
-            disabled={submitting}
-            className="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-50"
-          >
-            {t('cancel', 'Cancel')}
-          </button>
-          <button
-            onClick={onSubmit}
-            disabled={submitting || selectedProjectIds.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-            {isEditMode ? t('updatePeriod', 'Update Period') : t('createPeriod', 'Create Period')}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Page>
   );
 };
 

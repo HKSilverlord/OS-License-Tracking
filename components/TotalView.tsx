@@ -1,18 +1,30 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
+import { Link } from 'react-router-dom';
+import { ArrowRight, ClipboardList, X } from 'lucide-react';
+import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LabelList, ReferenceArea, ReferenceLine } from 'recharts';
 import { MonthlyRecord } from '../types';
 import { dbService } from '../services/dbService';
-import { Link } from 'react-router-dom';
 import { ExportButton } from './ExportButton';
-import { EmptyStatePage, emptyStateActionClass } from './ui/EmptyState';
+import { CurrentMonthBadge } from './CurrentMonthBadge';
+import { SeriesStyleButton, SeriesStyleCheck, type SeriesStyle } from './SeriesStyleButton';
+import { YearControl, YearExportButton } from './YearControl';
+import { Badge } from './ui/Badge';
+import { buttonClasses } from './ui/Button';
+import { Card, CardHeader, WithYear } from './ui/Card';
+import { EmptyState } from './ui/EmptyState';
+import { Select } from './ui/Field';
+import { Page } from './ui/Page';
 import { RefreshBar } from './ui/RefreshBar';
-import { TrendingUp, Palette, Pin, RefreshCw, X } from 'lucide-react';
+import { Skeleton } from './ui/Skeleton';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { TranslateFn } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
 import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
-import { Skeleton } from './ui/Skeleton';
+import { formatVariance } from '../utils/variance';
+import { useNumberFormat } from '../hooks/useNumberFormat';
 import { useIsDarkTheme } from '../hooks/useDarkMode';
-import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LabelList, ReferenceArea, ReferenceLine } from 'recharts';
+import { useMonthKeys } from '../hooks/useMonthKeys';
+import { chartTheme } from '../utils/chartTheme';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger('TotalView');
@@ -21,26 +33,16 @@ interface TotalViewProps {
   currentYear: number;
 }
 
-interface SeriesStyle {
-  color: string;
-  opacity: number;
-  labelColor: string;
-  fontSize: number;
-  bold: boolean;
-  stroke: boolean;
-}
+/** The two series the chart draws: they are what the legend filters and the style panel edits. */
+const PLOTTED_SERIES = ['accPlan', 'accActual'] as const;
+type PlottedSeries = (typeof PLOTTED_SERIES)[number];
 
-interface ChartColors {
-  plan: SeriesStyle;
-  actual: SeriesStyle;
-  accPlan: SeriesStyle;
-  accActual: SeriesStyle;
-}
+type ChartColors = Record<PlottedSeries, SeriesStyle>;
 
 /** One point of the monthly chart. */
 interface TotalChartRow {
   name: string;
-  /** Unabbreviated month, for the tooltip heading — "Tháng 9", not "thg 9". */
+  /** Unabbreviated month, for the card heading — "Tháng 9", not "thg 9". */
   fullName: string;
   month: number;
   /** After the current month: planned but not yet worked. */
@@ -51,19 +53,11 @@ interface TotalChartRow {
   accActual: number;
 }
 
-/** Theme-safe mid-tones (U8) — legible on both bg-white and bg-slate-900. */
+/** Theme-safe mid-tones, legible on both bg-white and bg-slate-900. */
 const DEFAULT_CHART_COLORS: ChartColors = {
-  plan: { color: CHART_PALETTE.neutral, opacity: 1, labelColor: CHART_PALETTE.labelNeutral, fontSize: 10, bold: true, stroke: false },
-  actual: { color: CHART_PALETTE.plan, opacity: 1, labelColor: CHART_PALETTE.plan, fontSize: 10, bold: true, stroke: false },
   accPlan: { color: CHART_PALETTE.labelNeutral, opacity: 1, labelColor: CHART_PALETTE.labelNeutral, fontSize: 10, bold: false, stroke: false },
   accActual: { color: CHART_PALETTE.actual, opacity: 1, labelColor: CHART_PALETTE.actual, fontSize: 12, bold: true, stroke: true },
 };
-
-const SERIES_KEYS = ['plan', 'actual', 'accPlan', 'accActual'] as const;
-
-/** The two series the chart actually draws, and so the ones the legend filters. */
-const PLOTTED_SERIES = ['accPlan', 'accActual'] as const;
-type PlottedSeries = (typeof PLOTTED_SERIES)[number];
 
 /** A forecast month is drawn as an outline at this opacity rather than solid. */
 const FORECAST_OPACITY = 0.3;
@@ -71,15 +65,9 @@ const FORECAST_OPACITY = 0.3;
 /** Where a bar sits in chart coordinates, so the detail card can anchor to it. */
 type ColumnBox = { x: number; y: number; width: number };
 
-/** Gap between the anchor point and the card, matching the old tooltip offset. */
+/** Gap between the anchor point and the card. */
 const CARD_OFFSET_PX = 12;
 
-/**
- * Axis, grid and marker colours.
- *
- * These cannot be Tailwind `dark:` classes: every one of them is an SVG
- * `fill`/`stroke` prop that Recharts passes straight to the element.
- */
 /**
  * How long the bars take to grow in, and how long hovering is ignored for: any
  * re-render hands Recharts a fresh animation id and restarts the grow-in, and
@@ -87,27 +75,19 @@ const CARD_OFFSET_PX = 12;
  */
 const BAR_ANIMATION_MS = 650;
 
-const axisTheme = (isDark: boolean) => ({
-  text: isDark ? '#e2e8f0' : '#334155',
-  muted: isDark ? '#94a3b8' : '#475569',
-  line: isDark ? '#475569' : '#cbd5e1',
-  // Thin but readable: a solid hairline reads more clearly across a wide plot
-  // than the old 3-3 dash, without adding weight.
-  grid: isDark ? 'rgba(148,163,184,0.32)' : 'rgba(100,116,139,0.26)',
-  marker: '#f97316',
-});
-
 /**
  * Migration for the stored `totalView_chartColors` preference:
  *  - the oldest format stored a bare colour string per series,
- *  - later formats stored a partial SeriesStyle, which is merged over the defaults so
- *    fields added since the preference was written are picked up.
+ *  - later formats stored a partial SeriesStyle, merged over the defaults so
+ *    fields added since the preference was written are picked up,
+ *  - older versions also stored styles for the monthly plan and actual, which
+ *    were never drawn; they are dropped.
  */
 const migrateChartColors = (raw: unknown): ChartColors | null => {
   if (raw === null || typeof raw !== 'object') return null;
-  const parsed = raw as Partial<Record<keyof ChartColors, unknown>>;
+  const parsed = raw as Partial<Record<PlottedSeries, unknown>>;
 
-  const mergeSeries = (key: keyof ChartColors): SeriesStyle => {
+  const mergeSeries = (key: PlottedSeries): SeriesStyle => {
     const value = parsed[key];
     if (typeof value === 'string') return { ...DEFAULT_CHART_COLORS[key], color: value };
     if (value !== null && typeof value === 'object') {
@@ -116,16 +96,20 @@ const migrateChartColors = (raw: unknown): ChartColors | null => {
     return DEFAULT_CHART_COLORS[key];
   };
 
-  return {
-    plan: mergeSeries('plan'),
-    actual: mergeSeries('actual'),
-    accPlan: mergeSeries('accPlan'),
-    accActual: mergeSeries('accActual'),
-  };
+  return { accPlan: mergeSeries('accPlan'), accActual: mergeSeries('accActual') };
 };
 
 /** Referentially stable so hooks that map over it can list it as a dependency. */
 const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+/**
+ * A difference with its sign, in the reader's convention: `-400` in English
+ * and Vietnamese, `▲400` in Japanese, where the triangle is the minus sign.
+ */
+const signed = (delta: number, language: string, format: (value: number) => string): string => {
+  const mark = formatVariance(delta, language, format);
+  return language === 'ja' ? `${mark.arrow}${mark.text}` : mark.text;
+};
 
 /* --------------------------------------------------------------------------
  * Chart renderers
@@ -137,18 +121,19 @@ const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
  * `content=` / `shape=`, so everything from the view is threaded in explicitly.
  * ------------------------------------------------------------------------ */
 
-/** Outlined label renderer for a <LabelList content=…>. */
-const OutlinedLabel = ({ x, y, value, dataKey, width = 0, chartColors, index, rows, nf }: {
+/** Value label for a <LabelList content=…>, optionally outlined in the card colour. */
+const OutlinedLabel = ({ x, y, value, dataKey, width = 0, chartColors, index, rows, nf, halo }: {
   x?: number;
   y?: number;
   value?: number | string;
-  dataKey: keyof ChartColors;
+  dataKey: PlottedSeries;
   width?: number;
   chartColors: ChartColors;
   /** Recharts supplies the datum's position; `rows` turns it back into the row. */
   index?: number;
   rows: TotalChartRow[];
   nf: (value: number) => string;
+  halo: string;
 }) => {
   if (!value || value === 0) return null;
   const style = chartColors[dataKey];
@@ -160,7 +145,7 @@ const OutlinedLabel = ({ x, y, value, dataKey, width = 0, chartColors, index, ro
   return (
     <g opacity={isFuture ? 0.55 : 1}>
       {style.stroke && (
-        <text x={tx} y={ty} textAnchor="middle" fontSize={style.fontSize} fontWeight="bold" stroke="white" strokeWidth={3} strokeLinejoin="round" paintOrder="stroke">
+        <text x={tx} y={ty} textAnchor="middle" fontSize={style.fontSize} fontWeight="bold" stroke={halo} strokeWidth={3} strokeLinejoin="round" paintOrder="stroke">
           {formatted}
         </text>
       )}
@@ -172,35 +157,9 @@ const OutlinedLabel = ({ x, y, value, dataKey, width = 0, chartColors, index, ro
 };
 
 /**
- * "This month" marker.
- *
- * A small pill sitting on top of a hairline at the month the year is currently
- * at, replacing the full-height tinted band that used to wash out a whole
- * column of bars.
- */
-const CurrentMonthBadge = ({ viewBox, label, color }: {
-  viewBox?: { x?: number; y?: number };
-  label: string;
-  color: string;
-}) => {
-  const x = viewBox?.x ?? 0;
-  const y = viewBox?.y ?? 0;
-  const height = 18;
-  const width = Math.max(52, label.length * 7.5 + 16);
-  return (
-    <g transform={`translate(${x - width / 2}, ${y - height - 6})`}>
-      <rect width={width} height={height} rx={height / 2} fill={color} />
-      <text x={width / 2} y={height / 2} textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight="bold" fill="#ffffff">
-        {label}
-      </text>
-    </g>
-  );
-};
-
-/**
  * Where the year stands at `row`: accumulated actual against accumulated plan.
  *
- * Shared by the detail card and the header summary, so the two can never
+ * Shared by the detail card and the summary line, so the two can never
  * disagree about the same month.
  */
 const accumulatedGap = (row: TotalChartRow): { timeGap: number; percentGap: number } => {
@@ -209,164 +168,129 @@ const accumulatedGap = (row: TotalChartRow): { timeGap: number; percentGap: numb
   return { timeGap, percentGap: accPlan !== 0 ? (timeGap / accPlan) * 100 : 0 };
 };
 
+const gapTone = (gap: number) =>
+  gap >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400';
+
 /**
- * The chart's conclusion, in one line, inside the capture target.
+ * The chart's conclusion in one line, inside the capture target.
  *
- * A copied chart used to leave the reader to work out from the bars whether the
- * year is ahead or behind; the number that answers that was only in a hover
- * card, which no image ever carries. It reports the last month that has actual
- * hours, so it does not swing to zero on the forecast months at the right.
+ * Whether the year is ahead or behind is the question the chart exists to
+ * answer, and a copied image carries no hover card. It reports the last month
+ * with actual hours, so it does not swing on the forecast months to the right.
  */
-const AccumulatedSummary = ({ row, t, nf, nfPct, unit }: {
+const AccumulatedSummary = ({ row, t, language, nf, nfPct, unit }: {
   row: TotalChartRow;
   t: TranslateFn;
+  language: string;
   nf: (value: number) => string;
-  /** Percentages carry the language's decimal mark too: 19,7 in vi, 19.7 in en. */
   nfPct: (value: number) => string;
   unit: string;
 }) => {
   const { timeGap, percentGap } = accumulatedGap(row);
-  const ahead = timeGap >= 0;
-  const sign = ahead ? '+' : '';
-
   return (
-    <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs md:text-sm">
-      <span className="font-semibold text-slate-700 dark:text-slate-200">
+    <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[13px] text-slate-500 dark:text-slate-400">
+      <span className="font-medium text-slate-700 dark:text-slate-200">
         {t('totalView.summary.through', 'Through {month}').replace('{month}', row.fullName)}
       </span>
-      <span className="text-slate-500 dark:text-slate-400">
+      <span>
         {t('tracker.actualShort', 'Actual')}{' '}
-        <span className="font-semibold tabular-nums text-slate-800 dark:text-slate-100">{nf(row.accActual || 0)}</span>
+        <span className="font-semibold tabular-nums text-slate-900 dark:text-white">{nf(row.accActual || 0)}</span>
         {' / '}
         {t('tracker.planShort', 'Plan')}{' '}
-        <span className="font-semibold tabular-nums text-slate-800 dark:text-slate-100">{nf(row.accPlan || 0)}</span>{' '}
+        <span className="font-semibold tabular-nums text-slate-900 dark:text-white">{nf(row.accPlan || 0)}</span>{' '}
         {unit}
       </span>
-      <span className={`font-semibold tabular-nums ${ahead ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-        {sign}{nf(timeGap)} {unit} ({sign}{nfPct(percentGap)}%){' '}
+      <span className={`font-semibold tabular-nums ${gapTone(timeGap)}`}>
+        {signed(timeGap, language, nf)} {unit} ({signed(percentGap, language, nfPct)}%){' '}
         <span className="font-medium">
-          {ahead ? t('totalView.summary.ahead', 'ahead of plan') : t('totalView.summary.behind', 'behind plan')}
+          {timeGap >= 0 ? t('totalView.summary.ahead', 'ahead of plan') : t('totalView.summary.behind', 'behind plan')}
         </span>
       </span>
     </p>
   );
 };
 
-/** The month breakdown, shown both in the tooltip and in the pinned card. */
-const MonthDetailCard = ({ data, chartColors, t, nf, nfPct, unit, pinned = false, onUnpin, hideShadow = false }: {
+const DetailRow = ({ label, value, unit, swatch }: {
+  label: string;
+  value: string;
+  unit: string;
+  swatch?: string;
+}) => (
+  <div className="flex items-center justify-between gap-6">
+    <span className="flex min-w-0 items-center gap-2 text-slate-500 dark:text-slate-400">
+      {swatch && <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: swatch }} />}
+      {label}
+    </span>
+    <span className="whitespace-nowrap font-medium tabular-nums text-slate-900 dark:text-slate-100">
+      {value} <span className="font-normal text-slate-400 dark:text-slate-500">{unit}</span>
+    </span>
+  </div>
+);
+
+/** The month breakdown: follows the cursor, or holds on a selected month. */
+const MonthDetailCard = ({ data, chartColors, t, language, nf, nfPct, unit, onUnpin }: {
   data: TotalChartRow;
   chartColors: ChartColors;
   t: TranslateFn;
-  /** Formats in the UI language, so 9600 reads 9.600 in vi and 9,600 in en. */
+  language: string;
   nf: (value: number) => string;
-  /** Percentages carry the language's decimal mark too: 19,7 in vi, 19.7 in en. */
   nfPct: (value: number) => string;
   unit: string;
-  /** Shown because the month was selected, not because the cursor is on it. */
-  pinned?: boolean;
-  /** Only passed when pinned: releases the card back to following the cursor. */
+  /** Only passed when the month is selected: releases the card. */
   onUnpin?: () => void;
-  hideShadow?: boolean;
 }) => {
-  const plan = data.plan || 0;
-  const actual = data.actual || 0;
-  const accPlan = data.accPlan || 0;
-  const accActual = data.accActual || 0;
-
   const { timeGap, percentGap } = accumulatedGap(data);
 
   return (
-    <div className={`bg-white dark:bg-slate-900 p-3 border border-slate-300 dark:border-slate-700 rounded-lg min-w-[200px] ${hideShadow ? '' : 'shadow-lg'}`}>
-      <p className="font-semibold text-slate-800 dark:text-slate-100 mb-2 border-b border-slate-200 dark:border-slate-800 pb-1 flex items-center justify-between gap-2">
-        <span className="flex items-center gap-1.5">
-          {/* The card itself is worth having in an exported image - it says which
-              month the chart is making a point about. Its controls are not: a
-              close button printed in a slide is just confusing. */}
-          {pinned && <Pin data-html2canvas-ignore className="w-3 h-3 text-indigo-500 dark:text-indigo-400" aria-hidden="true" />}
-          {data.fullName}
-        </span>
-        <span className="flex items-center gap-1.5">
-          {data.isFuture && (
-            <span className="text-[10px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400">
-              {t('totalView.forecast', 'Forecast')}
-            </span>
-          )}
-          {pinned && onUnpin && (
+    <div className="min-w-[232px] rounded-xl bg-white p-3 text-[13px] shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/10 dark:bg-slate-900 dark:shadow-black/40 dark:ring-white/10">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="font-semibold text-slate-900 dark:text-white">{data.fullName}</span>
+        <span className="flex items-center gap-1">
+          {data.isFuture && <Badge tone="amber">{t('totalView.forecast', 'Forecast')}</Badge>}
+          {/* The card belongs in an exported image — it says which month the
+              chart is making a point about. Its close button does not. */}
+          {onUnpin && (
             <button
               type="button"
-              data-html2canvas-ignore
+              data-html2canvas-ignore="true"
               onClick={onUnpin}
               title={t('common.close', 'Close')}
               aria-label={t('common.close', 'Close')}
-              className="pointer-events-auto -mr-1 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              className="pointer-events-auto -mr-1 grid h-6 w-6 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           )}
         </span>
-      </p>
-      <div className="space-y-1.5 text-sm">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.plan.color }}></div>
-            <span className="text-slate-700 dark:text-slate-400">{t('tracker.planShort')}:</span>
-          </div>
-          <span className="font-medium text-slate-900 dark:text-slate-100 tabular-nums">{nf(plan)} <span className="text-slate-500 dark:text-slate-400 font-normal">{unit}</span></span>
+      </div>
+      <div className="space-y-1">
+        <DetailRow label={t('dashboard.chart.accPlan', 'Cumulative plan')} value={nf(data.accPlan || 0)} unit={unit} swatch={chartColors.accPlan.color} />
+        <DetailRow label={t('dashboard.chart.accActual', 'Cumulative actual')} value={nf(data.accActual || 0)} unit={unit} swatch={chartColors.accActual.color} />
+        <div className="flex items-center justify-between gap-6">
+          <span className="text-slate-500 dark:text-slate-400">{t('totalView.gap', 'Difference')}</span>
+          <span className={`whitespace-nowrap font-semibold tabular-nums ${gapTone(timeGap)}`}>
+            {signed(timeGap, language, nf)} {unit}
+            <span className="ml-1.5 font-medium opacity-80">{signed(percentGap, language, nfPct)}%</span>
+          </span>
         </div>
-
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.actual.color }}></div>
-            <span className="text-slate-700 dark:text-slate-400">{t('tracker.actualShort')}:</span>
-          </div>
-          <span className="font-medium text-slate-900 dark:text-slate-100 tabular-nums">{nf(actual)} <span className="text-slate-500 dark:text-slate-400 font-normal">{unit}</span></span>
-        </div>
-
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded border-2" style={{ borderColor: chartColors.accPlan.color }}></div>
-            <span className="text-slate-700 dark:text-slate-400">{t('dashboard.chart.accPlan')}:</span>
-          </div>
-          <span className="font-medium text-slate-900 dark:text-slate-100 tabular-nums">{nf(accPlan)} <span className="text-slate-500 dark:text-slate-400 font-normal">{unit}</span></span>
-        </div>
-
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded border-2" style={{ borderColor: chartColors.accActual.color }}></div>
-            <span className="text-slate-700 dark:text-slate-400">{t('dashboard.chart.accActual')}:</span>
-          </div>
-          <span className="font-medium text-slate-900 dark:text-slate-100 tabular-nums">{nf(accActual)} <span className="text-slate-500 dark:text-slate-400 font-normal">{unit}</span></span>
-        </div>
-
-        <div className="border-t border-slate-200 dark:border-slate-800 pt-2 mt-2">
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-slate-700 dark:text-slate-400 font-medium">{t('totalView.timeGap', '時間 GAP')}:</span>
-            <span className={`font-semibold tabular-nums ${timeGap >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-              {timeGap >= 0 ? '+' : ''}{nf(timeGap)} <span className="font-normal opacity-80">{unit}</span>
-            </span>
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-slate-700 dark:text-slate-400 font-medium">{t('totalView.percentGap', '% GAP')}:</span>
-            <span className={`font-semibold ${percentGap >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-              {percentGap >= 0 ? '+' : ''}{nfPct(percentGap)}%
-            </span>
-          </div>
-        </div>
+      </div>
+      <div className="mt-2 space-y-1 border-t border-slate-100 pt-2 dark:border-slate-800">
+        <DetailRow label={t('totalView.monthPlan', 'Plan this month')} value={nf(data.plan || 0)} unit={unit} />
+        <DetailRow label={t('totalView.monthActual', 'Actual this month')} value={nf(data.actual || 0)} unit={unit} />
       </div>
     </div>
   );
 };
 
 /**
-  * Rounded bar that also reports each column's centre x, so the pinned card can
-  * be positioned under the right month.
-  *
-  * It reports through a callback rather than taking the ref: Recharts 3 keeps
-  * chart props in an immer-backed store that DEEP-FREEZES what it is handed, so
-  * a ref passed as a prop arrives with a frozen `.current` and the first write
-  * throws. A callback closes over the ref instead — only the function object is
-  * frozen, which is harmless.
-  */
+ * Rounded bar that also reports each column's position, so the selected
+ * month's card can be placed over the right bar.
+ *
+ * It reports through a callback rather than taking the ref: Recharts 3 keeps
+ * chart props in an immer-backed store that DEEP-FREEZES what it is handed, so
+ * a ref passed as a prop arrives with a frozen `.current` and the first write
+ * throws. A callback closes over the ref instead.
+ */
 const TrackingBar = (props: {
   fill?: string;
   x?: number;
@@ -403,11 +327,7 @@ const TrackingBar = (props: {
   return <path d={d} stroke="none" fill={fill} fillOpacity={fillOpacity} />;
 };
 
-/**
- * Legend, top-right, doubling as the series filter — clicking a chip hides or
- * shows that series. It lives in the header rather than under the plot so the
- * chart keeps its full height and the key is read before the bars, not after.
- */
+/** The chart's key, doubling as its filter: a chip hides or shows its series. */
 const SeriesLegend = ({ chartColors, hidden, onToggle, labels, hint }: {
   chartColors: ChartColors;
   hidden: Record<PlottedSeries, boolean>;
@@ -415,7 +335,7 @@ const SeriesLegend = ({ chartColors, hidden, onToggle, labels, hint }: {
   labels: Record<PlottedSeries, string>;
   hint: string;
 }) => (
-  <div className="flex items-center gap-2">
+  <div className="flex flex-wrap items-center gap-1.5">
     {PLOTTED_SERIES.map(key => {
       const shown = !hidden[key];
       return (
@@ -425,18 +345,18 @@ const SeriesLegend = ({ chartColors, hidden, onToggle, labels, hint }: {
           onClick={() => onToggle(key)}
           title={hint}
           aria-pressed={shown}
-          className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${
+          className={`inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors ${
             shown
-              ? 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
-              : 'border-slate-200 bg-slate-100 text-slate-400 line-through dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-500'
+              ? 'bg-slate-100 text-slate-700 hover:bg-slate-200/70 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+              : 'text-slate-400 line-through ring-1 ring-inset ring-slate-200 hover:text-slate-600 dark:text-slate-500 dark:ring-slate-700 dark:hover:text-slate-300'
           }`}
         >
           <span
+            aria-hidden="true"
             className="h-2.5 w-2.5 rounded-sm"
             style={{
               backgroundColor: shown ? chartColors[key].color : 'transparent',
-              border: `2px solid ${chartColors[key].color}`,
-              opacity: shown ? 1 : 0.5,
+              boxShadow: `inset 0 0 0 1.5px ${chartColors[key].color}`,
             }}
           />
           {labels[key]}
@@ -449,17 +369,16 @@ const SeriesLegend = ({ chartColors, hidden, onToggle, labels, hint }: {
 export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   const { t, language } = useLanguage();
   const toast = useToast();
+  const { format: nf, formatDecimal: nfPct, localeTag } = useNumberFormat();
   const [allRecords, setAllRecords] = useState<MonthlyRecord[]>([]);
   const [loading, setLoading] = useState(true);
   /** A failed load used to leave an empty grid behind a toast nobody saw. */
   const [loadError, setLoadError] = useState(false);
   /** After the first year has landed, later loads refresh in place. */
   const loadedOnceRef = useRef(false);
-  const [showColorPicker, setShowColorPicker] = useState(false);
   const [pinnedMonth, setPinnedMonth] = useState<number | null>(null);
-  // Hovering and selecting used to render two different cards in two different
-  // places, and both at once on the selected month. They now feed one card:
-  // the cursor wins while it is over the chart, the selection holds otherwise.
+  // Hovering and selecting feed one card: the selection holds it on its month,
+  // otherwise it follows the cursor.
   const [hoveredMonth, setHoveredMonth] = useState<number | null>(null);
   // Read inside the mousemove handler, which must not be rebuilt per render.
   const hoveredMonthRef = useRef<number | null>(null);
@@ -476,7 +395,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   const barsAnimatingRef = useRef(true);
   barsAnimatingRef.current = barsAnimating;
   const isDark = useIsDarkTheme();
-  const axis = useMemo(() => axisTheme(isDark), [isDark]);
+  const axis = useMemo(() => chartTheme(isDark), [isDark]);
   const columnMetricsRef = useRef<Record<number, Partial<Record<PlottedSeries, ColumnBox>>>>({});
   const plotRef = useRef<HTMLDivElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
@@ -487,21 +406,17 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   const chartDataRef = useRef<TotalChartRow[]>([]);
   const loadSeqRef = useRef(0);
 
-  // Colours live behind the shared preference helper (U8): the localStorage key is unchanged
-  // so existing user picks survive (see `migrateChartColors`), and every set() persists.
-  const [chartColors, setChartColors] = useChartPref<ChartColors>(
+  // The localStorage key is unchanged, so earlier picks survive (see `migrateChartColors`).
+  const [chartColors, setChartColors, resetChartColors] = useChartPref<ChartColors>(
     'totalView_chartColors',
     DEFAULT_CHART_COLORS,
     migrateChartColors,
   );
 
-  const updateColor = <K extends keyof SeriesStyle>(seriesKey: keyof ChartColors, field: K, value: SeriesStyle[K]) => {
-    setChartColors(prev => {
-      const updated: SeriesStyle = { ...prev[seriesKey] };
-      updated[field] = value;
-      return { ...prev, [seriesKey]: updated };
-    });
-  };
+  const updateSeries = useCallback((key: string, patch: Partial<SeriesStyle>) => {
+    if (!PLOTTED_SERIES.includes(key as PlottedSeries)) return;
+    setChartColors(prev => ({ ...prev, [key]: { ...prev[key as PlottedSeries], ...patch } }));
+  }, [setChartColors]);
 
   const toggleSeries = useCallback((key: PlottedSeries) => {
     setHiddenSeries(prev => ({ ...prev, [key]: !prev[key] }));
@@ -514,9 +429,8 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   }, []);
 
   /**
-   * Place the card beside its anchor the way the old Recharts tooltip did:
-   * offset from the point, flipped to the other side rather than pushed off the
-   * right edge, and kept inside the plot vertically.
+   * Place the card beside its anchor: offset from the point, flipped to the
+   * other side rather than pushed off the right edge, and kept inside the plot.
    *
    * Written straight to the DOM. The cursor moves far more often than the month
    * under it changes, and routing every pixel through React state would
@@ -565,21 +479,6 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     return chartDataRef.current[index]?.month ?? null;
   }, []);
 
-  const localeTag = language === 'ja' ? 'ja-JP' : language === 'vn' ? 'vi-VN' : 'en-US';
-  // Every number in the chart goes through this, so the separators follow the
-  // UI language (9.600 in Vietnamese, 9,600 in English) instead of the browser's.
-  const nf = useCallback(
-    (value: number) => new Intl.NumberFormat(localeTag).format(value),
-    [localeTag]
-  );
-  /** One decimal, in the UI language: -19,7% in vi, -19.7% in en. */
-  const nfPct = useCallback(
-    (value: number) => new Intl.NumberFormat(localeTag, {
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
-    }).format(value),
-    [localeTag]
-  );
   const unit = t('totalView.unit.hours', 'h');
 
   /**
@@ -593,20 +492,16 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     { key: 'fullName', label: t('csv.monthName', 'Month name') },
     { key: 'plan', label: `${t('tracker.planShort', 'Plan')} (${unit})` },
     { key: 'actual', label: `${t('tracker.actualShort', 'Actual')} (${unit})` },
-    { key: 'accPlan', label: `${t('dashboard.chart.accPlan', 'Accumulated Plan')} (${unit})` },
-    { key: 'accActual', label: `${t('dashboard.chart.accActual', 'Accumulated Actual')} (${unit})` },
+    { key: 'accPlan', label: `${t('dashboard.chart.accPlan', 'Cumulative plan')} (${unit})` },
+    { key: 'accActual', label: `${t('dashboard.chart.accActual', 'Cumulative actual')} (${unit})` },
   ], [t, unit]);
 
-  // Current month highlight
   const currentMonth = new Date().getFullYear() === currentYear ? new Date().getMonth() + 1 : null;
   const [showCurrentMonth, setShowCurrentMonth] = useState(true);
 
-  // U1 routed every view's year through one shell control, so a user can change
-  // year faster than a request completes. Without this guard an older response
-  // lands after a newer one and the view shows the wrong year's numbers.
-  // `t` is memoised per language, so making it a dependency of the fetch would
-  // refetch the year's data on every language switch. The ref keeps the error
-  // toast localised without tying data loading to the language.
+  // Years can change faster than a request completes; the sequence number
+  // drops any response that is no longer for the year on screen. `t` is read
+  // through a ref so a language switch does not refetch the year.
   const tRef = useRef(t);
   useEffect(() => {
     tRef.current = t;
@@ -641,18 +536,13 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     fetchData();
   }, [fetchData]);
 
-  // Listen for data updates from other tabs
   useEffect(() => {
-    const handleDataUpdated = () => {
-      // In place: an edit somewhere else must not blank the chart being read.
-      fetchData({ silent: true });
-    };
-
+    // In place: an edit somewhere else must not blank the chart being read.
+    const handleDataUpdated = () => fetchData({ silent: true });
     window.addEventListener('dataUpdated', handleDataUpdated);
     return () => window.removeEventListener('dataUpdated', handleDataUpdated);
   }, [fetchData]);
 
-  // Chart Data Preparation
   const chartData = useMemo<TotalChartRow[]>(() => {
     const now = new Date();
     // Only the year in progress has a past and a future; a past year is all
@@ -671,11 +561,10 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
         plan: 0,
         actual: 0,
         accPlan: 0,
-        accActual: 0
+        accActual: 0,
       };
     });
 
-    // Aggregate monthly totals from all records directly
     allRecords.forEach(r => {
       if (r.month >= 1 && r.month <= 12) {
         data[r.month - 1].plan += Number(r.planned_hours) || 0;
@@ -683,7 +572,6 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
       }
     });
 
-    // Calculate accumulations
     let runningPlan = 0;
     let runningActual = 0;
     data.forEach(d => {
@@ -705,13 +593,11 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     () => [...chartData].reverse().find(row => !row.isFuture && (row.accPlan > 0 || row.accActual > 0)) ?? null,
     [chartData]
   );
+  const forecastMonths = chartData.filter(row => row.isFuture).length;
 
   chartDataRef.current = chartData;
 
-  // The cursor wins while it is over the plot; the selection is what the card
-  // falls back to. Either way there is exactly one card, in the same place.
-  // A selected month outranks the cursor: that is what selecting it is for, and
-  // a card that wandered off as soon as the pointer came back was the complaint.
+  // A selected month outranks the cursor: that is what selecting it is for.
   const focusedMonth = pinnedMonth ?? hoveredMonth;
   const isPinned = pinnedMonth !== null;
   pinnedMonthRef.current = pinnedMonth;
@@ -736,35 +622,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     placeCard();
   }, [focusedMonth, isPinned, hiddenSeries, chartData, columnAnchor, placeCard]);
 
-  /**
-   * With a month pinned: Esc releases the card, the arrows walk the year.
-   *
-   * Reading a month at a time is the point of the card, and stepping to the
-   * next one meant going back to the select or finding a 40px-wide bar with the
-   * pointer. Only bound while a month is pinned, so the arrows keep their usual
-   * meaning everywhere else on the page.
-   */
-  useEffect(() => {
-    if (!isPinned) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        unpin();
-        return;
-      }
-      const step = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
-      const jump = e.key === 'Home' ? 1 : e.key === 'End' ? 12 : 0;
-      if (!step && !jump) return;
-      e.preventDefault();
-      setPinnedMonth(current => {
-        if (current === null) return current;
-        // Stops at January and December rather than wrapping: a card that
-        // jumps from December to January reads as having lost its place.
-        return jump || Math.min(12, Math.max(1, current + step));
-      });
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isPinned, unpin]);
+  useMonthKeys(isPinned, setPinnedMonth, unpin);
 
   // Replay the grow-in when a series is switched on or off, or the data reloads.
   const firstPaintRef = useRef(true);
@@ -787,7 +645,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   /** Labels are hidden mid-grow-in, so settle the bars before any capture. */
   const settleBars = useCallback(() => setBarsAnimating(false), []);
 
-  // Dynamic Y-axis max based on max accumulated values
+  // Y axis in whole thousands, with room above the tallest bar for its label.
   const { yAxisMax, yAxisTicks } = useMemo(() => {
     const maxPlan = Math.max(0, ...chartData.map(d => d.accPlan || 0));
     const maxActual = Math.max(0, ...chartData.map(d => d.accActual || 0));
@@ -802,15 +660,28 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     return { yAxisMax: maxLimit, yAxisTicks: ticks };
   }, [chartData]);
 
+  const header = {
+    title: t('nav.totalView', 'Cumulative hours'),
+    description: t('totalView.desc', 'Whether the year’s hours are keeping up with the plan'),
+    actions: (
+      <>
+        <YearControl />
+        <YearExportButton />
+      </>
+    ),
+  };
+
   if (loading && !loadedOnceRef.current) {
     return (
-      <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-4 md:p-6 overflow-hidden">
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex-1 flex flex-col gap-4">
-          <Skeleton className="h-5 w-56" />
-          <Skeleton className="flex-1 min-h-[240px] w-full" />
-          <span className="sr-only text-slate-500 dark:text-slate-400">{t('common.loading', 'Loading…')}</span>
-        </div>
-      </div>
+      <Page {...header}>
+        <Card padding="lg" role="status" aria-busy="true" aria-label={t('common.loading', 'Loading…')}>
+          <div aria-hidden="true">
+            <Skeleton className="h-5 w-64" />
+            <Skeleton className="mt-2 h-4 w-80 max-w-full" />
+            <Skeleton className="mt-6 h-[max(320px,calc(100dvh-17rem))] w-full" />
+          </div>
+        </Card>
+      </Page>
     );
   }
 
@@ -818,331 +689,250 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
   // looks exactly the same whether the year is empty or the request failed.
   if (loadError && !loading) {
     return (
-      <EmptyStatePage
-        tone="error"
-        title={t('empty.loadFailedTitle', 'Could not load this year')}
-        description={t('empty.loadFailedHint', 'The request did not come back. Check the connection and try again.')}
-        actions={
-          <button type="button" onClick={() => fetchData()} className={emptyStateActionClass}>
-            <RefreshCw className="w-4 h-4" />
-            {t('buttons.retry', 'Try again')}
-          </button>
-        }
-      />
+      <Page {...header}>
+        <Card>
+          <EmptyState
+            tone="error"
+            title={t('empty.loadFailedTitle', 'Could not load this year')}
+            description={t('empty.loadFailedHint', 'The request did not come back. Check the connection and try again.')}
+            actions={
+              <button type="button" onClick={() => fetchData()} className={buttonClasses('secondary')}>
+                {t('buttons.retry', 'Try again')}
+              </button>
+            }
+          />
+        </Card>
+      </Page>
     );
   }
 
   if (allRecords.length === 0 && !loading) {
     return (
-      <EmptyStatePage
-        title={t('empty.noDataTitle', 'No hours recorded for {year} yet').replace('{year}', String(currentYear))}
-        description={t('empty.noDataHint', 'Enter planned and actual hours in Project Tracking, or pick another year in the bar above.')}
-        actions={
-          <Link to="/tracking" className={emptyStateActionClass}>
-            {t('empty.goToTracking', 'Go to Project Tracking')}
-          </Link>
-        }
-      />
+      <Page {...header}>
+        <Card>
+          <EmptyState
+            icon={ClipboardList}
+            title={t('empty.noDataTitle', 'No hours recorded for {year} yet').replace('{year}', String(currentYear))}
+            description={t('empty.noDataHint', 'Enter planned and actual hours in Project tracking, or choose another year.')}
+            actions={
+              <Link to="/tracking" className={buttonClasses('secondary')}>
+                {t('empty.goToTracking', 'Go to Project tracking')}
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+            }
+          />
+        </Card>
+      </Page>
     );
   }
 
+  const seriesLabels: Record<PlottedSeries, string> = {
+    accPlan: t('dashboard.chart.accPlan', 'Cumulative plan'),
+    accActual: t('dashboard.chart.accActual', 'Cumulative actual'),
+  };
+  const focusedName = focusedRow?.name;
+  const currentMonthName = currentMonth !== null ? chartData[currentMonth - 1]?.name : undefined;
+
   return (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-4 md:p-6 overflow-hidden">
+    <Page {...header}>
+      {/* The card is the capture target: an exported image carries its title,
+          year, conclusion and key along with the bars. */}
+      <Card id="total-view-chart" padding="lg" className="animate-fade-up">
+        <CardHeader
+          title={<WithYear year={currentYear}>{t('totalView.chartTitle', 'Cumulative plan and actual')}</WithYear>}
+          description={
+            <>
+              {t('totalView.chartDesc', 'Running totals of planned and actual hours')}
+              {forecastMonths === 12
+                ? <> · {t('totalView.allForecast', 'The whole year is forecast')}</>
+                : forecastMonths > 0 && <> · {t('totalView.forecastNote', 'Months after this one are forecast')}</>}
+            </>
+          }
+          actions={
+            <>
+              <div data-html2canvas-ignore="true">
+                <Select
+                  controlSize="sm"
+                  aria-label={t('chart.monthDetailsHint', 'Show the numbers for one month')}
+                  title={t('chart.monthDetailsHint', 'Show the numbers for one month')}
+                  value={pinnedMonth ?? ''}
+                  onChange={event => {
+                    const month = event.target.value ? Number(event.target.value) : null;
+                    if (month === null) {
+                      unpin();
+                      return;
+                    }
+                    setPinnedMonth(month);
+                    setHoveredMonth(null);
+                  }}
+                  className="w-36"
+                >
+                  <option value="">{t('chart.monthDetails', 'Month details')}</option>
+                  {chartData.map(d => (
+                    <option key={d.month} value={d.month}>{d.fullName}</option>
+                  ))}
+                </Select>
+              </div>
+              <SeriesStyleButton
+                series={PLOTTED_SERIES.map(key => ({ key, label: seriesLabels[key], style: chartColors[key] }))}
+                onChange={updateSeries}
+                onReset={() => {
+                  resetChartColors();
+                  setShowCurrentMonth(true);
+                }}
+                extra={currentMonth !== null && (
+                  <SeriesStyleCheck checked={showCurrentMonth} onChange={setShowCurrentMonth}>
+                    {t('chart.highlightCurrentMonth', 'Mark this month')}
+                  </SeriesStyleCheck>
+                )}
+              />
+              <ExportButton
+                targetId="total-view-chart"
+                filename={`yearly_overview_${currentYear}`}
+                data={chartData}
+                csvColumns={csvColumns}
+                disabled={loading}
+                onBeforeCapture={settleBars}
+              />
+            </>
+          }
+        />
 
-      {/* 1. Chart Section - Full Page */}
-      <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex-1 flex flex-col min-h-0">
-        <div className="flex items-center justify-end mb-2 flex-wrap gap-2">
-          <div className="flex gap-2 flex-wrap items-center">
-            <select
-              aria-label={t('tracker.selectMonth', 'Select a month')}
-              className="px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
-              value={pinnedMonth ?? ""}
-              onChange={(e) => {
-                const month = e.target.value ? Number(e.target.value) : null;
-                if (month === null) { unpin(); return; }
-                setPinnedMonth(month);
-                setHoveredMonth(null);
-              }}
-            >
-              <option value="">{t('tracker.selectMonth', '月を選択...')}</option>
-              {chartData.map((d) => (
-                <option key={d.month} value={d.month}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-            {/* Secondary to copying, so it reads as secondary: an icon button,
-                not a fifth block of saturated colour competing for attention. */}
-            <button
-              onClick={() => setShowColorPicker(!showColorPicker)}
-              aria-pressed={showColorPicker}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg border transition-colors ${
-                showColorPicker
-                  ? 'border-purple-300 bg-purple-50 text-purple-700 dark:border-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
-                  : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'
-              }`}
-              title={t('chart.customizeColors', 'Customize chart colors')}
-            >
-              <Palette className="w-4 h-4" />
-              <span className="hidden sm:inline">{t('chart.colors', 'Colors')}</span>
-            </button>
-            <ExportButton
-              targetId="total-view-chart"
-              filename={`yearly_overview_${currentYear}`}
-              data={chartData}
-              csvColumns={csvColumns}
-              disabled={loading}
-              onBeforeCapture={settleBars}
-            />
-          </div>
-        </div>
+        {loading && <RefreshBar className="mt-4" />}
 
-        {/* Color Picker Section */}
-        {showColorPicker && (
-          <div className="mb-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
-            <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">
-              <Palette className="w-4 h-4" />
-              {t('chart.customizeColors', 'Customize chart colors')}
-            </h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {SERIES_KEYS.map((key) => {
-                const label = key === 'plan'
-                  ? t('tracker.planShort')
-                  : key === 'actual'
-                    ? t('tracker.actualShort')
-                    : key === 'accPlan'
-                      ? t('dashboard.chart.accPlan')
-                      : t('dashboard.chart.accActual');
-                const style = chartColors[key];
-                return (
-                  <div key={key} className="flex flex-col gap-2 p-2 bg-white dark:bg-slate-800 rounded border border-slate-100 dark:border-slate-700 shadow-sm">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{label}</label>
-
-                    {/* Color Row */}
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">{t('chart.field.color', 'Color')}</span>
-                      <div className="flex items-center gap-1 flex-1">
-                        <input type="color" aria-label={label} value={style.color} onChange={(e) => updateColor(key, 'color', e.target.value)} className="w-6 h-6 rounded cursor-pointer p-0 border-0" />
-                        <input type="text" aria-label={label} value={style.color} onChange={(e) => updateColor(key, 'color', e.target.value)} className="flex-1 w-full px-1 py-0.5 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded" />
-                      </div>
-                    </div>
-
-                    {/* Opacity Row */}
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">{t('chart.field.alpha', 'Alpha')}</span>
-                      <div className="flex items-center gap-1 flex-1">
-                        <input type="range" min="0" max="1" step="0.1" value={style.opacity} onChange={(e) => updateColor(key, 'opacity', parseFloat(e.target.value))} className="w-full h-1 bg-slate-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer" />
-                        <span className="text-[10px] w-5 text-right font-medium text-slate-600 dark:text-slate-300">{Math.round(style.opacity * 100)}%</span>
-                      </div>
-                    </div>
-
-                    {/* Label Color Row */}
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">{t('chart.field.text', 'Text')}</span>
-                      <div className="flex items-center gap-1 flex-1">
-                        <input type="color" aria-label={label} value={style.labelColor} onChange={(e) => updateColor(key, 'labelColor', e.target.value)} className="w-6 h-6 rounded cursor-pointer p-0 border-0" />
-                        <input type="text" aria-label={label} value={style.labelColor} onChange={(e) => updateColor(key, 'labelColor', e.target.value)} className="flex-1 w-full px-1 py-0.5 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded" />
-                      </div>
-                    </div>
-
-                    {/* Font Size Row */}
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">{t('chart.field.size', 'Size')}</span>
-                      <div className="flex items-center gap-1 flex-1">
-                        <input type="range" min="8" max="20" step="1" value={style.fontSize} onChange={(e) => updateColor(key, 'fontSize', parseInt(e.target.value))} className="w-full h-1 bg-slate-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer" />
-                        <span className="text-[10px] w-5 text-right font-medium text-slate-600 dark:text-slate-300">{style.fontSize}</span>
-                      </div>
-                    </div>
-
-                    {/* Bold + Stroke Row */}
-                    <div className="flex items-center gap-3">
-                      <label className="flex items-center gap-1 cursor-pointer">
-                        <input type="checkbox" checked={style.bold} onChange={(e) => updateColor(key, 'bold', e.target.checked)} className="w-3 h-3" />
-                        <span className="text-[10px] text-slate-600 dark:text-slate-400 font-bold">{t('chart.field.bold', 'Bold')}</span>
-                      </label>
-                      <label className="flex items-center gap-1 cursor-pointer">
-                        <input type="checkbox" checked={style.stroke} onChange={(e) => updateColor(key, 'stroke', e.target.checked)} className="w-3 h-3" />
-                        <span className="text-[10px] text-slate-600 dark:text-slate-400">{t('chart.field.outline', 'Outline')}</span>
-                      </label>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Global: Highlight Current Month */}
-            <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={showCurrentMonth} onChange={(e) => setShowCurrentMonth(e.target.checked)} className="w-4 h-4 accent-orange-500" />
-                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('chart.highlightCurrentMonth', 'Highlight current month')}</span>
-              </label>
-            </div>
-          </div>
-        )}
-        {loading && <RefreshBar className="mb-2" />}
         {/* The old year stays readable while the new one loads; it is dimmed so
             nobody reads it as the year they just picked. */}
-        <div
-          id="total-view-chart"
-          className={`flex-1 min-h-0 relative flex flex-col transition-opacity duration-200 ${loading ? 'opacity-40' : ''}`}
-        >
-
-          {/* Title and legend sit INSIDE the capture target, so an exported or
-              copied image carries its own heading and key. */}
-          <div className="flex items-start justify-between gap-4 flex-wrap px-1 pb-3">
-            <div className="min-w-0">
-              <h3 className="text-base md:text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center">
-                <TrendingUp className="w-4 h-4 mr-2 shrink-0 text-blue-600 dark:text-blue-400" />
-                {t('totalView.chartTitle')} — {currentYear}
-              </h3>
-              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                {t('totalView.axis.accumulated')} ({unit}) · {t('totalView.forecastNote', 'Months after the current one are forecast')}
-              </p>
-              {summaryRow && <AccumulatedSummary row={summaryRow} t={t} nf={nf} nfPct={nfPct} unit={unit} />}
-            </div>
+        <div className={`transition-opacity duration-200 ${loading ? 'opacity-40' : ''}`}>
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+            {summaryRow ? (
+              <AccumulatedSummary row={summaryRow} t={t} language={language} nf={nf} nfPct={nfPct} unit={unit} />
+            ) : <span />}
             <SeriesLegend
               chartColors={chartColors}
               hidden={hiddenSeries}
               onToggle={toggleSeries}
-              labels={{ accPlan: t('dashboard.chart.accPlan'), accActual: t('dashboard.chart.accActual') }}
-              hint={t('chart.toggleSeries', 'Click to show or hide a series')}
+              labels={seriesLabels}
+              hint={t('chart.toggleSeries', 'Show or hide this series')}
             />
           </div>
 
-          <div ref={plotRef} className="flex-1 min-h-0 relative">
+          {/* Narrow screens scroll the plot sideways rather than squeezing
+              twelve months of labelled bars into a phone's width. */}
+          <div className="-mx-2 mt-4 overflow-x-auto px-2 custom-scrollbar">
+            <div ref={plotRef} className="relative h-[max(320px,calc(100dvh-20rem))] min-w-[600px]">
+              {/* The one detail card. It follows the cursor over the plot and
+                  parks on the selected month's bar; `placeCard` moves it. */}
+              {focusedRow !== null && (
+                <div ref={cardRef} className="pointer-events-none absolute left-0 top-0 z-10 will-change-transform">
+                  <MonthDetailCard
+                    data={focusedRow}
+                    chartColors={chartColors}
+                    t={t}
+                    language={language}
+                    nf={nf}
+                    nfPct={nfPct}
+                    unit={unit}
+                    onUnpin={isPinned ? unpin : undefined}
+                  />
+                </div>
+              )}
 
-          {/* The one detail card. It tracks the cursor while the pointer is on
-              the plot, exactly as the tooltip it replaced did, and parks on the
-              selected month's bar once the pointer leaves — `placeCard` moves it,
-              so nothing here depends on the pointer position. */}
-          {focusedRow !== null && (
-            <div
-              ref={cardRef}
-              className="absolute left-0 top-0 z-10 pointer-events-none will-change-transform"
-            >
-              <MonthDetailCard
-                data={focusedRow}
-                chartColors={chartColors}
-                t={t}
-                nf={nf}
-                nfPct={nfPct}
-                unit={unit}
-                pinned={isPinned}
-                onUnpin={unpin}
-              />
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart
+                  data={chartData}
+                  margin={{ top: 34, right: 16, left: 0, bottom: 4 }}
+                  onClick={state => {
+                    const clicked = monthAtIndex(state?.activeIndex);
+                    if (clicked === null) return;
+                    // Idempotent on purpose: toggling here meant a double-click
+                    // selected and immediately released the month again.
+                    setPinnedMonth(clicked);
+                  }}
+                  onMouseMove={(state, event) => {
+                    // Selected means selected: the card holds its month and place.
+                    if (pinnedMonthRef.current !== null) return;
+                    // Moving over the chart mid-grow-in would restart it.
+                    if (barsAnimatingRef.current) return;
+                    const plot = plotRef.current;
+                    const native = event as React.MouseEvent;
+                    if (plot && typeof native?.clientX === 'number') {
+                      const rect = plot.getBoundingClientRect();
+                      anchorRef.current = { x: native.clientX - rect.left, y: native.clientY - rect.top };
+                    }
+                    const month = monthAtIndex(state?.activeIndex);
+                    // Only the month goes through state; the position is written
+                    // straight to the card so the chart is not re-rendered per pixel.
+                    if (month === hoveredMonthRef.current) {
+                      placeCard();
+                      return;
+                    }
+                    setHoveredMonth(month);
+                  }}
+                  onMouseLeave={() => {
+                    if (pinnedMonthRef.current === null) setHoveredMonth(null);
+                  }}
+                  className="cursor-pointer"
+                >
+                  {/* `yAxisId` is required: without it the grid looks for the
+                      default axis id, finds none, and draws a single line. */}
+                  <CartesianGrid yAxisId="left" vertical={false} stroke={axis.grid} strokeWidth={1} />
+                  <XAxis
+                    dataKey="name"
+                    interval={0}
+                    tickMargin={8}
+                    tickLine={false}
+                    axisLine={{ stroke: axis.line }}
+                    tick={{ fontSize: 13, fontWeight: 600, fill: axis.text }}
+                  />
+                  <YAxis
+                    yAxisId="left"
+                    orientation="left"
+                    domain={[0, yAxisMax]}
+                    ticks={yAxisTicks}
+                    width={78}
+                    tickMargin={6}
+                    tickLine={false}
+                    axisLine={{ stroke: axis.line }}
+                    tick={{ fontSize: 12, fontWeight: 500, fill: axis.text }}
+                    tickFormatter={nf}
+                    label={{
+                      value: `${t('totalView.axis.accumulated', 'Cumulative')} (${unit})`,
+                      angle: -90,
+                      position: 'insideLeft',
+                      style: { fontSize: 13, fontWeight: 600, fill: axis.muted, textAnchor: 'middle' },
+                    }}
+                  />
+                  {/* Stands in for a tooltip cursor: the month the card is about. */}
+                  {focusedName && (
+                    <ReferenceArea yAxisId="left" x1={focusedName} x2={focusedName} fill={axis.focus} />
+                  )}
+                  {showCurrentMonth && currentMonthName && (
+                    <ReferenceLine
+                      yAxisId="left"
+                      x={currentMonthName}
+                      stroke={axis.marker}
+                      strokeWidth={1.5}
+                      strokeDasharray="4 4"
+                      label={<CurrentMonthBadge label={t('chart.thisMonth', 'This month')} color={axis.marker} />}
+                    />
+                  )}
+                  {/* Animated only while `barsAnimating` is open: mount, a
+                      legend toggle, a data reload. See BAR_ANIMATION_MS. */}
+                  <Bar yAxisId="left" dataKey="accPlan" name={seriesLabels.accPlan} hide={hiddenSeries.accPlan} isAnimationActive={barsAnimating} animationDuration={BAR_ANIMATION_MS} animationEasing="ease-out" fill={chartColors.accPlan.color} fillOpacity={chartColors.accPlan.opacity} shape={<TrackingBar seriesKey="accPlan" onColumnMetrics={recordColumnMetrics} />}>
+                    <LabelList dataKey="accPlan" position="top" content={<OutlinedLabel dataKey="accPlan" chartColors={chartColors} rows={chartData} nf={nf} halo={axis.halo} />} />
+                  </Bar>
+                  {/* Same shape as the plan bar so this series reports column
+                      positions too — otherwise hiding the plan series would
+                      leave the detail card with nowhere to anchor. */}
+                  <Bar yAxisId="left" dataKey="accActual" name={seriesLabels.accActual} hide={hiddenSeries.accActual} isAnimationActive={barsAnimating} animationDuration={BAR_ANIMATION_MS} animationEasing="ease-out" fill={chartColors.accActual.color} fillOpacity={chartColors.accActual.opacity} shape={<TrackingBar seriesKey="accActual" onColumnMetrics={recordColumnMetrics} />}>
+                    <LabelList dataKey="accActual" position="top" content={<OutlinedLabel dataKey="accActual" chartColors={chartColors} rows={chartData} nf={nf} halo={axis.halo} />} />
+                  </Bar>
+                </ComposedChart>
+              </ResponsiveContainer>
             </div>
-          )}
-
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart
-              data={chartData}
-              margin={{ top: 34, right: 30, left: 8, bottom: 8 }}
-              onClick={(state) => {
-                const clicked = monthAtIndex(state?.activeIndex);
-                if (clicked === null) return;
-                // Selecting is idempotent on purpose: toggling here meant a
-                // double-click pinned and immediately unpinned again. The card's
-                // close button and Esc are what release it.
-                setPinnedMonth(clicked);
-              }}
-              onMouseMove={(state, event) => {
-                // Pinned means pinned: the card holds its month and its place.
-                if (pinnedMonthRef.current !== null) return;
-                // Moving over the chart mid-grow-in would restart it, so the
-                // bars are left to finish first.
-                if (barsAnimatingRef.current) return;
-                const plot = plotRef.current;
-                const native = event as React.MouseEvent;
-                if (plot && typeof native?.clientX === 'number') {
-                  const rect = plot.getBoundingClientRect();
-                  anchorRef.current = { x: native.clientX - rect.left, y: native.clientY - rect.top };
-                }
-                const month = monthAtIndex(state?.activeIndex);
-                // Only the month goes through state; the position is written
-                // straight to the card so the chart is not re-rendered per pixel.
-                if (month === hoveredMonthRef.current) {
-                  placeCard();
-                  return;
-                }
-                setHoveredMonth(month);
-              }}
-              onMouseLeave={() => {
-                if (pinnedMonthRef.current === null) setHoveredMonth(null);
-              }}
-            >
-              {/* `yAxisId` is required: without it the grid looks for the default
-                  axis id, finds none, and draws a single line at the top. */}
-              <CartesianGrid yAxisId="left" vertical={false} stroke={axis.grid} strokeWidth={1} />
-              <XAxis
-                dataKey="name"
-                interval={0}
-                tickMargin={8}
-                tickLine={false}
-                axisLine={{ stroke: axis.line }}
-                tick={{ fontSize: 13, fontWeight: 600, fill: axis.text }}
-              />
-              <YAxis
-                yAxisId="left"
-                orientation="left"
-                domain={[0, yAxisMax]}
-                ticks={yAxisTicks}
-                width={78}
-                tickMargin={6}
-                tickLine={false}
-                axisLine={{ stroke: axis.line }}
-                tick={{ fontSize: 12, fontWeight: 500, fill: axis.text }}
-                tickFormatter={nf}
-                label={{
-                  value: `${t('totalView.axis.accumulated')} (${unit})`,
-                  angle: -90,
-                  position: 'insideLeft',
-                  style: { fontSize: 13, fontWeight: 600, fill: axis.muted, textAnchor: 'middle' },
-                }}
-              />
-              {/* Stands in for the tooltip cursor, which went with the tooltip. */}
-              {focusedMonth !== null && (() => {
-                const focusedName = chartData.find(d => d.month === focusedMonth)?.name;
-                return focusedName ? (
-                  <ReferenceArea
-                    yAxisId="left"
-                    x1={focusedName}
-                    x2={focusedName}
-                    fill={isDark ? 'rgba(148,163,184,0.14)' : 'rgba(100,116,139,0.09)'}
-                  />
-                ) : null;
-              })()}
-              {/* Current month: a hairline plus a pill, not a full-height band. */}
-              {showCurrentMonth && currentMonth !== null && (() => {
-                const monthName = chartData.find(d => d.month === currentMonth)?.name;
-                return monthName ? (
-                  <ReferenceLine
-                    yAxisId="left"
-                    x={monthName}
-                    stroke={axis.marker}
-                    strokeWidth={1.5}
-                    strokeDasharray="4 4"
-                    label={<CurrentMonthBadge label={t('chart.thisMonth', '今月')} color={axis.marker} />}
-                  />
-                ) : null;
-              })()}
-              {/* Animated only in the window `barsAnimating` is open: mount,
-                  a legend toggle, a data reload. See BAR_ANIMATION_MS. */}
-              <Bar yAxisId="left" dataKey="accPlan" name={t('dashboard.chart.accPlan')} hide={hiddenSeries.accPlan} isAnimationActive={barsAnimating} animationDuration={BAR_ANIMATION_MS} animationEasing="ease-out" fill={chartColors.accPlan.color} fillOpacity={chartColors.accPlan.opacity} shape={<TrackingBar seriesKey="accPlan" onColumnMetrics={recordColumnMetrics} />}>
-                <LabelList dataKey="accPlan" position="top" content={<OutlinedLabel dataKey="accPlan" chartColors={chartColors} rows={chartData} nf={nf} />} />
-              </Bar>
-              {/* Same shape as the plan bar so this series reports column
-                  positions too — otherwise filtering the plan series away would
-                  leave the detail card with nowhere to anchor. */}
-              <Bar yAxisId="left" dataKey="accActual" name={t('dashboard.chart.accActual')} hide={hiddenSeries.accActual} isAnimationActive={barsAnimating} animationDuration={BAR_ANIMATION_MS} animationEasing="ease-out" fill={chartColors.accActual.color} fillOpacity={chartColors.accActual.opacity} shape={<TrackingBar seriesKey="accActual" onColumnMetrics={recordColumnMetrics} />}>
-                <LabelList dataKey="accActual" position="top" content={<OutlinedLabel dataKey="accActual" chartColors={chartColors} rows={chartData} nf={nf} />} />
-              </Bar>
-            </ComposedChart>
-          </ResponsiveContainer>
           </div>
         </div>
-      </div>
-
-      {/* 2. Table Section Removed - check YearlyDataView.tsx */}
-    </div>
+      </Card>
+    </Page>
   );
 };

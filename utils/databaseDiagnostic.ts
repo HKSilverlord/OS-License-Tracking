@@ -53,8 +53,8 @@ export async function diagnoseDatabaseLinks(): Promise<DiagnosticResult> {
     result.totalPeriods = periods?.length || 0;
     console.log(`✓ Found ${result.totalPeriods} total periods`);
 
+    // Not an error: there is simply nothing to link to yet. The page says so.
     if (result.totalPeriods === 0) {
-      result.errors.push('No periods found! Create a period first.');
       return result;
     }
 
@@ -118,28 +118,4 @@ export async function diagnoseDatabaseLinks(): Promise<DiagnosticResult> {
 
   console.log('=== DATABASE DIAGNOSTIC END ===');
   return result;
-}
-
-/**
- * Quick check to see if database has any data at all
- */
-export async function checkDatabaseHasData(): Promise<{
-  hasProjects: boolean;
-  hasPeriods: boolean;
-  hasRecords: boolean;
-  hasLinks: boolean;
-}> {
-  const [projectsResult, periodsResult, recordsResult, linksResult] = await Promise.all([
-    supabase.from('projects').select('id', { count: 'exact', head: true }),
-    supabase.from('periods').select('label', { count: 'exact', head: true }),
-    supabase.from('monthly_records').select('id', { count: 'exact', head: true }),
-    supabase.from('period_projects').select('project_id', { count: 'exact', head: true })
-  ]);
-
-  return {
-    hasProjects: (projectsResult.count || 0) > 0,
-    hasPeriods: (periodsResult.count || 0) > 0,
-    hasRecords: (recordsResult.count || 0) > 0,
-    hasLinks: (linksResult.count || 0) > 0
-  };
 }

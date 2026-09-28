@@ -8,6 +8,12 @@ import { createLogger } from '../utils/logger';
 const log = createLogger('auth');
 
 export interface AuthSession {
+  /**
+   * False until the saved session has been read back. Until then "signed out"
+   * is not known yet, and showing the sign-in form would flash it at everyone
+   * who is in fact signed in.
+   */
+  ready: boolean;
   session: Session | null;
   /** Stable across token refreshes — use this, not `session`, as an effect key. */
   userId: string | null;
@@ -24,6 +30,7 @@ export interface AuthSession {
 export function useAuthSession(): AuthSession {
   const { setRole, setIsLoading } = useUserRole();
   const [session, setSession] = useState<Session | null>(null);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const fetchRole = async () => {
@@ -46,15 +53,19 @@ export function useAuthSession(): AuthSession {
       }
     };
 
-    void supabase.auth.getSession().then(({ data: { session: restored } }) => {
-      setSession(restored);
-      if (restored?.user?.id) void fetchRole();
-    });
+    supabase.auth.getSession()
+      .then(({ data: { session: restored } }) => {
+        setSession(restored);
+        if (restored?.user?.id) void fetchRole();
+      })
+      .catch(error => log.error('Could not restore the session', error))
+      .finally(() => setReady(true));
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, next) => {
       setSession(next);
+      setReady(true);
       if (next?.user?.id) {
         void fetchRole();
       } else {
@@ -70,5 +81,5 @@ export function useAuthSession(): AuthSession {
     setSession(null);
   };
 
-  return { session, userId: session?.user?.id ?? null, signOut };
+  return { ready, session, userId: session?.user?.id ?? null, signOut };
 }
