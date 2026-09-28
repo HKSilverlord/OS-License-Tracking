@@ -1,12 +1,12 @@
 import React, { useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronsUpDown, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Sun, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { SUPPORTED_LANGUAGES, useLanguage } from '../../contexts/LanguageContext';
 import type { SupportedLanguage } from '../../contexts/LanguageContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { ThemePreference } from '../../contexts/ThemeContext';
-import { confirmNavigation } from '../../utils/navigationGuard';
+import { confirmNavigation, hasNavigationBlocker } from '../../utils/navigationGuard';
 import { AppIcon } from '../ui/AppIcon';
 import { Badge } from '../ui/Badge';
 import { Popover } from '../ui/Popover';
@@ -63,6 +63,7 @@ const NavItem: React.FC<{ item: NavItemDef; collapsed: boolean; onNavigate?: () 
   onNavigate,
 }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const active = location.pathname === item.to;
   const Icon = item.icon;
 
@@ -77,12 +78,19 @@ const NavItem: React.FC<{ item: NavItemDef; collapsed: boolean; onNavigate?: () 
           onNavigate?.();
           return;
         }
-        // Never leave a view with unsaved changes without asking.
-        if (!confirmNavigation()) {
-          event.preventDefault();
+        const newTab = event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0;
+        if (newTab || !hasNavigationBlocker()) {
+          onNavigate?.();
           return;
         }
-        onNavigate?.();
+        // Never leave a view with unsaved changes without asking. The app's
+        // dialog answers later, so the link is held and followed on a yes.
+        event.preventDefault();
+        void confirmNavigation().then(leave => {
+          if (!leave) return;
+          navigate(item.to);
+          onNavigate?.();
+        });
       }}
       className={`group relative flex items-center rounded-lg text-sm font-medium transition-colors duration-150 ${
         collapsed ? 'mx-auto h-10 w-10 justify-center' : 'h-9 gap-3 px-2.5'
