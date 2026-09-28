@@ -24,6 +24,7 @@ dist-ssr
 *.docx
 *.doc
 *.png
+!public/apple-touch-icon.png
 *.jpg
 
 # Editor directories and files
