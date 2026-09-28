@@ -495,7 +495,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
           {/* Narrow screens scroll the plot sideways rather than squeezing
               twelve months of labelled columns into a phone's width. */}
           <div className="-mx-2 mt-3 overflow-x-auto px-2 custom-scrollbar">
-            <div className="relative h-[max(360px,calc(100dvh-20rem))] min-w-[680px]">
+            <div className="relative h-[max(360px,calc(100dvh-20rem))] min-w-[840px] sm:min-w-[680px]">
               {pinnedData && (() => {
                 // Beside its column, on whichever side has the room.
                 const onLeft = pinnedData.month > 8;
@@ -514,6 +514,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 <ComposedChart
                   data={monthlyData}
                   margin={{ top: 28, right: 16, left: 8, bottom: 4 }}
+                  aria-label={`${t('monthlyPlanActual.chartTitle', 'OS contract work: plan vs actual')} ${currentYear}`}
                   onClick={state => {
                     // recharts 3 `MouseHandlerDataParam` has no `activePayload` — recover the
                     // clicked datum from the active index instead.

@@ -841,6 +841,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                 <ComposedChart
                   data={chartData}
                   margin={{ top: 34, right: 16, left: 0, bottom: 4 }}
+                  aria-label={`${t('totalView.chartTitle', 'Cumulative plan and actual')} ${currentYear}`}
                   onClick={state => {
                     const clicked = monthAtIndex(state?.activeIndex);
                     if (clicked === null) return;

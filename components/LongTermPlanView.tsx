@@ -406,7 +406,7 @@ export const LongTermPlanView: React.FC = () => {
           <div className="-mx-2 mt-3 overflow-x-auto px-2 custom-scrollbar">
             <div className="h-[max(360px,calc(100dvh-20rem))] min-w-[560px]">
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={chartData} margin={{ top: 24, right: 8, left: 8, bottom: 4 }}>
+                <ComposedChart data={chartData} margin={{ top: 24, right: 8, left: 8, bottom: 4 }} aria-label={`${t('longTermPlan.title', 'OS business long-term plan')} ${range}`}>
                   <CartesianGrid vertical={false} stroke={theme.grid} yAxisId="left" />
 
                   <XAxis
