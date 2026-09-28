@@ -218,37 +218,70 @@ const resolveOklchColors = async (clonedDoc: Document): Promise<void> => {
 };
 
 /**
- * Recursively copy ALL computed styles to inline styles
- * This ensures the exported file renders correctly standalone (SVG only)
+ * The styles that decide how an SVG draws, with the value each starts from.
+ *
+ * Copying every computed property onto every node, as this used to, made a
+ * chart of a few hundred nodes a 1.5–2 MB file of layout, animation and
+ * scrolling properties no SVG reader looks at.
  */
-const inlineAllStyles = (sourceNode: Element, targetNode: Element): void => {
-  if (sourceNode.nodeType !== 1) return;
+const SVG_STYLES: Record<string, { initial: string; inherited: boolean }> = {
+  fill: { initial: 'rgb(0, 0, 0)', inherited: true },
+  'fill-opacity': { initial: '1', inherited: true },
+  'fill-rule': { initial: 'nonzero', inherited: true },
+  stroke: { initial: 'none', inherited: true },
+  'stroke-width': { initial: '1px', inherited: true },
+  'stroke-opacity': { initial: '1', inherited: true },
+  'stroke-dasharray': { initial: 'none', inherited: true },
+  'stroke-dashoffset': { initial: '0px', inherited: true },
+  'stroke-linecap': { initial: 'butt', inherited: true },
+  'stroke-linejoin': { initial: 'miter', inherited: true },
+  'stroke-miterlimit': { initial: '4', inherited: true },
+  'paint-order': { initial: 'normal', inherited: true },
+  color: { initial: 'rgb(0, 0, 0)', inherited: true },
+  // No initial value to match: the reader's default font is anyone's guess.
+  'font-family': { initial: '', inherited: true },
+  'font-size': { initial: '16px', inherited: true },
+  'font-weight': { initial: '400', inherited: true },
+  'font-style': { initial: 'normal', inherited: true },
+  'font-variant-numeric': { initial: 'normal', inherited: true },
+  'letter-spacing': { initial: 'normal', inherited: true },
+  'text-anchor': { initial: 'start', inherited: true },
+  'dominant-baseline': { initial: 'auto', inherited: true },
+  visibility: { initial: 'visible', inherited: true },
+  opacity: { initial: '1', inherited: false },
+  'alignment-baseline': { initial: 'auto', inherited: false },
+  'baseline-shift': { initial: '0px', inherited: false },
+  'clip-path': { initial: 'none', inherited: false },
+  mask: { initial: 'none', inherited: false },
+  filter: { initial: 'none', inherited: false },
+  transform: { initial: 'none', inherited: false },
+  'stop-color': { initial: 'rgb(0, 0, 0)', inherited: false },
+  'stop-opacity': { initial: '1', inherited: false },
+};
 
-  const sourceElement = sourceNode as HTMLElement;
-  const targetElement = targetNode as HTMLElement;
-  const computedStyle = window.getComputedStyle(sourceElement);
-
-  // Copy all computed CSS properties as inline styles
-  for (let i = 0; i < computedStyle.length; i++) {
-    const property = computedStyle[i];
-    const value = computedStyle.getPropertyValue(property);
-
-    try {
-      targetElement.style.setProperty(property, value, computedStyle.getPropertyPriority(property));
-    } catch (e) {
-      // Some properties might not be settable, skip them
-    }
+/**
+ * Copy the styles that matter onto the clone, so the file draws the same on
+ * its own. An inherited style is written only where it changes from the parent,
+ * the rest only where they leave their initial value, and colours the page
+ * keeps as `oklch()` are written as rgb() for readers that predate it.
+ */
+const inlineSvgStyles = (source: Element, target: Element, parent: CSSStyleDeclaration | null = null): void => {
+  const computed = window.getComputedStyle(source);
+  const style = (target as SVGElement).style;
+  if (computed.display === 'none') style.setProperty('display', 'none');
+  for (const [property, { initial, inherited }] of Object.entries(SVG_STYLES)) {
+    const value = computed.getPropertyValue(property);
+    if (!value) continue;
+    const from = inherited && parent ? parent.getPropertyValue(property) : initial;
+    if (value === from) continue;
+    style.setProperty(property, value.includes('(') ? replaceUnsupportedColors(value) : value);
   }
 
-  // Recursively process all children
-  const sourceChildren = Array.from(sourceNode.children);
-  const targetChildren = Array.from(targetNode.children);
-
-  for (let i = 0; i < sourceChildren.length; i++) {
-    if (targetChildren[i]) {
-      inlineAllStyles(sourceChildren[i], targetChildren[i]);
-    }
-  }
+  const sourceChildren = Array.from(source.children);
+  const targetChildren = Array.from(target.children);
+  sourceChildren.forEach((child, i) => {
+    if (targetChildren[i]) inlineSvgStyles(child, targetChildren[i], computed);
+  });
 };
 
 /**
@@ -468,6 +501,25 @@ const capturedSize = (element: HTMLElement): { width: number; height: number } =
   };
 };
 
+/**
+ * html2canvas finds where text sits on its line by putting a 1px image beside
+ * a word in the PAGE (not the copy it paints) and reading the image's offset.
+ * Tailwind's base styles make every <img> a block, which moved that image onto
+ * a line of its own: the measurement came out most of a line too low, and every
+ * word in every exported image was drawn several pixels below where the page
+ * shows it, so legend dots sat above their labels and text sank in its pills.
+ * For the length of a capture the measuring image is put back inline.
+ */
+const INLINE_MEASURING_IMAGE =
+  'body > div[style*="visibility: hidden"][style*="white-space: nowrap"] > img { display: inline !important; }';
+
+const withInlineMeasuringImage = (): (() => void) => {
+  const style = document.createElement('style');
+  style.textContent = INLINE_MEASURING_IMAGE;
+  document.head.appendChild(style);
+  return () => style.remove();
+};
+
 /** The top-left `width` x `height` of a canvas, as a canvas of that size. */
 const trimCanvas = (canvas: HTMLCanvasElement, width: number, height: number): HTMLCanvasElement => {
   if (width >= canvas.width && height >= canvas.height) return canvas;
@@ -578,7 +630,10 @@ export const captureElement = (
 ): Promise<HTMLCanvasElement> =>
   // Returns its promise synchronously so `copyElementToClipboard` can still
   // hand a pending ClipboardItem to write() from inside the click.
-  withExportTheme(element, () => capture(element, options));
+  withExportTheme(element, () => {
+    const restoreMeasuring = withInlineMeasuringImage();
+    return capture(element, options).finally(restoreMeasuring);
+  });
 
 const capture = async (
   element: HTMLElement,
@@ -775,28 +830,34 @@ export const exportChartToSVG = async (elementId: string, filename: string = 'ch
 
     log.debug('Exporting chart as SVG...');
 
-    // Same export theme as the raster paths: `inlineAllStyles` copies the LIVE
+    // Same export theme as the raster paths: `inlineSvgStyles` copies the LIVE
     // computed styles, so the palette has to be switched before it reads them.
     const svgString = await withExportTheme(chartContainer, async () => {
       // Measure the PLOT, not the container. The container also holds the HTML
       // heading and legend, so sizing the surface by it left every exported file
       // with a blank strip along the bottom exactly that row's height tall.
       const surfaceRect = svgElement.getBoundingClientRect();
-      const width = Math.round(surfaceRect.width);
-      const height = Math.round(surfaceRect.height);
+      // Grown to take in whatever is drawn past the surface's edge: on the page
+      // the last month's name overhangs the right edge and simply shows, and in
+      // the file it was cut through.
+      const drawn = (svgElement as SVGSVGElement).getBBox();
+      const left = Math.min(0, Math.floor(drawn.x));
+      const top = Math.min(0, Math.floor(drawn.y));
+      const width = Math.max(Math.round(surfaceRect.width), Math.ceil(drawn.x + drawn.width)) - left;
+      const height = Math.max(Math.round(surfaceRect.height), Math.ceil(drawn.y + drawn.height)) - top;
 
       // Clone the SVG deeply
       const clonedSvg = svgElement.cloneNode(true) as SVGElement;
 
       // Copy all computed styles inline for standalone rendering
       log.debug('Copying styles...');
-      inlineAllStyles(svgElement, clonedSvg);
+      inlineSvgStyles(svgElement, clonedSvg);
       // After the style walk, which pairs the two trees node for node.
       clonedSvg.querySelectorAll(HOVER_ONLY).forEach(node => node.remove());
 
       clonedSvg.setAttribute('width', width.toString());
       clonedSvg.setAttribute('height', height.toString());
-      clonedSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      clonedSvg.setAttribute('viewBox', `${left} ${top} ${width} ${height}`);
 
       // The plot alone is a mystery once it leaves the app, so carry the heading
       // across as real text. It is the one piece of the HTML header worth the
