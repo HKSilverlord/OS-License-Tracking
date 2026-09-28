@@ -375,6 +375,8 @@ export const en: Record<string, string> = {
   'diagnostic.links': 'Project links',
   'diagnostic.noLinks': 'No project is linked to a period, so every view is empty. Repair the links below.',
   'diagnostic.emptyPeriods': 'No projects in {periods} yet.',
+  'diagnostic.linksWaiting': 'Nothing to link until there is at least one project and one period.',
+  'diagnostic.openPage': 'Open {page}',
   'diagnostic.records': 'Monthly records',
   'diagnostic.noRecords': 'No hours recorded yet. Enter them in Project tracking.',
   'diagnostic.otherYears': 'Other years',

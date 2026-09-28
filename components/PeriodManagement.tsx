@@ -195,8 +195,8 @@ interface PeriodEditorProps {
   editor: EditorState;
   projects: Project[];
   existingLabels: ReadonlySet<string>;
-  /** The newest period, offered as a starting selection for a new one. */
-  latestLabel: string | null;
+  /** The newest period that has projects, offered as a starting selection for a new one. */
+  copySourceLabel: string | null;
   submitting: boolean;
   /** Updates are functions of the latest state: a fetch may finish after further edits. */
   onChange: (update: (prev: EditorState) => EditorState) => void;
@@ -209,7 +209,7 @@ const PeriodEditor: React.FC<PeriodEditorProps> = ({
   editor,
   projects,
   existingLabels,
-  latestLabel,
+  copySourceLabel,
   submitting,
   onChange,
   onClose,
@@ -242,12 +242,12 @@ const PeriodEditor: React.FC<PeriodEditorProps> = ({
   const setYear = (year: number) => onChange(prev => (prev.mode === 'create' ? { ...prev, year } : prev));
   const setHalf = (half: Half) => onChange(prev => (prev.mode === 'create' ? { ...prev, half } : prev));
 
-  const copyFromLatest = async () => {
-    if (!latestLabel || editor.mode !== 'create') return;
+  const copyFromSource = async () => {
+    if (!copySourceLabel || editor.mode !== 'create') return;
     setCopying(true);
     try {
-      const inLatest = await dbService.getProjectsForPeriod(latestLabel);
-      setSelected(inLatest.map(project => project.id));
+      const inSource = await dbService.getProjectsForPeriod(copySourceLabel);
+      setSelected(inSource.map(project => project.id));
     } catch (error) {
       log.error('Failed to load the latest period', error);
       toast.error(t('alerts.projectsLoadFailed', 'Failed to load projects'));
@@ -348,9 +348,9 @@ const PeriodEditor: React.FC<PeriodEditorProps> = ({
           loading={loading}
           onChange={setSelected}
           extraAction={
-            editor.mode === 'create' && latestLabel && projects.length > 0 ? (
-              <Button variant="ghost" size="sm" onClick={copyFromLatest} isLoading={copying}>
-                {t('periodManagement.copyFrom', 'Same as {period}').replace('{period}', latestLabel.replace('-', ' '))}
+            editor.mode === 'create' && copySourceLabel && projects.length > 0 ? (
+              <Button variant="ghost" size="sm" onClick={() => { void copyFromSource(); }} isLoading={copying}>
+                {t('periodManagement.copyFrom', 'Same as {period}').replace('{period}', copySourceLabel.replace('-', ' '))}
               </Button>
             ) : undefined
           }
@@ -488,6 +488,8 @@ export const PeriodManagement: React.FC = () => {
   const existingLabels = useMemo(() => new Set(periods.map(period => period.label)), [periods]);
   // Newest first from the service: year, then half, descending.
   const latestLabel = periods[0]?.label ?? null;
+  // "Same as" an empty period would select nothing, so it names the newest one with projects.
+  const copySourceLabel = periods.find(period => period.project_count > 0)?.label ?? null;
 
   const openCreate = (year?: number, half?: Half) => {
     if (year !== undefined && half !== undefined) {
@@ -671,7 +673,7 @@ export const PeriodManagement: React.FC = () => {
           editor={editor}
           projects={allProjects}
           existingLabels={existingLabels}
-          latestLabel={latestLabel}
+          copySourceLabel={copySourceLabel}
           submitting={submitting}
           onChange={update => setEditor(prev => (prev ? update(prev) : prev))}
           onClose={closeEditor}

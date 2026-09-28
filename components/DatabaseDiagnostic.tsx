@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, Link2, Loader2, Play, RefreshCw, XCircle } from 'lucide-react';
 import { diagnoseDatabaseLinks } from '../utils/databaseDiagnostic';
 import {
@@ -164,7 +165,23 @@ export const DatabaseDiagnostic: React.FC = () => {
   };
 
   const count = (key: string, n: number, fallback: string) => plural(t, key, n, fallback, nf);
-  const joined = (entries: [string, number][]) => entries.map(([label, n]) => `${label}: ${nf(n)}`).join(' · ');
+  /* A label such as "2026 H1" breaks between the list's items, never inside one. */
+  const joined = (entries: [string, number | null][]) =>
+    entries.map(([label, n], i) => (
+      <React.Fragment key={label}>
+        {i > 0 && ' · '}
+        <span className="whitespace-nowrap">{n === null ? label : `${label}: ${nf(n)}`}</span>
+      </React.Fragment>
+    ));
+
+  /** Where to go to fix what a finding reports. */
+  const openPage = (to: string, pageKey: string, pageFallback: string) => (
+    <Link to={to} className="ml-1 whitespace-nowrap font-medium text-blue-600 hover:underline dark:text-blue-400">
+      {t('diagnostic.openPage', 'Open {page}').replace('{page}', t(pageKey, pageFallback))}
+    </Link>
+  );
+  const openTracking = () => openPage('/tracking', 'nav.tracking', 'Project tracking');
+  const openPeriods = () => openPage('/period-management', 'nav.periodManagement', 'Periods');
 
   const renderHealth = () => {
     if (!health) {
@@ -194,19 +211,31 @@ export const DatabaseDiagnostic: React.FC = () => {
       <>
         <ul className="mt-5 divide-y divide-slate-100 dark:divide-slate-800">
           <Finding ok={health.projects.total > 0} label={t('diagnostic.projects', 'Projects')} value={nf(health.projects.total)}>
-            {health.projects.total === 0 && t('diagnostic.noProjects', 'No projects yet. Add them in Project tracking.')}
+            {health.projects.total === 0 && (
+              <>
+                {t('diagnostic.noProjects', 'No projects yet. Add them in Project tracking.')}
+                {openTracking()}
+              </>
+            )}
           </Finding>
           <Finding ok={health.periods.total > 0} label={t('diagnostic.periods', 'Periods')} value={nf(health.periods.total)}>
-            {health.periods.total === 0
-              ? t('diagnostic.noPeriods', 'No periods yet. Create one under Periods.')
-              : periodLabels.join(' · ')}
+            {health.periods.total === 0 ? (
+              <>
+                {t('diagnostic.noPeriods', 'No periods yet. Create one under Periods.')}
+                {openPeriods()}
+              </>
+            ) : (
+              joined(periodLabels.map(label => [label, null]))
+            )}
           </Finding>
           <Finding
             ok={health.periodProjects.total > 0 && emptyPeriods.length === 0}
             label={t('diagnostic.links', 'Project links')}
             value={nf(health.periodProjects.total)}
           >
-            {health.periodProjects.total === 0 ? (
+            {health.projects.total === 0 || health.periods.total === 0 ? (
+              t('diagnostic.linksWaiting', 'Nothing to link until there is at least one project and one period.')
+            ) : health.periodProjects.total === 0 ? (
               t('diagnostic.noLinks', 'No project is linked to a period, so every view is empty. Repair the links below.')
             ) : (
               <>
@@ -214,18 +243,24 @@ export const DatabaseDiagnostic: React.FC = () => {
                 {emptyPeriods.length > 0 && (
                   <span className="block text-amber-700 dark:text-amber-300">
                     {t('diagnostic.emptyPeriods', 'No projects in {periods} yet.').replace('{periods}', emptyPeriods.join(', '))}
+                    {openPeriods()}
                   </span>
                 )}
               </>
             )}
           </Finding>
           <Finding ok={health.monthlyRecords.total > 0} label={t('diagnostic.records', 'Monthly records')} value={nf(health.monthlyRecords.total)}>
-            {health.monthlyRecords.total === 0
-              ? t('diagnostic.noRecords', 'No hours recorded yet. Enter them in Project tracking.')
-              : joined([
+            {health.monthlyRecords.total === 0 ? (
+              <>
+                {t('diagnostic.noRecords', 'No hours recorded yet. Enter them in Project tracking.')}
+                {openTracking()}
+              </>
+            ) : (
+              joined([
                   ...recordYears,
                   ...(otherRecords > 0 ? [[t('diagnostic.otherYears', 'Other years'), otherRecords] as [string, number]] : []),
-                ])}
+                ])
+            )}
           </Finding>
         </ul>
         {health.errors.length > 0 && (
@@ -243,6 +278,7 @@ export const DatabaseDiagnostic: React.FC = () => {
       return (
         <p className="text-[13px] text-amber-700 dark:text-amber-300">
           {t('diagnostic.repair.noPeriods', 'There is no period to link to. Create one under Periods first.')}
+          {openPeriods()}
         </p>
       );
     }

@@ -375,6 +375,8 @@ export const vn: Record<string, string> = {
   'diagnostic.links': 'Liên kết dự án',
   'diagnostic.noLinks': 'Chưa dự án nào được liên kết với kỳ, nên mọi màn hình đều trống. Hãy sửa liên kết bên dưới.',
   'diagnostic.emptyPeriods': 'Chưa có dự án trong {periods}.',
+  'diagnostic.linksWaiting': 'Chưa có gì để liên kết cho đến khi có ít nhất một dự án và một kỳ.',
+  'diagnostic.openPage': 'Mở {page}',
   'diagnostic.records': 'Bản ghi hằng tháng',
   'diagnostic.noRecords': 'Chưa ghi nhận giờ nào. Hãy nhập trong Theo dõi dự án.',
   'diagnostic.otherYears': 'Năm khác',
