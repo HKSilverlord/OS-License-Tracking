@@ -1,67 +1,289 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { ArrowDown, ArrowUp, ArrowUpDown, CalendarRange, Check, ChevronsUpDown, Columns3, Eye, Plus, Search } from 'lucide-react';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Project, MonthlyRecord, PeriodType } from '../types';
 import { dbService } from '../services/dbService';
 import { getCurrentPeriod, getMonthsForPeriod } from '../utils/helpers';
-import { TABLE_COLUMN_WIDTHS, STICKY_CLASSES } from '../utils/tableStyles';
-import { Save, Loader2, Search, ArrowUpDown, Check, ListChecks, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useNumberFormat, localeTagFor } from '../hooks/useNumberFormat';
 import { useUserRole } from '../contexts/UserRoleContext';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
-
-import { EditProjectModal } from './EditProjectModal';
 import { useToast, useConfirm } from '../contexts/ToastContext';
+import { useYearControl } from '../contexts/YearContext';
 import { setNavigationBlocker } from '../utils/navigationGuard';
 import { resolvePrices } from '../services/pricing';
 import { createLogger } from '../utils/logger';
-import { Skeleton } from './ui/Skeleton';
+import { describePeriod, halfMonths, type Half } from '../utils/period';
+import { plural } from '../utils/plural';
+import { EditProjectModal } from './EditProjectModal';
+import { NewProjectModal } from './modals/NewProjectModal';
+import { YearControl, YearExportButton } from './YearControl';
 import { SortableRow, DragHandleCell, ProjectActionsMenu } from './tracking/SortableRow';
+import { Badge } from './ui/Badge';
+import { Button, buttonClasses } from './ui/Button';
+import { cardClasses } from './ui/Card';
+import { EmptyState } from './ui/EmptyState';
+import { Input } from './ui/Field';
+import { Kbd } from './ui/Kbd';
+import { Page } from './ui/Page';
+import { SegmentedControl } from './ui/SegmentedControl';
+import { Skeleton } from './ui/Skeleton';
 
 const log = createLogger('TrackingView');
 
 interface TrackingViewProps {
   currentYear: number;
-  searchQuery: string;
-  refreshTrigger?: number; // Trigger to refresh data when project is created
 }
 
-export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQuery, refreshTrigger }) => {
+type SortKey = 'display_order' | 'exclusion_mark' | 'name';
+type SortConfig = { key: SortKey; direction: 'asc' | 'desc' };
+
+const MANUAL_ORDER: SortConfig = { key: 'display_order', direction: 'asc' };
+
+/** Column widths in px. The first three stay put while the months scroll. */
+const W = {
+  no: 48,
+  excl: 72,
+  name: 224,
+  notes: 200,
+  software: 150,
+  content: 200,
+  rate: 92,
+  kind: 72,
+  month: 76,
+  total: 84,
+  actions: 52,
+} as const;
+
+/*
+ * Frozen cells must stay opaque while the months slide under them, including
+ * on hover, so the hover colour is a solid mix rather than a translucent tint.
+ */
+const SURFACE =
+  'bg-white group-hover:bg-slate-50 dark:bg-slate-900 ' +
+  'dark:group-hover:bg-[color-mix(in_oklab,var(--color-slate-900),var(--color-slate-800)_55%)]';
+
+/* On a phone only the project name stays frozen: No. and Excl. would take
+   a third of the screen. From `sm` up all three are frozen. The offsets are
+   W.no and W.no + W.excl; Tailwind needs them written out. */
+const STICKY_NO = 'sm:sticky sm:left-0 sm:z-10';
+const STICKY_EXCL = 'sm:sticky sm:left-[48px] sm:z-10';
+const STICKY_NAME = 'sticky left-0 z-10 sm:left-[120px]';
+const NAME_WIDTH = 'w-[152px] min-w-[152px] max-w-[152px] sm:w-[224px] sm:min-w-[224px] sm:max-w-[224px]';
+
+const HEAD =
+  'sticky top-0 z-20 h-10 border-b border-slate-200 bg-white px-2 text-[12px] font-medium text-slate-500 ' +
+  'dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400';
+/* Header cells frozen both ways sit above the rest. HEAD is already sticky
+   to the top, so a left offset is all it takes to freeze one sideways. */
+const HEAD_NO = 'sm:left-0 sm:z-30';
+const HEAD_EXCL = 'sm:left-[48px] sm:z-30';
+const HEAD_NAME = 'left-0 z-30! sm:left-[120px]';
+/* Frozen on the right from `sm` up; on a phone its width goes to the months. */
+const HEAD_ACTIONS = 'sm:right-0 z-30!';
+
+/** Where the grid ends a project: a hairline under its Actual row. */
+const ROW_END = 'border-b border-slate-100 dark:border-slate-800';
+
+/** Editable cell text: a spreadsheet cell that shows it can be typed into on hover. */
+const CELL_INPUT =
+  'block w-full rounded-md border-0 bg-transparent px-2 text-[13px] text-slate-900 outline-none ' +
+  'transition-[background-color,box-shadow] duration-100 placeholder:text-slate-300 ' +
+  'hover:bg-slate-100/70 focus:bg-white focus:ring-2 focus:ring-blue-500/50 ' +
+  'dark:text-slate-100 dark:placeholder:text-slate-600 dark:hover:bg-slate-800 dark:focus:bg-slate-950 dark:focus:ring-blue-400/50';
+
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+const SAVE_SHORTCUT = isMac ? '⌘S' : 'Ctrl S';
+
+const readShowDetails = (): boolean => {
+  try {
+    return window.localStorage.getItem('tracking_showDetails') === '1';
+  } catch {
+    return false;
+  }
+};
+
+/* ------------------------------------------------------------------ */
+
+/** A column heading that sorts the table. */
+const SortHeader: React.FC<{
+  label: string;
+  title?: string;
+  sortKey: SortKey;
+  sort: SortConfig;
+  onSort: (key: SortKey) => void;
+  align?: 'start' | 'center';
+}> = ({ label, title, sortKey, sort, onSort, align = 'start' }) => {
+  const active = sort.key === sortKey;
+  const Icon = !active ? ChevronsUpDown : sort.direction === 'asc' ? ArrowUp : ArrowDown;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(sortKey)}
+      title={title}
+      className={`group/sort -mx-1 inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-md px-1 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white ${
+        align === 'center' ? 'justify-center' : ''
+      } ${active ? 'text-slate-900 dark:text-white' : ''}`}
+    >
+      {label}
+      <Icon
+        className={`h-3.5 w-3.5 ${active ? 'text-blue-600 dark:text-blue-400' : 'opacity-0 group-hover/sort:opacity-60'}`}
+        aria-hidden="true"
+      />
+    </button>
+  );
+};
+
+const ariaSort = (sort: SortConfig, key: SortKey): React.AriaAttributes['aria-sort'] =>
+  sort.key === key ? (sort.direction === 'asc' ? 'ascending' : 'descending') : undefined;
+
+/**
+ * On a phone only the name is frozen, and No., Excl. and Rate would fill the
+ * screen before the first month. The table opens with the Plan/Actual column
+ * against the name instead; from `sm` up everything fits from the left edge.
+ */
+const openAtKindColumn = (table: HTMLTableElement | null) => {
+  if (!table || window.matchMedia('(min-width: 640px)').matches) return;
+  // Measured once the web font is in: the columns before it size to their text.
+  void document.fonts.ready.then(() => {
+    const scroller = table.parentElement;
+    const name = table.querySelector<HTMLElement>('[data-col="name"]');
+    const kind = table.querySelector<HTMLElement>('[data-col="kind"]');
+    if (!table.isConnected || !scroller || !name || !kind) return;
+    // In content coordinates: the name only sticks once the table has scrolled.
+    const contentLeft = scroller.getBoundingClientRect().left + scroller.clientLeft - scroller.scrollLeft;
+    scroller.scrollLeft = kind.getBoundingClientRect().left - contentLeft - name.offsetWidth;
+  });
+};
+
+/** One month's hours. An input for an admin; the figure for everyone else. */
+const HourCell: React.FC<{
+  value: number;
+  editable: boolean;
+  kind: 'plan' | 'actual';
+  cellKey: string;
+  label: string;
+  pending: boolean;
+  saving: boolean;
+  format: (value: number) => string;
+  onChange: (value: string) => void;
+  onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void;
+}> = ({ value, editable, kind, cellKey, label, pending, saving, format, onChange, onKeyDown }) => {
+  const tone = kind === 'actual' ? 'font-medium' : 'text-slate-500! dark:text-slate-400!';
+  if (!editable) {
+    return (
+      <span className={`block px-2 text-right text-[13px] tabular-nums text-slate-900 dark:text-slate-100 ${tone}`}>
+        {value === 0 ? <span className="text-slate-300 dark:text-slate-600">–</span> : format(value)}
+      </span>
+    );
+  }
+  return (
+    <input
+      type="number"
+      inputMode="decimal"
+      min={0}
+      data-hour-cell={cellKey}
+      aria-label={label}
+      className={`${CELL_INPUT} no-spinner h-8 text-right tabular-nums ${tone} ${
+        pending ? 'bg-amber-50! dark:bg-amber-500/10!' : ''
+      } ${saving ? 'animate-pulse' : ''}`}
+      value={value === 0 ? '' : value}
+      placeholder="–"
+      onChange={event => onChange(event.target.value)}
+      onKeyDown={onKeyDown}
+      onWheel={event => event.currentTarget.blur()}
+    />
+  );
+};
+
+/** A free-text project field: notes, software, business content. */
+const TextCell: React.FC<{
+  value: string;
+  editable: boolean;
+  label: string;
+  placeholder?: string;
+  onChange: (value: string) => void;
+}> = ({ value, editable, label, placeholder, onChange }) =>
+  editable ? (
+    <textarea
+      aria-label={label}
+      className={`${CELL_INPUT} min-h-[4.25rem] resize-none py-1.5 leading-5 custom-scrollbar`}
+      value={value}
+      placeholder={placeholder}
+      onChange={event => onChange(event.target.value)}
+    />
+  ) : (
+    <p className="whitespace-pre-line px-2 py-1.5 text-[13px] leading-5 text-slate-600 dark:text-slate-300">
+      {value || <span className="text-slate-300 dark:text-slate-600">–</span>}
+    </p>
+  );
+
+const GridSkeleton: React.FC = () => (
+  <div className="p-4" aria-hidden="true">
+    <Skeleton.Table rows={8} cols={9} />
+  </div>
+);
+
+/* ------------------------------------------------------------------ */
+
+export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
   const { t, language } = useLanguage();
   const { format: nf } = useNumberFormat();
   const { isAdmin } = useUserRole();
   const toast = useToast();
   const confirm = useConfirm();
+  const yearControl = useYearControl();
 
-  // Tabs State
   // Seeded from today's half-year: opening this view in October on H1 meant six
   // empty columns and a tab click before anyone could type anything.
-  const [activeTerm, setActiveTerm] = useState<'H1' | 'H2'>(() => {
+  const [activeTerm, setActiveTerm] = useState<Half>(() => {
     const current = getCurrentPeriod();
-    return current.year === currentYear ? (current.type as 'H1' | 'H2') : 'H1';
+    return current.year === currentYear ? (current.type as Half) : 'H1';
   });
   const currentPeriodLabel = `${currentYear}-${activeTerm}`;
+  const periodName = describePeriod(currentPeriodLabel, t);
+  // Outside the shell (the chart harness) there is no catalog; assume it exists.
+  const periodExists = yearControl ? yearControl.periods.includes(currentPeriodLabel) : true;
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [records, setRecords] = useState<Record<string, MonthlyRecord[]>>({}); // Key: ProjectId
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [savingStatus, setSavingStatus] = useState<Record<string, boolean>>({}); // Key: `${projectId}-${month}-${field}`
   const [pendingChanges, setPendingChanges] = useState<Record<string, MonthlyRecord>>({}); // Key: `${projectId}-${month}`
   const [isSaving, setIsSaving] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(true);
+  const [showDetails, setShowDetails] = useState(readShowDetails);
 
-  // Local Filter & Sort State
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [newProjectCode, setNewProjectCode] = useState('');
+  const [openingNewProject, setOpeningNewProject] = useState(false);
+  /** A project just created: scrolled into view and focused once it renders. */
+  const [revealId, setRevealId] = useState<string | null>(null);
+
   const [localFilter, setLocalFilter] = useState('');
-  const [sortConfig, setSortConfig] = useState<{ key: keyof Project | null; direction: 'asc' | 'desc' }>({ key: 'display_order', direction: 'asc' });
+  const [sortConfig, setSortConfig] = useState<SortConfig>(MANUAL_ORDER);
+  // Dragging and Move up/down rearrange the manual order, so they only make
+  // sense while the table is showing it.
+  const inManualOrder = sortConfig.key === 'display_order' && sortConfig.direction === 'asc';
+  const canReorder = isAdmin && inManualOrder;
 
   const pendingCount = Object.keys(pendingChanges).length;
   const hasPendingChanges = pendingCount > 0;
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('tracking_showDetails', showDetails ? '1' : '0');
+    } catch {
+      /* private mode: the choice lasts for this visit only */
+    }
+  }, [showDetails]);
+
   /**
-   * Text fields save themselves 500ms after the last keystroke, and said so
-   * nowhere at all - the only way to know an edit had landed was to reload.
+   * Text fields save themselves 500ms after the last keystroke; this is the
+   * brief "Saved" that says the edit landed.
    */
   const [autosaved, setAutosaved] = useState(false);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -85,7 +307,6 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
   const periodRef = useRef(currentPeriodLabel);
   const leaveConfirmedRef = useRef(false);
 
-  // DnD Sensors
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -93,50 +314,39 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
     })
   );
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    if (!isAdmin) return;
+  const handleDragEnd = (event: DragEndEvent) => {
+    if (!canReorder) return;
     const { active, over } = event;
+    if (!over || active.id === over.id) return;
 
-    if (active.id !== over?.id) {
-      setProjects((items) => {
-        const oldIndex = items.findIndex((item) => item.id === active.id);
-        const newIndex = items.findIndex((item) => item.id === over?.id);
+    setProjects(items => {
+      const oldIndex = items.findIndex(item => item.id === active.id);
+      const newIndex = items.findIndex(item => item.id === over.id);
 
-        const newItems = arrayMove(items, oldIndex, newIndex);
+      // Optimistic: display_order follows the new array position (1-based).
+      const updatedItems = arrayMove(items, oldIndex, newIndex).map((item, index) => ({
+        ...item,
+        display_order: index + 1,
+      }));
 
-        // Optimistic update of display_order
-        // We re-assign display_order based on the new array index (1-based)
-        const updatedItems = newItems.map((item, index) => ({
-          ...item,
-          display_order: index + 1
-        }));
+      const updates = updatedItems.map(p => ({ id: p.id, display_order: p.display_order || 0 }));
+      log.debug('Saving new order for', updates.length, 'items');
+      dbService.updateProjectDisplayOrders(updates)
+        .then(() => log.debug('Order saved successfully'))
+        .catch(err => {
+          log.error('Failed to update order', err);
+          toast.error(t('tracker.reorderFailed', 'Could not save the new order. Please refresh.'));
+        });
 
-        // Trigger backend update
-        // Trigger backend update
-        const updates = updatedItems.map(p => ({ id: p.id, display_order: p.display_order || 0 }));
-
-        log.debug('Saving new order for', updates.length, 'items');
-
-        // Handle persistence
-        dbService.updateProjectDisplayOrders(updates)
-          .then(() => log.debug('Order saved successfully'))
-          .catch(err => {
-            log.error('Failed to update order', err);
-            toast.error(t('tracker.reorderFailed', 'Could not save the new order. Please refresh.'));
-          });
-
-        return updatedItems;
-      });
-    }
+      return updatedItems;
+    });
   };
 
-  // Debounce refs
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const [yearStr, typeStr] = currentPeriodLabel.split('-');
-  const year = parseInt(yearStr);
-  const periodType = typeStr as PeriodType;
+  const year = currentYear;
+  const periodType = activeTerm as PeriodType;
   const months = useMemo(() => getMonthsForPeriod(periodType), [periodType]);
 
   /** Cancels every debounced project-field save; they all target the current period. */
@@ -167,7 +377,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
     });
   }, [confirm, t]);
 
-  const handleTermChange = useCallback(async (term: 'H1' | 'H2') => {
+  const handleTermChange = useCallback(async (term: Half) => {
     if (term === activeTerm) return;
     if (!(await confirmDiscardPending())) return; // user chose to stay — abort the switch
     discardPendingChanges();
@@ -180,41 +390,31 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
     return new Date(2000, month - 1).toLocaleString(localeTagFor(language), { month: 'short' });
   }, [language]);
 
-  // Handle Sort
-  const handleSort = (key: keyof Project) => {
-    setSortConfig(current => ({
+  const handleSort = (key: SortKey) => {
+    const next: SortConfig = {
       key,
-      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc',
-    }));
+      direction: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc',
+    };
+    setSortConfig(next);
+    if (next.key !== 'display_order' || next.direction !== 'asc') setIsEditMode(false);
   };
 
-  // Handle Reorder
   const handleMoveProject = async (projectId: string, direction: 'up' | 'down') => {
-    // Optimistic Update
     const currentIndex = projects.findIndex(p => p.id === projectId);
     if (currentIndex === -1) return;
     if (direction === 'up' && currentIndex === 0) return;
     if (direction === 'down' && currentIndex === projects.length - 1) return;
 
+    // Optimistic: swap the two rows and their display_order.
     const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-    const newProjects = [...projects];
-
-    // Swap
-    [newProjects[currentIndex], newProjects[targetIndex]] = [newProjects[targetIndex], newProjects[currentIndex]];
-
-    // Update display_order based on new index
-    // Assuming backend sorts by display_order, we just need to swap the orders or re-assign
-    const currentOrder = newProjects[currentIndex].display_order;
-    const targetOrder = newProjects[targetIndex].display_order;
-
-    // Swap display_order property as well to keep consistency
-    newProjects[currentIndex].display_order = targetOrder;
-    newProjects[targetIndex].display_order = currentOrder;
-
-    setProjects(newProjects);
+    const current = projects[currentIndex];
+    const target = projects[targetIndex];
+    const next = [...projects];
+    next[currentIndex] = { ...target, display_order: current.display_order };
+    next[targetIndex] = { ...current, display_order: target.display_order };
+    setProjects(next);
 
     try {
-      // Call DB Service
       if (direction === 'up') {
         await dbService.moveProjectUp(projectId, currentPeriodLabel);
       } else {
@@ -222,54 +422,32 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
       }
     } catch (error) {
       log.error('Failed to move project', error);
-      // Revert on error? For now, we assume success or user will refresh
-      // fetchData(); // Prevent immediate reload to avoid race conditions/flicker
       toast.error(t('tracker.moveFailed', 'Could not move the project. Please refresh.'));
     }
   };
 
+  const query = localFilter.trim().toLowerCase();
 
   const filteredAndSortedProjects = useMemo(() => {
-    // 1. Filter
     let result = projects;
 
-    // Global Search
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
+    if (query) {
       result = result.filter(p =>
-        p.name.toLowerCase().includes(q) ||
-        p.code.toLowerCase().includes(q)
+        p.name.toLowerCase().includes(query) ||
+        p.code.toLowerCase().includes(query) ||
+        (p.type ?? '').toLowerCase().includes(query)
       );
     }
 
-    // Local Filter
-    if (localFilter.trim()) {
-      const q = localFilter.trim().toLowerCase();
-      result = result.filter(p =>
-        p.name.toLowerCase().includes(q) ||
-        p.code.toLowerCase().includes(q)
-      );
-    }
+    return [...result].sort((a, b) => {
+      const aValue = a[sortConfig.key] ?? '';
+      const bValue = b[sortConfig.key] ?? '';
+      if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [projects, query, sortConfig]);
 
-    // 2. Sort
-    if (sortConfig.key) {
-      result = [...result].sort((a, b) => {
-        const aValue = a[sortConfig.key!] ?? '';
-        const bValue = b[sortConfig.key!] ?? '';
-
-        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-        return 0;
-      });
-    } else {
-      // Default Sort by display_order
-      result = [...result].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
-    }
-
-    return result;
-  }, [projects, searchQuery, localFilter, sortConfig]);
-
-  // Close menu when clicking outside - Removed as DropdownMenu handles it locally
   // `t` is memoised per language. Making it a dependency of the fetch would
   // refetch on every language switch, so the ref keeps the error toast localised
   // without tying data loading to the language.
@@ -280,6 +458,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const [projectsData, recordsData] = await Promise.all([
         dbService.getProjects(currentPeriodLabel),
@@ -296,38 +475,67 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
       setRecords(groupedRecords);
     } catch (error) {
       log.error('Failed to load data', error);
-      toast.error(tRef.current('toast.loadFailed', 'Failed to load data'));
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
-  }, [currentPeriodLabel, toast]);
+  }, [currentPeriodLabel]);
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
   }, [fetchData]);
-
-  // Refresh data when a new project is created
-  useEffect(() => {
-    if (refreshTrigger !== undefined && refreshTrigger > 0) {
-      fetchData().then(() => {
-        // Scroll to bottom after data is loaded to show the new project
-        setTimeout(() => {
-          if (scrollContainerRef.current) {
-            scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-          }
-        }, 100);
-      });
-    }
-  }, [refreshTrigger, fetchData]);
 
   // Cleanup debounce timers on unmount
   useEffect(() => {
     return () => {
-      // Clear all pending timers on unmount
       Object.values(debounceTimers.current).forEach(timer => clearTimeout(timer));
       debounceTimers.current = {};
     };
   }, []);
+
+  /* ---------------------------------------------------------------- *
+   * New project
+   * ---------------------------------------------------------------- */
+
+  const handleOpenNewProject = async () => {
+    setOpeningNewProject(true);
+    try {
+      setNewProjectCode(await dbService.getNextProjectCode(currentPeriodLabel));
+    } catch (error) {
+      // Never swallowed: the dialog still opens, with an empty code the user can type.
+      log.error('Failed to generate project code', error);
+      setNewProjectCode('');
+      toast.error(t('toast.codeFailed', 'Could not generate a project code'));
+    } finally {
+      setOpeningNewProject(false);
+      setNewProjectOpen(true);
+    }
+  };
+
+  /**
+   * Only the project list is refetched: reloading the hours as well would put
+   * the saved values back over any edits that are still pending.
+   */
+  const handleProjectCreated = async (created: Project) => {
+    try {
+      const projectsData = await dbService.getProjects(currentPeriodLabel);
+      setProjects(projectsData);
+      setLocalFilter('');
+      setRevealId(created.id);
+    } catch (error) {
+      log.error('Failed to refresh projects', error);
+    }
+  };
+
+  // Once the new project has rendered: bring it into view, ready for hours.
+  useEffect(() => {
+    if (!revealId) return;
+    const row = scrollContainerRef.current?.querySelector<HTMLElement>(`[data-project="${revealId}"]`);
+    if (!row) return;
+    row.scrollIntoView({ block: 'center' });
+    row.querySelector<HTMLInputElement>('input[data-hour-cell]')?.focus({ preventScroll: true });
+    setRevealId(null);
+  }, [revealId, filteredAndSortedProjects]);
 
   /* ---------------------------------------------------------------- *
    * U3 — unsaved-changes guard
@@ -355,12 +563,11 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [pendingCount]);
 
-  // (c) The period changed. This used to drop every pending edit silently — the
-  // core of U3. Now the edits are only thrown away once the user has agreed:
-  // the H1/H2 tabs clear them in handleTermChange, and a year change from the
-  // shell passes through the blocker above. If neither happened the edits are
-  // kept (each pending record carries its own period_label, so "Save All" still
-  // writes them to the period they were typed in) and the user is told.
+  // (c) The period changed. Edits are only thrown away once the user has agreed:
+  // H1/H2 clears them in handleTermChange, and a year change from the shell
+  // passes through the blocker above. If neither happened the edits are kept
+  // (each pending record carries its own period_label, so Save still writes
+  // them to the period they were typed in) and the user is told.
   useEffect(() => {
     if (periodRef.current === currentPeriodLabel) return;
     periodRef.current = currentPeriodLabel;
@@ -377,7 +584,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
     }
 
     toast.warning(
-      t('tracker.unsavedKept', 'Your unsaved changes were kept. Use Save All to store them.')
+      t('tracker.unsavedKept', 'Your unsaved changes were kept. Press Save to store them.')
     );
   }, [currentPeriodLabel, clearDebounceTimers, toast, t]);
 
@@ -420,9 +627,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
       leaveConfirmedRef.current = false;
       // Dashboard, TotalView and YearlyDataView refetch on this event — keep it.
       window.dispatchEvent(new CustomEvent('dataUpdated'));
-      toast.success(
-        t('tracker.savedCount', 'Saved {count} change(s)').replace('{count}', String(changesToSave.length))
-      );
+      toast.success(plural(t, 'tracker.saved', changesToSave.length, 'Saved {count} changes'));
     } catch (err) {
       log.error('Batch save failed:', err);
       toast.error(t('toast.saveFailed', 'Save failed'));
@@ -435,8 +640,8 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
   /**
    * Ctrl/Cmd+S saves the hours.
    *
-   * Hours are held until "Save All" is pressed, and the reflex for keeping work
-   * is Ctrl+S - which, unhandled, opened the browser's Save Page dialog over a
+   * Hours are held until Save is pressed, and the reflex for keeping work is
+   * Ctrl+S - which, unhandled, opened the browser's Save Page dialog over a
    * table of unsaved edits.
    */
   const canSaveRef = useRef(false);
@@ -474,7 +679,6 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
     next?.focus();
     next?.select();
   };
-
 
   const handleValueChange = (
     projectId: string,
@@ -520,33 +724,30 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
           ...prev,
           [changeKey]: { ...existingChange, [field]: numValue }
         };
-      } else {
-        return {
-          ...prev,
-          [changeKey]: {
-            project_id: projectId,
-            period_label: currentPeriodLabel,
-            year,
-            month,
-            planned_hours: field === 'planned_hours' ? numValue : otherFieldValue,
-            actual_hours: field === 'actual_hours' ? numValue : otherFieldValue
-          }
-        };
       }
+      return {
+        ...prev,
+        [changeKey]: {
+          project_id: projectId,
+          period_label: currentPeriodLabel,
+          year,
+          month,
+          planned_hours: field === 'planned_hours' ? numValue : otherFieldValue,
+          actual_hours: field === 'actual_hours' ? numValue : otherFieldValue
+        }
+      };
     });
   };
 
-  const handleDeleteProjects = async (ids: string[]) => {
-    if (!isAdmin || !ids.length) return;
-    const targets = projects.filter(p => ids.includes(p.id));
-    const confirmMessage = ids.length === 1
-      ? t('tracker.confirmDeleteProject', 'Delete this project? This cannot be undone.')
-      : t('tracker.confirmDeleteMany', 'Delete {count} projects and their records?').replace('{count}', `${ids.length}`);
-    const nameList = targets.map(p => p.name).join(', ');
+  const handleDeleteProject = async (project: Project) => {
+    if (!isAdmin) return;
 
     const accepted = await confirm({
-      title: t('common.delete', 'Delete'),
-      message: nameList ? `${confirmMessage}\n${nameList}` : confirmMessage,
+      title: t('tracker.confirmDeleteTitle', 'Delete {name}?').replace('{name}', project.name),
+      message: t(
+        'tracker.confirmDeleteProject',
+        'It is removed from every period, together with all its recorded hours. To stop tracking it in {period} only, remove it from the period in Periods instead.'
+      ).replace('{period}', periodName),
       confirmLabel: t('common.delete', 'Delete'),
       cancelLabel: t('common.cancel', 'Cancel'),
       danger: true,
@@ -554,12 +755,20 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
     if (!accepted) return;
 
     try {
-      await dbService.deleteProjects(ids);
-      setProjects(prev => prev.filter(p => !ids.includes(p.id)));
+      await dbService.deleteProjects([project.id]);
+      setProjects(prev => prev.filter(p => p.id !== project.id));
       setRecords(prev => {
         const updated = { ...prev };
-        ids.forEach(id => { delete updated[id]; });
+        delete updated[project.id];
         return updated;
+      });
+      // Its unsaved hours would otherwise be written back for a project that is gone.
+      setPendingChanges(prev => {
+        const next = { ...prev };
+        for (const key of Object.keys(next)) {
+          if (next[key].project_id === project.id) delete next[key];
+        }
+        return next;
       });
       window.dispatchEvent(new CustomEvent('dataUpdated'));
       toast.success(t('toast.deleted', 'Deleted'));
@@ -573,10 +782,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
     if (!isAdmin) return;
     try {
       // 1. Optimistic update (Immediate UI change)
-      setProjects(prev => prev.map(p => {
-        if (p.id !== id) return p;
-        return { ...p, ...updates };
-      }));
+      setProjects(prev => prev.map(p => (p.id === id ? { ...p, ...updates } : p)));
 
       // 2. Prepare logic for API call
       const performSave = async () => {
@@ -597,50 +803,41 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
             hasPriceUpdates = true;
           }
 
-          // If updating prices, update in the junction table for the ALL PERIODS IN THE YEAR
+          // Prices are set for every period of the year at once.
           if (hasPriceUpdates) {
-            const year = parseInt(currentPeriodLabel.split('-')[0]);
-            if (!isNaN(year)) {
-              await dbService.updateProjectPriceForYear(id, year, priceUpdates);
+            const priceYear = parseInt(currentPeriodLabel.split('-')[0]);
+            if (!isNaN(priceYear)) {
+              await dbService.updateProjectPriceForYear(id, priceYear, priceUpdates);
             } else {
               await dbService.updateProjectPriceForPeriod(id, currentPeriodLabel, priceUpdates);
             }
           }
 
-          // If updating other fields, update global project
+          // Everything else lives on the project itself.
           if (Object.keys(otherUpdates).length > 0) {
             await dbService.updateProject(id, otherUpdates);
           }
 
-          // Dispatch event only after successful save
           window.dispatchEvent(new CustomEvent('dataUpdated'));
           markAutosaved();
         } catch (error) {
           log.error('Failed to save project update', error);
-          // Could revert changes here if strict data integrity needed
           toast.error(t('toast.saveFailed', 'Save failed'));
         }
       };
 
       // 3. Execute with debounce logic
       if (debounceMs > 0) {
-        // Create a unique key for this project and the fields being updated
+        // One timer per project and set of fields, so typing in two cells saves both.
         const key = `proj-${id}-${Object.keys(updates).sort().join('-')}`;
-
-        // Clear existing timer for this specific update key
-        if (debounceTimers.current[key]) {
-          clearTimeout(debounceTimers.current[key]);
-        }
-
+        if (debounceTimers.current[key]) clearTimeout(debounceTimers.current[key]);
         debounceTimers.current[key] = setTimeout(async () => {
           await performSave();
           delete debounceTimers.current[key];
         }, debounceMs);
       } else {
-        // Immediate execution
         await performSave();
       }
-
     } catch (error) {
       log.error('Failed to update project', error);
       toast.error(t('toast.saveFailed', 'Save failed'));
@@ -650,403 +847,426 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear, searchQ
 
   const handleProjectFieldChange = (id: string, field: keyof Project, value: string) => {
     // Use 500ms debounce for text fields to balance responsiveness and API load
-    handleUpdateProject(id, { [field]: value }, 500);
+    void handleUpdateProject(id, { [field]: value }, 500);
   };
 
+  /* ---------------------------------------------------------------- *
+   * Layout
+   * ---------------------------------------------------------------- */
+
+  const planLabel = t('tracker.planShort', 'Plan');
+  const actualLabel = t('tracker.actualShort', 'Actual');
+  const reorderHint = inManualOrder ? undefined : t('tracker.sortDisabled', 'Sort by No. to reorder');
+  const today = new Date();
+  const thisMonth = today.getFullYear() === currentYear ? today.getMonth() + 1 : null;
+  const listIsEmpty = !loading && !loadError && projects.length === 0;
+
+  const cellLabel = (kind: string, month: number, name: string) =>
+    t('tracker.cellLabel', '{kind} hours, {month}, {name}')
+      .replace('{kind}', kind)
+      .replace('{month}', formatMonthLabel(month))
+      .replace('{name}', name);
+
+  const newProjectButton = (variant: 'primary' | 'secondary') => (
+    <Button
+      variant={variant}
+      onClick={() => { void handleOpenNewProject(); }}
+      isLoading={openingNewProject}
+      disabled={loading}
+      icon={<Plus className="h-4 w-4" aria-hidden="true" />}
+    >
+      {t('modals.project.title', 'New project')}
+    </Button>
+  );
+
+  const header = {
+    title: t('nav.tracking', 'Project tracking'),
+    description: t('tracker.desc', 'Planned and actual hours for each project, month by month'),
+    actions: (
+      <>
+        <YearControl />
+        <YearExportButton />
+        {isAdmin && periodExists && !listIsEmpty && newProjectButton('secondary')}
+      </>
+    ),
+  };
+
+  const halfOptions = (['H1', 'H2'] as const).map(half => ({
+    value: half,
+    label: (
+      <>
+        {half}
+        <span className="ml-1.5 hidden font-normal text-slate-400 sm:inline dark:text-slate-500">{halfMonths(half, t)}</span>
+      </>
+    ),
+    title: `${half} (${halfMonths(half, t)})`,
+  }));
+
+  let body: React.ReactNode;
   if (loading) {
-    return (
-      <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-2 sm:p-4 md:p-6 overflow-hidden">
-        <div
-          className="w-full border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm bg-white dark:bg-slate-900 p-4 overflow-hidden"
-          aria-busy="true"
-          aria-label={t('common.loading', 'Loading…')}
-        >
-          <Skeleton.Table rows={8} cols={14} />
-        </div>
+    body = <GridSkeleton />;
+  } else if (loadError) {
+    body = (
+      <EmptyState
+        tone="error"
+        title={t('tracker.loadFailedTitle', 'Could not load the projects')}
+        description={t('empty.loadFailedHint', 'The request did not come back. Check the connection and try again.')}
+        actions={<Button variant="secondary" onClick={() => { void fetchData(); }}>{t('buttons.retry', 'Try again')}</Button>}
+      />
+    );
+  } else if (!periodExists && projects.length === 0) {
+    body = (
+      <EmptyState
+        icon={CalendarRange}
+        title={t('tracker.periodMissingTitle', '{period} isn’t set up yet').replace('{period}', periodName)}
+        description={
+          isAdmin
+            ? t('tracker.periodMissingAdmin', 'Set it up in Periods, with the projects to track in it.')
+            : t('tracker.periodMissingViewer', 'An administrator sets up periods.')
+        }
+        actions={
+          isAdmin && (
+            <Link to="/period-management" className={buttonClasses('secondary')}>
+              {t('tracker.goToPeriods', 'Go to Periods')}
+            </Link>
+          )
+        }
+      />
+    );
+  } else if (projects.length === 0) {
+    body = (
+      <EmptyState
+        title={t('tracker.emptyTitle', 'No projects in {period}').replace('{period}', periodName)}
+        description={
+          isAdmin
+            ? t('tracker.emptyAdmin', 'Add the first project to start recording hours.')
+            : t('tracker.emptyViewer', 'Projects appear here once an administrator adds them.')
+        }
+        actions={isAdmin && newProjectButton('primary')}
+      />
+    );
+  } else if (filteredAndSortedProjects.length === 0) {
+    body = (
+      <EmptyState
+        icon={Search}
+        title={t('periodManagement.noMatch', 'No projects match “{query}”.').replace('{query}', localFilter.trim())}
+        actions={<Button variant="secondary" onClick={() => setLocalFilter('')}>{t('tracker.clearSearch', 'Clear search')}</Button>}
+      />
+    );
+  } else {
+    // The scroll padding keeps a focused cell out from under the frozen header and columns.
+    body = (
+      <div ref={scrollContainerRef} className="min-h-0 flex-1 scroll-pt-10 scroll-pl-[152px] overflow-auto custom-scrollbar sm:scroll-pl-[344px] sm:scroll-pr-[52px]">
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <table key={currentPeriodLabel} ref={openAtKindColumn} className="w-full min-w-max border-separate border-spacing-0">
+            <thead>
+              <tr>
+                <th scope="col" aria-sort={ariaSort(sortConfig, 'display_order')} style={{ width: W.no, minWidth: W.no }} className={`${HEAD} ${HEAD_NO} text-center`}>
+                  <SortHeader label={t('tracker.no', 'No.')} sortKey="display_order" sort={sortConfig} onSort={handleSort} align="center" />
+                </th>
+                <th scope="col" aria-sort={ariaSort(sortConfig, 'exclusion_mark')} style={{ width: W.excl, minWidth: W.excl }} className={`${HEAD} ${HEAD_EXCL} text-center`}>
+                  <SortHeader
+                    label={t('tracker.exclusion', 'Excl.')}
+                    title={t('tracker.exclusionMark', 'Exclusion mark')}
+                    sortKey="exclusion_mark"
+                    sort={sortConfig}
+                    onSort={handleSort}
+                    align="center"
+                  />
+                </th>
+                <th scope="col" data-col="name" aria-sort={ariaSort(sortConfig, 'name')} className={`${HEAD} ${HEAD_NAME} ${NAME_WIDTH} border-r text-left`}>
+                  <SortHeader label={t('tracker.projectName', 'Company name')} sortKey="name" sort={sortConfig} onSort={handleSort} />
+                </th>
+                {showDetails && (
+                  <>
+                    <th scope="col" style={{ width: W.notes, minWidth: W.notes }} className={`${HEAD} text-left`}>{t('tracker.notes', 'Notes')}</th>
+                    <th scope="col" style={{ width: W.software, minWidth: W.software }} className={`${HEAD} text-left`}>{t('tracker.software', 'Software')}</th>
+                    <th scope="col" style={{ width: W.content, minWidth: W.content }} className={`${HEAD} border-r text-left`}>{t('tracker.businessContent', 'Business content')}</th>
+                  </>
+                )}
+                <th scope="col" style={{ width: W.rate, minWidth: W.rate }} className={`${HEAD} text-right`}>
+                  {t('tracker.rate', 'Rate')}
+                  <span className="block text-[11px] font-normal text-slate-400 dark:text-slate-500">{t('unit.yenPerHour', 'JPY/h')}</span>
+                </th>
+                <th scope="col" data-col="kind" style={{ width: W.kind, minWidth: W.kind }} className={`${HEAD} border-r`}>
+                  <span className="sr-only">{t('tracker.rowKind', 'Plan or actual')}</span>
+                </th>
+                {months.map(m => (
+                  <th
+                    key={m}
+                    scope="col"
+                    style={{ width: W.month, minWidth: W.month }}
+                    aria-current={m === thisMonth ? 'date' : undefined}
+                    title={m === thisMonth ? t('tracker.thisMonth', 'This month') : undefined}
+                    className={`${HEAD} text-right ${m === thisMonth ? 'text-orange-600! dark:text-orange-400!' : ''}`}
+                  >
+                    {m === thisMonth && <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-current align-middle" aria-hidden="true" />}
+                    {formatMonthLabel(m)}
+                  </th>
+                ))}
+                <th scope="col" style={{ width: W.total, minWidth: W.total }} className={`${HEAD} border-l text-right`}>
+                  {t('tracker.total', 'Total')}
+                </th>
+                {isAdmin && (
+                  <th scope="col" style={{ width: W.actions, minWidth: W.actions }} className={`${HEAD} ${HEAD_ACTIONS} border-l`}>
+                    <span className="sr-only">{t('tracker.actions', 'Actions')}</span>
+                  </th>
+                )}
+              </tr>
+            </thead>
+
+            <SortableContext items={filteredAndSortedProjects.map(p => p.id)} strategy={verticalListSortingStrategy}>
+              {filteredAndSortedProjects.map((project, index) => {
+                const projRecords = records[project.id] || [];
+                // getProjects(period) already merged the period_projects prices into
+                // the project, so the period tier is empty here; resolvePrices keeps
+                // the plan/actual/unit_price fall-through in one place (C1).
+                const prices = resolvePrices(null, project);
+                const valueFor = (m: number, field: 'planned_hours' | 'actual_hours') =>
+                  projRecords.find(r => r.month === m)?.[field] ?? 0;
+                const planTotal = months.reduce((sum, m) => sum + valueFor(m, 'planned_hours'), 0);
+                const actualTotal = months.reduce((sum, m) => sum + valueFor(m, 'actual_hours'), 0);
+                const globalIndex = projects.findIndex(p => p.id === project.id);
+
+                const hourCell = (m: number, field: 'planned_hours' | 'actual_hours') => (
+                  <td key={`${field}-${m}`} className={`${SURFACE} px-0.5 py-1 ${field === 'actual_hours' ? ROW_END : ''}`}>
+                    <HourCell
+                      value={valueFor(m, field)}
+                      editable={isAdmin}
+                      kind={field === 'planned_hours' ? 'plan' : 'actual'}
+                      cellKey={`${field}-${m}`}
+                      label={cellLabel(field === 'planned_hours' ? planLabel : actualLabel, m, project.name)}
+                      pending={Boolean(pendingChanges[`${project.id}-${m}`])}
+                      saving={Boolean(savingStatus[`${project.id}-${m}-${field}`])}
+                      format={nf}
+                      onChange={value => handleValueChange(project.id, m, field, value)}
+                      onKeyDown={handleHourKeyDown}
+                    />
+                  </td>
+                );
+
+                return (
+                  <SortableRow key={project.id} id={project.id} disabled={!isEditMode || !canReorder} className="group">
+                    {/* Plan */}
+                    <tr data-project={project.id}>
+                      <td rowSpan={2} style={{ width: W.no, minWidth: W.no }} className={`${SURFACE} ${STICKY_NO} ${ROW_END} px-1 py-2 text-center align-top text-[13px] tabular-nums text-slate-400 dark:text-slate-500`}>
+                        {isEditMode && canReorder
+                          ? <DragHandleCell label={t('tracker.dragToReorder', 'Drag to reorder')} />
+                          : <span className="inline-block pt-1.5">{index + 1}</span>}
+                      </td>
+                      <td rowSpan={2} style={{ width: W.excl, minWidth: W.excl }} className={`${SURFACE} ${STICKY_EXCL} ${ROW_END} px-1 py-1 align-top`}>
+                        {isAdmin ? (
+                          <input
+                            type="text"
+                            aria-label={`${t('tracker.exclusionMark', 'Exclusion mark')}, ${project.name}`}
+                            className={`${CELL_INPUT} h-8 text-center`}
+                            value={project.exclusion_mark || ''}
+                            onChange={event => handleProjectFieldChange(project.id, 'exclusion_mark', event.target.value)}
+                            placeholder="–"
+                          />
+                        ) : (
+                          <span className="block pt-1.5 text-center text-[13px] text-slate-600 dark:text-slate-300">
+                            {project.exclusion_mark || <span className="text-slate-300 dark:text-slate-600">–</span>}
+                          </span>
+                        )}
+                      </td>
+                      <th scope="rowgroup" rowSpan={2} className={`${SURFACE} ${STICKY_NAME} ${NAME_WIDTH} ${ROW_END} border-r border-r-slate-200 px-3 py-2 text-left align-top font-normal dark:border-r-slate-800`}>
+                        <span className="line-clamp-2 text-[13px] font-medium leading-5 text-slate-900 dark:text-white" title={project.name}>
+                          {project.name}
+                        </span>
+                        <span className="mt-0.5 block font-mono text-[11px] text-slate-400 dark:text-slate-500">{project.code}</span>
+                      </th>
+                      {showDetails && (
+                        <>
+                          <td rowSpan={2} className={`${SURFACE} ${ROW_END} px-1 py-1 align-top`}>
+                            <TextCell
+                              value={project.notes || ''}
+                              editable={isAdmin}
+                              label={`${t('tracker.notes', 'Notes')}, ${project.name}`}
+                              onChange={value => handleProjectFieldChange(project.id, 'notes', value)}
+                            />
+                          </td>
+                          <td rowSpan={2} className={`${SURFACE} ${ROW_END} px-1 py-1 align-top`}>
+                            <TextCell
+                              value={project.software || ''}
+                              editable={isAdmin}
+                              label={`${t('tracker.software', 'Software')}, ${project.name}`}
+                              placeholder="CAD"
+                              onChange={value => handleProjectFieldChange(project.id, 'software', value)}
+                            />
+                          </td>
+                          <td rowSpan={2} className={`${SURFACE} ${ROW_END} border-r border-r-slate-200 px-1 py-1 align-top dark:border-r-slate-800`}>
+                            <TextCell
+                              value={project.type || ''}
+                              editable={isAdmin}
+                              label={`${t('tracker.businessContent', 'Business content')}, ${project.name}`}
+                              onChange={value => handleProjectFieldChange(project.id, 'type', value)}
+                            />
+                          </td>
+                        </>
+                      )}
+                      <td className={`${SURFACE} px-2 py-1 text-right text-[13px] tabular-nums text-slate-400 dark:text-slate-500`}>
+                        {nf(prices.plan)}
+                      </td>
+                      <td className={`${SURFACE} border-r border-slate-100 px-2 py-1 text-[12px] text-slate-500 dark:border-slate-800 dark:text-slate-400`}>
+                        {planLabel}
+                      </td>
+                      {months.map(m => hourCell(m, 'planned_hours'))}
+                      <td className={`${SURFACE} border-l border-slate-100 px-2 py-1 text-right text-[13px] tabular-nums text-slate-500 dark:border-slate-800 dark:text-slate-400`}>
+                        {planTotal === 0 ? <span className="text-slate-300 dark:text-slate-600">–</span> : nf(planTotal)}
+                      </td>
+                      {isAdmin && (
+                        <td rowSpan={2} style={{ width: W.actions, minWidth: W.actions }} className={`${SURFACE} ${ROW_END} sm:sticky sm:right-0 z-10 border-l border-slate-100 px-1 py-1.5 text-center align-top dark:border-slate-800`}>
+                          <ProjectActionsMenu
+                            projectName={project.name}
+                            onEdit={() => setEditingProject(project)}
+                            onDelete={() => { void handleDeleteProject(project); }}
+                            onMoveUp={() => { void handleMoveProject(project.id, 'up'); }}
+                            onMoveDown={() => { void handleMoveProject(project.id, 'down'); }}
+                            canMoveUp={canReorder && globalIndex > 0}
+                            canMoveDown={canReorder && globalIndex < projects.length - 1}
+                            reorderHint={reorderHint}
+                          />
+                        </td>
+                      )}
+                    </tr>
+
+                    {/* Actual */}
+                    <tr>
+                      <td className={`${SURFACE} ${ROW_END} px-2 py-1 text-right text-[13px] tabular-nums text-slate-600 dark:text-slate-300`}>
+                        {nf(prices.actual)}
+                      </td>
+                      <td className={`${SURFACE} ${ROW_END} border-r border-r-slate-100 px-2 py-1 text-[12px] font-medium text-slate-900 dark:border-r-slate-800 dark:text-white`}>
+                        {actualLabel}
+                      </td>
+                      {months.map(m => hourCell(m, 'actual_hours'))}
+                      <td className={`${SURFACE} ${ROW_END} border-l border-l-slate-100 px-2 py-1 text-right text-[13px] font-semibold tabular-nums text-slate-900 dark:border-l-slate-800 dark:text-white`}>
+                        {actualTotal === 0 ? <span className="font-normal text-slate-300 dark:text-slate-600">–</span> : nf(actualTotal)}
+                      </td>
+                    </tr>
+                  </SortableRow>
+                );
+              })}
+            </SortableContext>
+          </table>
+        </DndContext>
       </div>
     );
   }
 
-  // Use shared table styling constants
-  const {
-    no: LEFT_NO_WIDTH,
-    exclusionMark: LEFT_EXCLUSION_WIDTH,
-    code: LEFT_CODE_WIDTH,
-    name: LEFT_NAME_WIDTH,
-    notes: LEFT_NOTES_WIDTH,
-    software: LEFT_SOFTWARE_WIDTH,
-    businessContent: BUSINESS_CONTENT_WIDTH,
-    month: MONTH_WIDTH,
-    actions: RIGHT_ACTIONS_WIDTH
-  } = TABLE_COLUMN_WIDTHS;
-
-  // New column width for Price
-  const PRICE_WIDTH = 100;
-
-  const { leftCell: stickyLeftClass, leftHeader: stickyLeftHeaderClass, rightCell: stickyRightClass, rightHeader: stickyRightHeaderClass, header: stickyHeaderZ, corner: stickyCornerZ } = STICKY_CLASSES;
-
-  // Calculate sticky positions
-  // CODE column is effectively hidden (width 0), so we can skip it or it will calculate to same pos
-  const POS_EXCLUSION = LEFT_NO_WIDTH;
-  const POS_CODE = POS_EXCLUSION + LEFT_EXCLUSION_WIDTH; // If WIDTH is 0, POS_CODE == POS_EXCLUSION
-  const POS_NAME = POS_CODE + LEFT_CODE_WIDTH;
-  const POS_NOTES = POS_NAME + LEFT_NAME_WIDTH;
-  const POS_SOFTWARE = POS_NOTES + LEFT_NOTES_WIDTH;
+  // Kept up while a period loads, so the toolbar does not jump on every H1/H2 switch.
+  const showGridTools = !loadError && (loading || projects.length > 0);
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-2 sm:p-4 md:p-6 overflow-hidden">
-      <div className="flex-1 min-h-0 w-full border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm bg-white dark:bg-slate-900 relative isolate flex flex-col">
-        {/* Save Button Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-              {t('tracker.title', 'Project Tracking')}
-            </h2>
-            {hasPendingChanges && (
-              <span className="px-2 py-1 text-xs font-medium bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 rounded-full">
-                {pendingCount} {t('unsavedChanges', 'unsaved changes')}
-              </span>
-            )}
+    <Page {...header} layout="fill" maxWidth="full">
+      <section className={`${cardClasses} flex min-h-0 flex-1 flex-col overflow-hidden`} aria-label={periodName}>
+        {/* Toolbar: which half, find a project, how to show it, and saving. */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/80 px-3 py-2.5 sm:px-4 dark:border-slate-800">
+          <SegmentedControl
+            options={halfOptions}
+            value={activeTerm}
+            onChange={term => { void handleTermChange(term); }}
+            ariaLabel={t('half', 'Half')}
+          />
 
-            {/* Period Tabs */}
-            <div className="ml-8 flex items-end gap-6">
-              <button
-                type="button"
-                onClick={() => { void handleTermChange('H1'); }}
-                aria-current={activeTerm === 'H1'}
-                className={`pb-2 text-sm font-bold transition-all border-b-2 ${activeTerm === 'H1'
-                  ? 'text-slate-900 dark:text-white border-blue-600 dark:border-blue-400'
-                  : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-200'
-                  }`}
-              >
-                H1 (Jan-Jun)
-              </button>
-              <button
-                type="button"
-                onClick={() => { void handleTermChange('H2'); }}
-                aria-current={activeTerm === 'H2'}
-                className={`pb-2 text-sm font-bold transition-all border-b-2 ${activeTerm === 'H2'
-                  ? 'text-slate-900 dark:text-white border-blue-600 dark:border-blue-400'
-                  : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-200'
-                  }`}
-              >
-                H2 (Jul-Dec)
-              </button>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            {/* Local Filter Box */}
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400 dark:text-slate-500" />
-              <input
-                type="text"
-                placeholder={t('search.placeholder', 'Search...')}
-                className="pl-9 pr-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-64 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+          {showGridTools && (
+            <div className="relative order-last w-full sm:order-none sm:w-64">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+              <Input
+                type="search"
+                controlSize="sm"
                 value={localFilter}
-                onChange={(e) => setLocalFilter(e.target.value)}
+                onChange={event => setLocalFilter(event.target.value)}
+                placeholder={t('searchPlaceholder', 'Search by name, code or type')}
+                aria-label={t('searchProjects', 'Search projects')}
+                className="pl-8"
               />
             </div>
+          )}
 
-            {/* Edit Order Toggle */}
-            <button
-              onClick={() => setIsEditMode(!isEditMode)}
-              disabled={!isAdmin || sortConfig.key !== 'display_order'}
-              title={!isAdmin ? t('tracker.adminOnly', 'Admin access required') : (sortConfig.key !== 'display_order' ? t('tracker.reorderDisabledWithSort', 'Reordering disabled while sorted') : '')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors ${isEditMode
-                ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/60'
-                : (!isAdmin || sortConfig.key !== 'display_order' ? 'opacity-50 cursor-not-allowed text-slate-400 dark:text-slate-500' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800')
-                }`}
-            >
-              {isEditMode ? <Check className="w-4 h-4" /> : <ListChecks className="w-4 h-4" />}
-              <span className="hidden sm:inline">{isEditMode ? t('tracker.done', 'Done') : t('tracker.editOrder', 'Edit Order')}</span>
-            </button>
+          <div className="ml-auto flex items-center gap-1.5">
+            <div aria-live="polite" className="flex items-center">
+              {!isAdmin ? (
+                <Badge tone="neutral">
+                  <Eye className="h-3 w-3" aria-hidden="true" />
+                  {t('common.viewOnly', 'View only')}
+                </Badge>
+              ) : hasPendingChanges ? (
+                <Badge tone="amber">{plural(t, 'tracker.pendingCount', pendingCount, '{count} unsaved changes')}</Badge>
+              ) : autosaved ? (
+                <span className="flex items-center gap-1 text-[13px] font-medium text-emerald-600 animate-fade-in dark:text-emerald-400">
+                  <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                  {t('tracker.autosaved', 'Saved')}
+                </span>
+              ) : null}
+            </div>
 
-            {/* Collapse Toggle */}
-            <button
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-              title={isCollapsed ? t('tracker.expand', 'Expand details') : t('tracker.collapse', 'Collapse details')}
-            >
-              {isCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
-              <span className="hidden sm:inline">{isCollapsed ? t('tracker.expandBtn', 'Expand') : t('tracker.collapseBtn', 'Collapse')}</span>
-            </button>
-
-            {autosaved && (
-              <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 animate-fade-in">
-                <Check className="w-3.5 h-3.5" />
-                {t('tracker.autosaved', 'Saved')}
-              </span>
-            )}
-
-            {isAdmin && (
-              <button
-                onClick={handleSaveAll}
-                title={`${t('saveAll', 'Save All')} (Ctrl+S)`}
-                disabled={!hasPendingChanges || isSaving}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${hasPendingChanges && !isSaving
-                  ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600'
-                  : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed'
-                  }`}
+            {showGridTools && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowDetails(prev => !prev)}
+                aria-pressed={showDetails}
+                title={t('tracker.detailsHint', 'Show notes, software and business content')}
+                icon={<Columns3 className="h-4 w-4" aria-hidden="true" />}
+                className="aria-pressed:bg-slate-100 aria-pressed:text-slate-900 dark:aria-pressed:bg-slate-800 dark:aria-pressed:text-white"
               >
-                {isSaving ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    {t('saving', 'Saving...')}
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    {t('saveAll', 'Save All')}
-                  </>
-                )}
-              </button>
+                <span className="sr-only md:not-sr-only">{t('tracker.details', 'Details')}</span>
+              </Button>
+            )}
+
+            {isAdmin && showGridTools && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsEditMode(prev => !prev)}
+                disabled={!canReorder}
+                aria-pressed={isEditMode}
+                title={reorderHint ?? t('tracker.reorderHint', 'Drag projects into a new order')}
+                icon={isEditMode ? <Check className="h-4 w-4" aria-hidden="true" /> : <ArrowUpDown className="h-4 w-4" aria-hidden="true" />}
+                className="aria-pressed:bg-blue-50 aria-pressed:text-blue-700 dark:aria-pressed:bg-blue-500/15 dark:aria-pressed:text-blue-300"
+              >
+                <span className="sr-only md:not-sr-only">{isEditMode ? t('tracker.done', 'Done') : t('tracker.reorder', 'Reorder')}</span>
+              </Button>
+            )}
+
+            {isAdmin && (showGridTools || hasPendingChanges) && (
+              <Button
+                size="sm"
+                onClick={() => { void handleSaveAll(); }}
+                disabled={!hasPendingChanges}
+                isLoading={isSaving}
+                title={`${t('common.save', 'Save')} (${SAVE_SHORTCUT})`}
+                className="ml-1"
+              >
+                {isSaving ? t('common.saving', 'Saving…') : t('common.save', 'Save')}
+                <Kbd className="hidden sm:inline-flex">{SAVE_SHORTCUT}</Kbd>
+              </Button>
             )}
           </div>
         </div>
 
-        <div
-          ref={scrollContainerRef}
-          className="flex-1 min-h-0 overflow-auto relative isolate custom-scrollbar"
-        >
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <table key={currentPeriodLabel} className="w-full min-w-max border-separate border-spacing-0">
-              <thead className="bg-slate-50 dark:bg-slate-800 sticky top-0 z-40 border-b border-slate-200 dark:border-slate-700">
-                <tr>
-                  <th scope="col" style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                    <div className="flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 rounded" onClick={() => handleSort('display_order')}>
-                      {t('tracker.no')}
-                      {sortConfig.key === 'display_order' && <ArrowUpDown className={`w-3 h-3 ${sortConfig.direction === 'asc' ? 'text-blue-600 dark:text-blue-400' : 'text-blue-600 dark:text-blue-400 rotate-180'}`} />}
-                    </div>
-                  </th>
-                  <th scope="col" style={{ left: `${POS_EXCLUSION}px`, width: `${LEFT_EXCLUSION_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                    <div className="flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 rounded" onClick={() => handleSort('exclusion_mark')}>
-                      {t('tracker.exclusion', '除外')}
-                      {sortConfig.key === 'exclusion_mark' && <ArrowUpDown className={`w-3 h-3 ${sortConfig.direction === 'asc' ? 'text-blue-600 dark:text-blue-400' : 'text-blue-600 dark:text-blue-400 rotate-180'}`} />}
-                    </div>
-                  </th>
+        {body}
+      </section>
 
-                  {/* Code Column - Hidden (Width 0) */}
-                  {/* <th ...> - Removed for UI cleanliness, or empty if width 0 is enough to hide? 
-                    Since width is 0 in tableStyles, it might still render border/padding. Better to skip rendering or ensure overflow hidden.
-                    If we skip rendering, sticky calcs might break if simple CSS logic used. 
-                    However, sticky styling is done via inline 'left' styles.
-                    Since width is 0, we can render it empty, but best to not render the TH/TD to completely remove it from DOM flow.
-                    BUT sticky positions depend on it if we don't adjust logic. 
-                    Logic POS_NAME = POS_CODE + LEFT_CODE_WIDTH. If LEFT_CODE_WIDTH is 0, POS_NAME = POS_CODE.
-                    So removing the TH/TD is fine as long as we don't assume its existence for other things. 
-                    Let's remove it.
-                 */}
+      {editingProject && (
+        <EditProjectModal
+          project={editingProject}
+          isOpen={!!editingProject}
+          onClose={() => setEditingProject(null)}
+          onSave={handleUpdateProject}
+        />
+      )}
 
-                  <th scope="col" style={{ left: `${POS_NAME}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-2 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                    <div className="flex items-center justify-between gap-1 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 rounded" onClick={() => handleSort('name')}>
-                      {t('tracker.projectName')}
-                      {sortConfig.key === 'name' && <ArrowUpDown className={`w-3 h-3 ${sortConfig.direction === 'asc' ? 'text-blue-600 dark:text-blue-400' : 'text-blue-600 dark:text-blue-400 rotate-180'}`} />}
-                    </div>
-                  </th>
-                  {!isCollapsed && (
-                    <>
-                      <th scope="col" style={{ left: `${POS_NOTES}px`, width: `${LEFT_NOTES_WIDTH}px` }} className={`px-2 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                        {t('tracker.notes', '補足')}
-                      </th>
-                      <th scope="col" style={{ left: `${POS_SOFTWARE}px`, width: `${LEFT_SOFTWARE_WIDTH}px` }} className={`px-2 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 ${stickyLeftHeaderClass} ${stickyCornerZ}`}>
-                        {t('tracker.software')}
-                      </th>
-
-                      <th scope="col" style={{ width: `${BUSINESS_CONTENT_WIDTH}px` }} className="px-2 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
-                        {t('tracker.businessContent')}
-                      </th>
-                    </>
-                  )}
-
-                  {/* Price Column */}
-                  <th scope="col" style={{ width: `${PRICE_WIDTH}px` }} className="px-2 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
-                    {t('totalView.tableHeader.price', 'Price')} (JPY/h)
-                  </th>
-
-                  <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 w-16">
-                    {t('tracker.type')}
-                  </th>
-
-                  {months.map((m) => (
-                    <th key={m} scope="col" style={{ width: `${MONTH_WIDTH}px` }} className={`px-1 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-r border-slate-200 dark:border-slate-700 ${stickyHeaderZ}`}>
-                      {formatMonthLabel(m)}
-                    </th>
-                  ))}
-
-                  <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 ${stickyRightHeaderClass} ${stickyCornerZ}`} style={{ right: 0, width: `${RIGHT_ACTIONS_WIDTH}px` }}>
-                    {t('tracker.actions')}
-                  </th>
-                </tr>
-              </thead>
-
-              <SortableContext items={filteredAndSortedProjects.map(p => p.id)} strategy={verticalListSortingStrategy}>
-                {filteredAndSortedProjects.map((project, index) => {
-                  const projRecords = records[project.id] || [];
-                  // getProjects(period) already merged the period_projects prices into
-                  // the project, so the period tier is empty here; resolvePrices keeps
-                  // the plan/actual/unit_price fall-through in one place (C1).
-                  const prices = resolvePrices(null, project);
-
-                  return (
-                    <SortableRow key={project.id} id={project.id} disabled={!isEditMode || sortConfig.key !== 'display_order'}>
-                      {/* ROW 1: Plan */}
-                      <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50 group">
-                        <td rowSpan={2} style={{ left: 0, width: `${LEFT_NO_WIDTH}px` }} className={`px-2 py-3 text-center text-sm font-medium text-slate-500 dark:text-slate-400 ${stickyLeftClass} align-top`}>
-                          {isEditMode && sortConfig.key === 'display_order' ? <DragHandleCell /> : index + 1}
-                        </td>
-                        <td rowSpan={2} style={{ left: `${POS_EXCLUSION}px`, width: `${LEFT_EXCLUSION_WIDTH}px` }} className={`px-1 py-3 text-center text-sm font-medium text-slate-900 dark:text-slate-100 ${stickyLeftClass} align-top group-hover:bg-slate-50 dark:group-hover:bg-slate-800/50`}>
-                          <input
-                            type="text"
-                            className="w-full text-center text-xs border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-transparent dark:text-slate-100"
-                            value={project.exclusion_mark || ''}
-                            onChange={(e) => handleProjectFieldChange(project.id, 'exclusion_mark', e.target.value)}
-                            placeholder="-"
-                            readOnly={!isAdmin}
-                          />
-                        </td>
-
-                        <td rowSpan={2} style={{ left: `${POS_NAME}px`, width: `${LEFT_NAME_WIDTH}px` }} className={`px-2 py-2 text-sm text-slate-700 dark:text-slate-200 border-b border-slate-200 dark:border-slate-700 ${stickyLeftClass} align-top group-hover:bg-slate-50 dark:group-hover:bg-slate-800/50`}>
-                          <div className="font-medium line-clamp-2" title={project.name}>{project.name}</div>
-                        </td>
-                        {!isCollapsed && (
-                          <>
-                            <td rowSpan={2} style={{ left: `${POS_NOTES}px`, width: `${LEFT_NOTES_WIDTH}px` }} className={`px-2 py-2 text-xs text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 ${stickyLeftClass} align-top group-hover:bg-slate-50 dark:group-hover:bg-slate-800/50`}>
-                              <textarea
-                                className="w-full min-h-[50px] text-xs border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 px-1 py-1 bg-transparent resize-none overflow-hidden dark:text-slate-300"
-                                value={project.notes || ''}
-                                onChange={(e) => handleProjectFieldChange(project.id, 'notes', e.target.value)}
-                                placeholder=""
-                                rows={2}
-                                readOnly={!isAdmin}
-                              />
-                            </td>
-                            <td rowSpan={2} style={{ left: `${POS_SOFTWARE}px`, width: `${LEFT_SOFTWARE_WIDTH}px` }} className={`px-2 py-2 text-xs text-slate-600 dark:text-slate-400 text-center border-b border-slate-200 dark:border-slate-700 ${stickyLeftClass} align-top group-hover:bg-slate-50 dark:group-hover:bg-slate-800/50`}>
-                              <textarea
-                                className="w-full min-h-[50px] text-xs border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-center px-1 py-1 bg-transparent resize-none overflow-hidden dark:text-slate-300"
-                                value={project.software || ''}
-                                onChange={(e) => handleProjectFieldChange(project.id, 'software', e.target.value)}
-                                placeholder="CAD"
-                                rows={2}
-                                readOnly={!isAdmin}
-                              />
-                            </td>
-                            <td rowSpan={2} style={{ width: `${BUSINESS_CONTENT_WIDTH}px` }} className="px-2 py-2 text-xs text-slate-500 dark:text-slate-400 text-center border-r border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 align-top p-0 group-hover:bg-slate-50 dark:group-hover:bg-slate-800/50">
-                              <textarea
-                                className="w-full h-full min-h-[50px] border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-xs p-2 bg-transparent resize-none dark:text-slate-300"
-                                value={project.type || ''}
-                                onChange={(e) => handleProjectFieldChange(project.id, 'type', e.target.value)}
-                                placeholder={t('tracker.businessContent')}
-                                readOnly={!isAdmin}
-                              />
-                            </td>
-                          </>
-                        )}
-
-                        {/* Price Column */}
-                        <td style={{ width: `${PRICE_WIDTH}px` }} className="px-2 py-2 text-xs text-slate-500 dark:text-slate-400 text-right border-r border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono">
-                          {nf(prices.plan)}
-                        </td>
-
-                        <td className="px-2 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400 text-center border-r border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
-                          {t('tracker.planShort')}
-                        </td>
-
-                        {months.map(m => {
-                          const record = projRecords.find(r => r.month === m);
-                          const plan = record?.planned_hours ?? 0;
-                          const isSaving = savingStatus[`${project.id}-${m}-planned_hours`];
-
-                          return (
-                            <td key={`p-${m}`} className="px-0.5 py-1 border-r border-b border-slate-200 dark:border-slate-700 relative" style={{ width: `${MONTH_WIDTH}px` }}>
-                              <input
-                                type="number"
-                                data-hour-cell={`planned_hours-${m}`}
-                                className="w-full text-xs border-slate-300 dark:border-slate-600 rounded focus:ring-blue-500 focus:border-blue-500 text-right px-1 py-1 bg-white dark:bg-slate-800 dark:text-slate-100 focus:bg-blue-50 dark:focus:bg-blue-900/30 transition-colors"
-                                value={plan === 0 ? '' : plan}
-                                placeholder="-"
-                                onChange={(e) => handleValueChange(project.id, m, 'planned_hours', e.target.value)}
-                                onKeyDown={handleHourKeyDown}
-                                onWheel={(e) => e.currentTarget.blur()}
-                                disabled={!isAdmin}
-                              />
-                              {isSaving && <Save className="w-2 h-2 absolute top-1 right-1 text-blue-500 animate-pulse" />}
-                            </td>
-                          );
-                        })}
-
-                        <td rowSpan={2} className={`px-2 py-3 text-center border-b border-slate-200 dark:border-slate-700 ${stickyRightClass} align-top group-hover:bg-slate-50 dark:group-hover:bg-slate-800/50`} style={{ right: 0, width: `${RIGHT_ACTIONS_WIDTH}px` }}>
-                          <ProjectActionsMenu
-                            onEdit={() => setEditingProject(project)}
-                            onDelete={() => handleDeleteProjects([project.id])}
-                            onMoveUp={() => handleMoveProject(project.id, 'up')}
-                            onMoveDown={() => handleMoveProject(project.id, 'down')}
-                            t={t}
-                            disableReorder={sortConfig.key !== 'display_order'}
-                            isAdmin={isAdmin}
-                          />
-                        </td>
-                      </tr>
-
-                      {/* ROW 2: Actual */}
-                      <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50 group">
-
-                        {/* Price Column */}
-                        <td style={{ width: `${PRICE_WIDTH}px` }} className="px-2 py-2 text-xs text-emerald-600 dark:text-emerald-400 text-right border-r border-b border-slate-200 dark:border-slate-700 bg-emerald-50/10 dark:bg-emerald-900/10 font-mono">
-                          {nf(prices.actual)}
-                        </td>
-
-                        <td className="px-2 py-2 text-xs font-bold text-blue-600 dark:text-blue-400 text-center border-r border-b border-slate-200 dark:border-slate-700 bg-blue-50/30 dark:bg-blue-900/20">
-                          {t('tracker.actualShort')}
-                        </td>
-
-                        {months.map(m => {
-                          const record = projRecords.find(r => r.month === m);
-                          const actual = record?.actual_hours ?? 0;
-                          const isSaving = savingStatus[`${project.id}-${m}-actual_hours`];
-
-                          return (
-                            <td key={`a-${m}`} className="px-0.5 py-1 border-r border-b border-slate-200 dark:border-slate-700 relative" style={{ width: `${MONTH_WIDTH}px` }}>
-                              <input
-                                type="number"
-                                data-hour-cell={`actual_hours-${m}`}
-                                className={`w-full text-xs border-slate-300 dark:border-slate-600 rounded focus:ring-green-500 focus:border-green-500 text-right px-1 py-1 transition-colors dark:text-slate-100 ${actual > 0 ? 'bg-green-50 dark:bg-green-900/20 font-medium text-green-700 dark:text-green-300' : 'bg-white dark:bg-slate-800'}`}
-                                value={actual === 0 ? '' : actual}
-                                placeholder="-"
-                                onChange={(e) => handleValueChange(project.id, m, 'actual_hours', e.target.value)}
-                                onKeyDown={handleHourKeyDown}
-                                onWheel={(e) => e.currentTarget.blur()}
-                                disabled={!isAdmin}
-                              />
-                              {isSaving && <Save className="w-2 h-2 absolute top-1 right-1 text-green-500 animate-pulse" />}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    </SortableRow>
-                  );
-                })}
-              </SortableContext>
-            </table>
-          </DndContext>
-        </div>
-        {filteredAndSortedProjects.length === 0 && (
-          <div className="p-4 sm:p-8 text-center text-slate-500 dark:text-slate-400 text-sm sm:text-base">
-            {t('tracker.noResults')}
-          </div>
-        )}
-      </div>
-
-      {
-        editingProject && (
-          <EditProjectModal
-            project={editingProject}
-            isOpen={!!editingProject}
-            onClose={() => setEditingProject(null)}
-            onSave={handleUpdateProject}
-          />
-        )
-      }
-
-    </div >
+      {isAdmin && (
+        <NewProjectModal
+          isOpen={newProjectOpen}
+          onClose={() => setNewProjectOpen(false)}
+          onSuccess={created => { void handleProjectCreated(created); }}
+          initialCode={newProjectCode}
+          currentPeriod={currentPeriodLabel}
+        />
+      )}
+    </Page>
   );
 };

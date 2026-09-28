@@ -47,6 +47,10 @@ const priceRecord = (record: DashboardRecord, index: PriceIndex): PricedRecord =
 
 export interface DashboardData {
   loading: boolean;
+  /** The last full load failed; the view shows why instead of an empty year. */
+  error: boolean;
+  /** Load again, e.g. from the error state's retry. */
+  reload: () => void;
   /** Raw rows, exposed only so the view can tell "no data" from "all zeroes". */
   rawRecords: DashboardRecord[];
   stats: MonthlyStats[];
@@ -72,6 +76,7 @@ export function useDashboardData(currentYear: number): DashboardData {
   const { language, t } = useLanguage();
 
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [rawRecords, setRawRecords] = useState<DashboardRecord[]>([]);
   const [priceIndex, setPriceIndex] = useState<PriceIndex>(EMPTY_PRICE_INDEX);
 
@@ -115,10 +120,14 @@ export function useDashboardData(currentYear: number): DashboardData {
 
       setRawRecords(records);
       setPriceIndex(yearPrices.index);
+      setError(false);
     } catch (error) {
       if (seq !== loadSeqRef.current) return;
       log.error('Failed to load dashboard data', error);
-      toast.error(tRef.current('toast.loadFailed', 'Failed to load data'));
+      // A background refresh keeps what is on screen and says so; a full load
+      // that fails shows the error state instead.
+      if (options?.silent) toast.error(tRef.current('toast.loadFailed', 'Failed to load data'));
+      else setError(true);
     } finally {
       if (seq === loadSeqRef.current) setLoading(false);
     }
@@ -178,32 +187,45 @@ export function useDashboardData(currentYear: number): DashboardData {
   }, [stats]);
 
   // Each setting is written straight back so a reload shows the same number.
+  const save = (settings: Parameters<typeof dbService.saveSettings>[0]) => {
+    dbService.saveSettings(settings).catch(saveError => {
+      log.error('Failed to save settings', saveError);
+      toast.error(tRef.current('toast.saveFailed', 'Save failed'));
+    });
+  };
+
   const handleRateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value) || 0;
     setExchangeRate(val);
-    dbService.saveSettings({ exchangeRate: val });
+    save({ exchangeRate: val });
   };
 
   const handleUnitPriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value) || 0;
     setUnitPrice(val);
-    dbService.saveSettings({ unitPrice: val });
+    save({ unitPrice: val });
   };
 
   const handleLicenseComputersChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value) || 0;
     setLicenseComputers(val);
-    dbService.saveSettings({ licenseComputers: val });
+    save({ licenseComputers: val });
   };
 
   const handleLicensePerComputerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value) || 0;
     setLicensePerComputer(val);
-    dbService.saveSettings({ licensePerComputer: val });
+    save({ licensePerComputer: val });
   };
+
+  const reload = useCallback(() => {
+    void loadDashboard();
+  }, [loadDashboard]);
 
   return {
     loading,
+    error,
+    reload,
     rawRecords,
     stats,
     accumulatedStats,

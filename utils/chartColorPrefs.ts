@@ -9,8 +9,6 @@ import { useCallback, useRef, useState } from 'react';
  */
 export type ChartPrefKey =
   | 'dashboard_chartColors'
-  | 'dashboard_kpiColors'
-  | 'dashboard_headingFontSize'
   | 'totalView_chartColors'
   | 'monthly_chartColors'
   | 'longTermPlan_chartColors';

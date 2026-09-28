@@ -1,12 +1,14 @@
 import React, { useRef, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { MoreVertical, Edit, Trash, ArrowUp, ArrowDown, GripVertical, Eye } from 'lucide-react';
-import { DropdownMenu } from '../DropdownMenu';
+import { ArrowDown, ArrowUp, GripVertical, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { Button } from '../ui/Button';
+import { Menu, MenuItem, MenuSeparator } from '../ui/Menu';
 import { SortableRowContext } from './sortableRowContext';
 
 /** Wraps a project's rows in a draggable <tbody> so a whole row group moves as one. */
-export const SortableRow = ({ children, id, disabled, className }: { children: React.ReactNode, id: string, disabled?: boolean, className?: string }) => {
+export const SortableRow = ({ children, id, disabled, className = '' }: { children: React.ReactNode, id: string, disabled?: boolean, className?: string }) => {
   const {
     attributes,
     listeners,
@@ -31,7 +33,9 @@ export const SortableRow = ({ children, id, disabled, className }: { children: R
     <tbody
       ref={setNodeRef}
       style={style}
-      className={isDragging ? 'opacity-90 bg-blue-50 relative z-50' : className}
+      className={`${className} ${isDragging ? 'relative z-50 opacity-95 shadow-lg shadow-slate-900/10' : ''} ${
+        disabled ? '' : 'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500'
+      }`}
       {...(disabled ? {} : attributes)}
     >
       <SortableRowContext.Provider value={{ listeners }}>
@@ -41,121 +45,70 @@ export const SortableRow = ({ children, id, disabled, className }: { children: R
   );
 };
 
-export const DragHandleCell = ({ disabled }: { disabled?: boolean }) => {
+export const DragHandleCell = ({ label }: { label: string }) => {
   const context = React.useContext(SortableRowContext);
   return (
     <div
-      className={`touch-none flex items-center justify-center p-2 cursor-grab active:cursor-grabbing ${disabled ? 'opacity-30 cursor-not-allowed' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}
-      {...(disabled ? {} : context?.listeners)}
+      title={label}
+      className="mx-auto flex h-8 w-8 cursor-grab touch-none items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+      {...context?.listeners}
     >
-      <GripVertical className="w-4 h-4" />
+      <GripVertical className="h-4 w-4" aria-hidden="true" />
     </div>
   );
 };
 
+/**
+ * A project's row actions. Only admins get the menu at all — for anyone else
+ * there is nothing in it to do.
+ */
 export const ProjectActionsMenu: React.FC<{
+  projectName: string;
   onEdit: () => void;
   onDelete: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
-  t: (key: string, defaultVal?: string) => string;
-  disableReorder?: boolean;
-  isAdmin?: boolean;
-}> = ({ onEdit, onDelete, onMoveUp, onMoveDown, t, disableReorder, isAdmin }) => {
-  const [isOpen, setIsOpen] = useState(false);
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  /** Why moving is off, when it is off because the table is sorted. */
+  reorderHint?: string;
+}> = ({ projectName, onEdit, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown, reorderHint }) => {
+  const { t } = useLanguage();
+  const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const label = t('tracker.actionsFor', 'Actions for {name}').replace('{name}', projectName);
 
   return (
     <>
-      <button
+      <Button
         ref={triggerRef}
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          setIsOpen(!isOpen);
-        }}
-        className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"
+        variant="ghost"
+        size="icon-sm"
+        onClick={() => setOpen(prev => !prev)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={label}
+        title={t('tracker.actions', 'Actions')}
+        className="text-slate-400"
       >
-        <MoreVertical className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-      </button>
+        <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+      </Button>
 
-      <DropdownMenu
-        isOpen={isOpen}
-        onClose={() => setIsOpen(false)}
-        triggerRef={triggerRef}
-      >
-        <div className="flex flex-col">
-          {isAdmin && (
-            <>
-              <button
-                type="button"
-                disabled={disableReorder}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onMoveUp();
-                  setIsOpen(false);
-                }}
-                className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${disableReorder
-                  ? 'text-slate-400 dark:text-slate-500 cursor-not-allowed'
-                  : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
-                  }`}
-                title={disableReorder ? t('tracker.sortDisabled', 'Sort by No. to reorder') : ''}
-              >
-                <ArrowUp className="w-4 h-4" />
-                {t('common.moveUp', 'Move Up')}
-              </button>
-              <button
-                type="button"
-                disabled={disableReorder}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onMoveDown();
-                  setIsOpen(false);
-                }}
-                className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${disableReorder
-                  ? 'text-slate-400 dark:text-slate-500 cursor-not-allowed'
-                  : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
-                  }`}
-                title={disableReorder ? t('tracker.sortDisabled', 'Sort by No. to reorder') : ''}
-              >
-                <ArrowDown className="w-4 h-4" />
-                {t('common.moveDown', 'Move Down')}
-              </button>
-              <div className="border-t border-slate-100 dark:border-slate-700 my-1"></div>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEdit();
-                  setIsOpen(false);
-                }}
-                className="w-full px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
-              >
-                <Edit className="w-4 h-4" />
-                {t('common.edit', 'Edit')}
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete();
-                  setIsOpen(false);
-                }}
-                className="w-full px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 flex items-center gap-2"
-              >
-                <Trash className="w-4 h-4" />
-                {t('common.delete', 'Delete')}
-              </button>
-            </>
-          )}
-          {!isAdmin && (
-            <div className="px-3 py-2 text-xs text-slate-500 flex items-center gap-2 uppercase tracking-wider font-semibold">
-              <Eye className="w-3 h-3" />
-              {t('common.viewOnly', 'View Only')}
-            </div>
-          )}
-        </div>
-      </DropdownMenu>
+      <Menu open={open} onClose={() => setOpen(false)} anchorRef={triggerRef} align="end" minWidth={196} label={label}>
+        <MenuItem icon={<Pencil />} onSelect={onEdit}>
+          {t('tracker.editDetails', 'Edit details…')}
+        </MenuItem>
+        <MenuItem icon={<ArrowUp />} onSelect={onMoveUp} disabled={!canMoveUp} title={reorderHint}>
+          {t('common.moveUp', 'Move up')}
+        </MenuItem>
+        <MenuItem icon={<ArrowDown />} onSelect={onMoveDown} disabled={!canMoveDown} title={reorderHint}>
+          {t('common.moveDown', 'Move down')}
+        </MenuItem>
+        <MenuSeparator />
+        <MenuItem icon={<Trash2 />} tone="danger" onSelect={onDelete}>
+          {t('tracker.deleteProject', 'Delete project…')}
+        </MenuItem>
+      </Menu>
     </>
   );
 };

@@ -1,24 +1,27 @@
-import React, { useCallback, useState, useRef } from 'react';
-import { TrendingUp, Palette } from 'lucide-react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { ArrowRight, ClipboardList, X } from 'lucide-react';
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, TooltipContentProps, LabelList, ReferenceLine, ReferenceArea } from 'recharts';
 import { ExportButton } from './ExportButton';
-import { useLanguage } from '../contexts/LanguageContext';
-import { useNumberFormat } from '../hooks/useNumberFormat';
-import type { TranslateFn } from '../contexts/LanguageContext';
-import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
+import { CurrentMonthBadge } from './CurrentMonthBadge';
+import { SeriesStyleButton, SeriesStyleCheck, type SeriesStyle } from './SeriesStyleButton';
+import { YearControl, YearExportButton } from './YearControl';
+import { buttonClasses } from './ui/Button';
+import { Card, CardHeader, WithYear } from './ui/Card';
+import { EmptyState } from './ui/EmptyState';
+import { Select } from './ui/Field';
+import { Page } from './ui/Page';
+import { RefreshBar } from './ui/RefreshBar';
 import { Skeleton } from './ui/Skeleton';
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipContentProps, LabelList, ReferenceLine, ReferenceArea } from 'recharts';
+import { useLanguage } from '../contexts/LanguageContext';
+import type { TranslateFn } from '../contexts/LanguageContext';
+import { useNumberFormat } from '../hooks/useNumberFormat';
+import { useIsDarkTheme } from '../hooks/useDarkMode';
+import { useMonthKeys } from '../hooks/useMonthKeys';
 import { useMonthlyPlanActualData } from '../hooks/useMonthlyPlanActualData';
 import type { MonthlyPlanActualData } from '../hooks/useMonthlyPlanActualData';
-
-interface SeriesStyle {
-  color: string;
-  opacity: number;
-  labelColor: string;
-  fontSize: number;
-  bold: boolean;
-  stroke: boolean;
-  barSize?: number;
-}
+import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
+import { chartTheme, type ChartTheme } from '../utils/chartTheme';
 
 interface MonthlyChartColors {
   capacityLine: SeriesStyle;
@@ -28,9 +31,11 @@ interface MonthlyChartColors {
   workingHoursActual: SeriesStyle;
 }
 
+type SeriesKey = keyof MonthlyChartColors;
+
 /**
- * Theme-safe defaults (U8). The four hard-coded values that broke dark-mode contrast
- * (#5c0000, #000080, #006080, #808080) are now CHART_PALETTE.plan / plan2 / actual / neutral.
+ * The report's own colours, kept because this chart is pasted into the monthly
+ * report next to earlier months; every one of them can be changed.
  */
 const DEFAULT_CHART_COLORS: MonthlyChartColors = {
   capacityLine: { color: CHART_PALETTE.neutral, opacity: 1, labelColor: CHART_PALETTE.neutral, fontSize: 10, bold: false, stroke: false },
@@ -40,7 +45,17 @@ const DEFAULT_CHART_COLORS: MonthlyChartColors = {
   workingHoursActual: { color: '#CC0000', opacity: 1, labelColor: '#ffffff', fontSize: 10, bold: true, stroke: false, barSize: 30 },
 };
 
-const SERIES_KEYS = ['salesPlan', 'salesActual', 'workingHoursPlan', 'workingHoursActual', 'capacityLine'] as const;
+/** In the order the legend and the style panel list them: sales first, then hours. */
+const SERIES_KEYS: readonly SeriesKey[] = ['salesPlan', 'salesActual', 'workingHoursPlan', 'workingHoursActual', 'capacityLine'];
+
+/** How each series is drawn, for its legend swatch. */
+const SERIES_SHAPE: Record<SeriesKey, 'line' | 'dash' | 'bar'> = {
+  salesPlan: 'line',
+  salesActual: 'bar',
+  workingHoursPlan: 'bar',
+  workingHoursActual: 'bar',
+  capacityLine: 'dash',
+};
 
 /**
  * Migration for the stored `monthly_chartColors` preference:
@@ -50,9 +65,9 @@ const SERIES_KEYS = ['salesPlan', 'salesActual', 'workingHoursPlan', 'workingHou
  */
 const migrateChartColors = (raw: unknown): MonthlyChartColors | null => {
   if (raw === null || typeof raw !== 'object') return null;
-  const parsed = raw as Partial<Record<keyof MonthlyChartColors, unknown>>;
+  const parsed = raw as Partial<Record<SeriesKey, unknown>>;
 
-  const mergeSeries = (key: keyof MonthlyChartColors): SeriesStyle => {
+  const mergeSeries = (key: SeriesKey): SeriesStyle => {
     const value = parsed[key];
     if (typeof value === 'string') return { ...DEFAULT_CHART_COLORS[key], color: value };
     if (value !== null && typeof value === 'object') {
@@ -78,122 +93,126 @@ interface MonthlyPlanActualViewProps {
  * Chart renderers
  *
  * Module scope on purpose: a component declared inside the view is a new type
- * on every render, so React discards the subtree — the pinned card and the bar
- * animations reset. Recharts injects x/y/value/payload into the element given
- * to content= / shape=, so view state is threaded in as explicit props.
+ * on every render, so React discards the subtree — the selected card and the
+ * bar animations reset. Recharts injects x/y/value/payload into the element
+ * given to content= / shape=, so view state is threaded in as explicit props.
  * ------------------------------------------------------------------------ */
 
-// Reusable Detail Card Component
-const MonthDetailCard = ({ data, chartColors, t, nf, hideShadow = false }: {
+const Swatch = ({ style, shape }: { style: SeriesStyle; shape: 'line' | 'dash' | 'bar' }) =>
+  shape === 'bar' ? (
+    <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: style.color, opacity: style.opacity }} />
+  ) : (
+    <span
+      aria-hidden="true"
+      className="w-4 shrink-0"
+      style={{ borderTop: `2px ${shape === 'dash' ? 'dashed' : 'solid'} ${style.color}`, opacity: style.opacity }}
+    />
+  );
+
+/** The month's figures: on hover, and held on a selected month. */
+const MonthDetailCard = ({ data, chartColors, labels, nf, hoursUnit, salesUnit, t, onClose }: {
   data: MonthlyPlanActualData;
   chartColors: MonthlyChartColors;
-  t: TranslateFn;
+  labels: Record<SeriesKey, string>;
   nf: (value: number) => string;
-  hideShadow?: boolean;
+  hoursUnit: string;
+  salesUnit: string;
+  t: TranslateFn;
+  /** Only passed when the month is selected: releases the card. */
+  onClose?: () => void;
 }) => {
+  const row = (key: SeriesKey, unit: string) => (
+    <div key={key} className="flex items-center justify-between gap-6">
+      <span className="flex min-w-0 items-center gap-2 text-slate-500 dark:text-slate-400">
+        <Swatch style={chartColors[key]} shape={SERIES_SHAPE[key]} />
+        {labels[key]}
+      </span>
+      <span className="whitespace-nowrap font-medium tabular-nums text-slate-900 dark:text-slate-100">
+        {nf(data[key])} <span className="font-normal text-slate-400 dark:text-slate-500">{unit}</span>
+      </span>
+    </div>
+  );
+
   return (
-    <div className={`bg-white dark:bg-slate-900 p-3 border border-slate-300 dark:border-slate-700 rounded-lg min-w-[200px] ${hideShadow ? '' : 'shadow-lg'}`}>
-      <p className="font-semibold text-slate-800 dark:text-slate-100 mb-2 border-b border-slate-200 dark:border-slate-800 pb-1">
-        {data.monthLabel}
-      </p>
-      <div className="space-y-1.5 text-sm">
-        {/* Working Hours Section */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.capacityLine.color, opacity: chartColors.capacityLine.opacity, borderStyle: 'dashed' }}></div>
-            <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.capacityLine', '能力線')}:</span>
-          </div>
-          <span className="font-medium text-slate-900 dark:text-slate-100">{nf(data.capacityLine)} {t('monthlyPlanActual.unit.hours', '時間')}</span>
-        </div>
-
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.workingHoursPlan.color, opacity: chartColors.workingHoursPlan.opacity }}></div>
-            <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.workingPlan', '稼働計画')}:</span>
-          </div>
-          <span className="font-medium text-slate-900 dark:text-slate-100">{nf(data.workingHoursPlan)} {t('monthlyPlanActual.unit.hours', '時間')}</span>
-        </div>
-
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.workingHoursActual.color, opacity: chartColors.workingHoursActual.opacity }}></div>
-            <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.workingActual', '稼働実績')}:</span>
-          </div>
-          <span className="font-medium text-slate-900 dark:text-slate-100">{nf(data.workingHoursActual)} {t('monthlyPlanActual.unit.hours', '時間')}</span>
-        </div>
-
-        {/* Sales Section */}
-        <div className="border-t border-slate-200 dark:border-slate-800 pt-2 mt-2"></div>
-
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesPlan.color, opacity: chartColors.salesPlan.opacity }}></div>
-            <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.salesPlan', '売上計画')}:</span>
-          </div>
-          <span className="font-medium text-slate-900 dark:text-slate-100">{nf(data.salesPlan)} {t('monthlyPlanActual.unit.sales', '万円')}</span>
-        </div>
-
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded" style={{ backgroundColor: chartColors.salesActual.color, opacity: chartColors.salesActual.opacity }}></div>
-            <span className="text-slate-700 dark:text-slate-400">{t('monthlyPlanActual.salesActual', '売上実績')}:</span>
-          </div>
-          <span className="font-medium text-slate-900 dark:text-slate-100">{nf(data.salesActual)} {t('monthlyPlanActual.unit.sales', '万円')}</span>
-        </div>
+    <div className="min-w-[248px] rounded-xl bg-white p-3 text-[13px] shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/10 dark:bg-slate-900 dark:shadow-black/40 dark:ring-white/10">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="font-semibold text-slate-900 dark:text-white">{data.monthLabel}</span>
+        {onClose && (
+          <button
+            type="button"
+            data-html2canvas-ignore="true"
+            onClick={onClose}
+            title={t('common.close', 'Close')}
+            aria-label={t('common.close', 'Close')}
+            className="pointer-events-auto -mr-1 grid h-6 w-6 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+          >
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        )}
+      </div>
+      <div className="space-y-1">
+        {row('salesPlan', salesUnit)}
+        {row('salesActual', salesUnit)}
+      </div>
+      <div className="mt-2 space-y-1 border-t border-slate-100 pt-2 dark:border-slate-800">
+        {row('workingHoursPlan', hoursUnit)}
+        {row('workingHoursActual', hoursUnit)}
+        {row('capacityLine', hoursUnit)}
       </div>
     </div>
   );
 };
 
-// Custom Tooltip Component (wraps Detail Card) — recharts 3 passes `TooltipContentProps`
-const CustomTooltip = ({ active, payload, chartColors, t, nf }: Partial<TooltipContentProps<number, string>> & {
-  chartColors: MonthlyChartColors;
-  t: TranslateFn;
-  nf: (value: number) => string;
-}) => {
+/** Hover card; recharts 3 passes `TooltipContentProps`. */
+const HoverCard = ({ active, payload, ...card }: Partial<TooltipContentProps<number, string>> & Omit<React.ComponentProps<typeof MonthDetailCard>, 'data' | 'onClose'>) => {
   if (!active || !payload || payload.length === 0) return null;
   const data = payload[0]?.payload as MonthlyPlanActualData | undefined;
   if (!data) return null;
-  return <MonthDetailCard data={data} chartColors={chartColors} t={t} nf={nf} />;
+  return <MonthDetailCard data={data} {...card} />;
 };
 
-// Custom zero label renderer for the Actual Sales bar
-const ZeroLabel = ({ x = 0, y = 0, width = 0, value, chartColors }: {
+/** A zero actual is a real figure, not a missing one: say so above the empty bar. */
+const ZeroLabel = ({ x = 0, y = 0, width = 0, value, index = 0, shownThrough, chartColors, theme }: {
   x?: number;
   y?: number;
   width?: number;
   value?: number | string;
+  index?: number;
+  /** Months finished so far. A zero after them is a month not reached yet, not a month without sales. */
+  shownThrough: number;
   chartColors: MonthlyChartColors;
+  theme: ChartTheme;
 }) => {
-  if (value !== 0) return null;
+  if (value !== 0 || index >= shownThrough) return null;
   return (
     <g>
-      <rect x={x + width / 2 - 8} y={y - 22} width={16} height={20} fill="rgba(255,255,255,0.7)" rx={4} />
-      <text x={x + width / 2} y={y - 8} fill={chartColors.workingHoursActual.labelColor} fontSize={14} fontWeight="bold" textAnchor="middle">0</text>
+      <rect x={x + width / 2 - 8} y={y - 22} width={16} height={20} fill={theme.plate} rx={4} />
+      <text x={x + width / 2} y={y - 8} fill={chartColors.salesActual.labelColor || CHART_PALETTE.labelNeutral} fontSize={14} fontWeight="bold" textAnchor="middle">0</text>
     </g>
   );
 };
 
-// Generic custom label with semi-transparent background pill + optional outline
-const CustomLabel = ({ x = 0, y = 0, value, width = 0, dataKey, chartColors, nf, offset = 10, position = 'top' }: {
+/** Value label on a soft plate, optionally outlined, in the series' own style. */
+const ValueLabel = ({ x = 0, y = 0, value, width = 0, dataKey, chartColors, nf, theme, offset = 10, position = 'top', suffix = '' }: {
   x?: number;
   y?: number;
   value?: number | string;
   width?: number;
-  dataKey: keyof MonthlyChartColors;
+  dataKey: SeriesKey;
   chartColors: MonthlyChartColors;
   nf: (value: number) => string;
+  theme: ChartTheme;
   offset?: number;
   position?: 'top' | 'insideTop' | 'left';
+  suffix?: string;
 }) => {
   if (value === 0 || !value) return null;
 
-  const formatted = typeof value === 'number' && value > 1000 ? nf(value) : value;
+  const formatted = `${typeof value === 'number' && value > 1000 ? nf(value) : value}${suffix}`;
   const style = chartColors[dataKey];
   const color = style?.labelColor || CHART_PALETTE.labelNeutral;
-  const fSize = style?.fontSize || 10;
+  const fontSize = style?.fontSize || 10;
   const isBold = style?.bold !== false;
-  const hasStroke = style?.stroke === true;
 
   let textX = x;
   let textY = y;
@@ -205,55 +224,26 @@ const CustomLabel = ({ x = 0, y = 0, value, width = 0, dataKey, chartColors, nf,
     textY = y - offset;
   } else if (position === 'left') {
     textX = x - offset;
-    textY = y;
   }
 
   return (
     <g>
-      {/* Background pill */}
-      <rect
-        x={textX - 16}
-        y={textY - 12}
-        width={32}
-        height={16}
-        fill="rgba(255,255,255,0.7)"
-        rx={3}
-      />
-      {/* Stroke (outline) layer */}
-      {hasStroke && (
-        <text
-          x={textX}
-          y={textY}
-          stroke="white"
-          strokeWidth={3}
-          strokeLinejoin="round"
-          paintOrder="stroke"
-          fontSize={fSize}
-          fontWeight="bold"
-          textAnchor="middle"
-          alignmentBaseline="middle"
-        >
-          {formatted}{dataKey === 'capacityLine' ? 'h' : ''}
+      <rect x={textX - 16} y={textY - 12} width={32} height={16} fill={theme.plate} rx={3} />
+      {style?.stroke && (
+        <text x={textX} y={textY} stroke={theme.halo} strokeWidth={3} strokeLinejoin="round" paintOrder="stroke" fontSize={fontSize} fontWeight="bold" textAnchor="middle" alignmentBaseline="middle">
+          {formatted}
         </text>
       )}
-      {/* Actual label */}
-      <text
-        x={textX}
-        y={textY}
-        fill={color}
-        fontSize={fSize}
-        fontWeight={isBold ? 'bold' : 'normal'}
-        textAnchor="middle"
-        alignmentBaseline="middle"
-      >
-        {formatted}{dataKey === 'capacityLine' ? 'h' : ''}
+      <text x={textX} y={textY} fill={color} fontSize={fontSize} fontWeight={isBold ? 'bold' : 'normal'} textAnchor="middle" alignmentBaseline="middle">
+        {formatted}
       </text>
     </g>
   );
 };
 
 /**
- * Custom Bar for Working Hours Actual with Gap Connector (Idea E).
+ * The actual hours, drawn inside the planned-hours column with a dashed line
+ * up to where the plan ends, so the gap reads at a glance.
  *
  * The column centre is reported through a callback, not by taking the ref:
  * Recharts 3 keeps chart props in an immer-backed store that DEEP-FREEZES what
@@ -273,36 +263,28 @@ const WorkingHoursActualBar = ({ fill, x = 0, y = 0, width = 0, height = 0, payl
   const planValue = payload?.workingHoursPlan || 0;
   const actualValue = payload?.workingHoursActual || 0;
 
-  // Track the center X coordinate of the column for correct tooltip pinning
   if (payload?.month) {
     onColumnCoord(payload.month, x + width / 2);
   }
 
-  // Estimate where the Plan bar top is physically (y-coordinate)
-  const containerHeight = y + height;
-  const zeroY = containerHeight;
+  // Where the plan column's top is, on the same scale as this bar.
+  const zeroY = y + height;
   const pixelsPerUnit = height / actualValue;
   const planY = zeroY - (planValue * pixelsPerUnit);
 
   return (
     <g>
-      {/* The actual red bar */}
       <path d={`M${x},${y} L${x + width},${y} L${x + width},${y + height} L${x},${y + height} Z`} stroke="none" fill={fill} fillOpacity={chartColors.workingHoursActual.opacity} />
-
-      {/* Draw gap connector if plan > 0 */}
       {planValue > 0 && actualValue > 0 && (
-        <g>
-          {/* The dashed line connecting Actual top to Plan top */}
-          <line
-            x1={x + width / 2}
-            y1={y}
-            x2={x + width / 2}
-            y2={planY}
-            stroke={chartColors.workingHoursActual.color}
-            strokeWidth={1}
-            strokeDasharray="3 3"
-          />
-        </g>
+        <line
+          x1={x + width / 2}
+          y1={y}
+          x2={x + width / 2}
+          y2={planY}
+          stroke={chartColors.workingHoursActual.color}
+          strokeWidth={1}
+          strokeDasharray="3 3"
+        />
       )}
     </g>
   );
@@ -311,447 +293,383 @@ const WorkingHoursActualBar = ({ fill, x = 0, y = 0, width = 0, height = 0, payl
 export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ currentYear }) => {
   const { t } = useLanguage();
   const { format: nf } = useNumberFormat();
-  const { loading, monthlyData, maxSales, maxWorkingHours } = useMonthlyPlanActualData(currentYear);
+  const { loading, hasLoaded, error, reload, monthlyData, maxSales, maxWorkingHours } = useMonthlyPlanActualData(currentYear);
   const [pinnedMonth, setPinnedMonth] = useState<number | null>(null);
   const columnCoordsRef = useRef<Record<number, number>>({});
+  const isDark = useIsDarkTheme();
+  const theme = useMemo(() => chartTheme(isDark), [isDark]);
 
-  const hoursUnit = t('monthlyPlanActual.unit.hours', 'hrs');
+  const hoursUnit = t('monthlyPlanActual.unit.hours', 'h');
   const salesUnit = t('monthlyPlanActual.unit.sales', '10k JPY');
+
+  const labels: Record<SeriesKey, string> = {
+    salesPlan: t('monthlyPlanActual.legend.salesPlan', 'Sales plan'),
+    salesActual: t('monthlyPlanActual.legend.salesActual', 'Sales actual'),
+    workingHoursPlan: t('monthlyPlanActual.legend.workingPlan', 'Working hours plan'),
+    workingHoursActual: t('monthlyPlanActual.legend.workingActual', 'Working hours actual'),
+    capacityLine: t('monthlyPlanActual.legend.capacityLine', 'Capacity'),
+  };
 
   /** Translated headings, with the unit each column is actually in. */
   const csvColumns = [
     { key: 'month', label: t('csv.month', 'Month') },
     { key: 'monthLabel', label: t('csv.monthName', 'Month name') },
-    { key: 'capacityLine', label: `${t('monthlyPlanActual.capacityLine', 'Capacity')} (${hoursUnit})` },
-    { key: 'workingHoursPlan', label: `${t('monthlyPlanActual.workingPlan', 'Working hours (Plan)')} (${hoursUnit})` },
-    { key: 'workingHoursActual', label: `${t('monthlyPlanActual.workingActual', 'Working hours (Actual)')} (${hoursUnit})` },
-    { key: 'salesPlan', label: `${t('monthlyPlanActual.salesPlan', 'Sales (Plan)')} (${salesUnit})` },
-    { key: 'salesActual', label: `${t('monthlyPlanActual.salesActual', 'Sales (Actual)')} (${salesUnit})` },
+    { key: 'capacityLine', label: `${labels.capacityLine} (${hoursUnit})` },
+    { key: 'workingHoursPlan', label: `${labels.workingHoursPlan} (${hoursUnit})` },
+    { key: 'workingHoursActual', label: `${labels.workingHoursActual} (${hoursUnit})` },
+    { key: 'salesPlan', label: `${labels.salesPlan} (${salesUnit})` },
+    { key: 'salesActual', label: `${labels.salesActual} (${salesUnit})` },
   ];
 
-  const [showColorPicker, setShowColorPicker] = useState(false);
-  // Colours live behind the shared preference helper (U8): the localStorage key is unchanged
-  // so existing user picks survive (see `migrateChartColors`), and every set() persists.
-  const [chartColors, setChartColors] = useChartPref<MonthlyChartColors>(
+  // The localStorage key is unchanged, so earlier picks survive (see `migrateChartColors`).
+  const [chartColors, setChartColors, resetChartColors] = useChartPref<MonthlyChartColors>(
     'monthly_chartColors',
     DEFAULT_CHART_COLORS,
     migrateChartColors,
   );
 
-  const updateColor = <K extends keyof SeriesStyle>(seriesKey: keyof MonthlyChartColors, field: K, value: SeriesStyle[K]) => {
-    setChartColors(prev => {
-      const updated: SeriesStyle = { ...prev[seriesKey] };
-      updated[field] = value;
-      return { ...prev, [seriesKey]: updated };
-    });
-  };
+  const updateSeries = useCallback((key: string, patch: Partial<SeriesStyle>) => {
+    if (!SERIES_KEYS.includes(key as SeriesKey)) return;
+    setChartColors(prev => ({ ...prev, [key]: { ...prev[key as SeriesKey], ...patch } }));
+  }, [setChartColors]);
 
   // See WorkingHoursActualBar: the ref cannot cross into Recharts, a callback can.
   const recordColumnCoord = useCallback((month: number, centerX: number) => {
     columnCoordsRef.current[month] = centerX;
   }, []);
 
-  // Current month highlight
+  const unpin = useCallback(() => setPinnedMonth(null), []);
+  useMonthKeys(pinnedMonth !== null, setPinnedMonth, unpin);
+
   const currentMonth = new Date().getFullYear() === currentYear ? new Date().getMonth() + 1 : null;
+  const thisYear = new Date().getFullYear();
+  const finishedMonths = currentYear < thisYear ? 12 : currentYear > thisYear ? 0 : new Date().getMonth();
   const [showCurrentMonth, setShowCurrentMonth] = useState(true);
 
-  if (loading) {
+  const hasData = monthlyData.some(d => d.workingHoursPlan || d.workingHoursActual || d.salesPlan || d.salesActual);
+
+  const header = {
+    title: t('nav.monthlyPlanActual', 'Monthly plan vs actual'),
+    description: t('monthlyPlanActual.desc', 'Sales and working hours each month, against the plan and capacity'),
+    actions: (
+      <>
+        <YearControl />
+        <YearExportButton />
+      </>
+    ),
+  };
+
+  // Also while a retry after a failed first load is in flight.
+  if (!hasLoaded && (loading || !error)) {
     return (
-      <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-4 md:p-6 overflow-auto">
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex-1 flex flex-col gap-4">
-          <Skeleton className="h-5 w-64" />
-          <Skeleton className="flex-1 min-h-[320px] w-full" />
-          <span className="sr-only text-slate-500 dark:text-slate-400">{t('common.loading', 'Loading…')}</span>
-        </div>
-      </div>
+      <Page {...header}>
+        <Card padding="lg" role="status" aria-busy="true" aria-label={t('common.loading', 'Loading…')}>
+          <div aria-hidden="true">
+            <Skeleton className="h-5 w-64" />
+            <Skeleton className="mt-2 h-4 w-80 max-w-full" />
+            <Skeleton className="mt-6 h-[max(360px,calc(100dvh-17rem))] w-full" />
+          </div>
+        </Card>
+      </Page>
     );
   }
 
+  if (!hasLoaded) {
+    return (
+      <Page {...header}>
+        <Card>
+          <EmptyState
+            tone="error"
+            title={t('empty.loadFailedTitle', 'Could not load this year')}
+            description={t('empty.loadFailedHint', 'The request did not come back. Check the connection and try again.')}
+            actions={
+              <button type="button" onClick={reload} className={buttonClasses('secondary')}>
+                {t('buttons.retry', 'Try again')}
+              </button>
+            }
+          />
+        </Card>
+      </Page>
+    );
+  }
+
+  if (!hasData && !loading) {
+    return (
+      <Page {...header}>
+        <Card>
+          <EmptyState
+            icon={ClipboardList}
+            title={t('empty.noDataTitle', 'No hours recorded for {year} yet').replace('{year}', String(currentYear))}
+            description={t('empty.noDataHint', 'Enter planned and actual hours in Project tracking, or choose another year.')}
+            actions={
+              <Link to="/tracking" className={buttonClasses('secondary')}>
+                {t('empty.goToTracking', 'Go to Project tracking')}
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+            }
+          />
+        </Card>
+      </Page>
+    );
+  }
+
+  const cardProps = { chartColors, labels, nf, hoursUnit, salesUnit, t };
+  const pinnedData = pinnedMonth !== null ? monthlyData.find(d => d.month === pinnedMonth) : undefined;
+  const currentMonthLabel = currentMonth !== null ? monthlyData.find(d => d.month === currentMonth)?.monthLabel : undefined;
+
   return (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-4 md:p-6 overflow-auto">
-      {/* Chart Section - Full Page */}
-      <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex-1 flex flex-col">
-        <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-          <div>
-            <h3 className="text-md font-bold text-pink-600 dark:text-pink-400 flex items-center">
-              <TrendingUp className="w-4 h-4 mr-2" />
-              {currentYear}{t('monthlyPlanActual.title', '年 OS事業受託状況予実')}
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('monthlyPlanActual.subtitle', '月次計画と実績の比較')}</p>
-          </div>
-          <div className="flex gap-2 flex-wrap items-center">
-            {/* Month Selector */}
-            <select
-              className="px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-600 outline-none"
-              value={pinnedMonth ?? ""}
-              onChange={(e) => {
-                const month = e.target.value ? Number(e.target.value) : null;
-                setPinnedMonth(month);
-              }}
-            >
-              <option value="">{t('tracker.selectMonth', '月を選択...')}</option>
-              {monthlyData.map((d) => (
-                <option key={d.month} value={d.month}>
-                  {d.monthLabel}
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={() => setShowColorPicker(!showColorPicker)}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 dark:bg-purple-700 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors"
-              title={t('chart.customizeColors', 'Customize chart colors')}
-            >
-              <Palette className="w-4 h-4" />
-              {t('chart.colors', 'Colors')}
-            </button>
-            <ExportButton
-              targetId="monthly-plan-actual-chart"
-              filename={`monthly_plan_actual_${currentYear}`}
-              data={monthlyData}
-              csvColumns={csvColumns}
-            />
-          </div>
-        </div>
-
-        {/* Color Picker Section */}
-        {showColorPicker && (
-          <div className="mb-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
-            <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">
-              <Palette className="w-4 h-4" />
-              {t('chart.customizeColors', 'Customize chart colors')}
-            </h4>
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-              {/* Render Color Options Helper */}
-              {SERIES_KEYS.map((key) => {
-                const label = key === 'salesPlan'
-                  ? t('monthlyPlanActual.legend.salesPlan', '売上計画')
-                  : key === 'salesActual'
-                    ? t('monthlyPlanActual.legend.salesActual', '売上実績')
-                    : key === 'workingHoursPlan'
-                      ? t('monthlyPlanActual.legend.workingPlan', '稼働計画')
-                      : key === 'workingHoursActual'
-                        ? t('monthlyPlanActual.legend.workingActual', '稼働実績')
-                        : t('monthlyPlanActual.legend.capacityLine', '能力線');
-                const style = chartColors[key];
-                return (
-                  <div key={key} className="flex flex-col gap-2 p-2 bg-white dark:bg-slate-800 rounded border border-slate-100 dark:border-slate-700 shadow-sm">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{label}</label>
-
-                    {/* Color Row */}
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">{t('chart.field.color', 'Color')}</span>
-                      <div className="flex items-center gap-1 flex-1">
-                        <input type="color" aria-label={label} value={style.color} onChange={(e) => updateColor(key, 'color', e.target.value)} className="w-6 h-6 rounded cursor-pointer p-0 border-0" />
-                        <input type="text" aria-label={label} value={style.color} onChange={(e) => updateColor(key, 'color', e.target.value)} className="flex-1 w-full px-1 py-0.5 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded" />
-                      </div>
-                    </div>
-
-                    {/* Opacity Row */}
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">{t('chart.field.alpha', 'Alpha')}</span>
-                      <div className="flex items-center gap-1 flex-1">
-                        <input type="range" min="0" max="1" step="0.1" value={style.opacity} onChange={(e) => updateColor(key, 'opacity', parseFloat(e.target.value))} className="w-full h-1 bg-slate-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer" />
-                        <span className="text-[10px] w-5 text-right font-medium text-slate-600 dark:text-slate-300">{Math.round(style.opacity * 100)}%</span>
-                      </div>
-                    </div>
-
-                    {/* Label Color Row */}
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">{t('chart.field.text', 'Text')}</span>
-                      <div className="flex items-center gap-1 flex-1">
-                        <input type="color" aria-label={label} value={style.labelColor} onChange={(e) => updateColor(key, 'labelColor', e.target.value)} className="w-6 h-6 rounded cursor-pointer p-0 border-0" />
-                        <input type="text" aria-label={label} value={style.labelColor} onChange={(e) => updateColor(key, 'labelColor', e.target.value)} className="flex-1 w-full px-1 py-0.5 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded" />
-                      </div>
-                    </div>
-
-                    {/* Font Size Row */}
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">{t('chart.field.size', 'Size')}</span>
-                      <div className="flex items-center gap-1 flex-1">
-                        <input type="range" min="8" max="20" step="1" value={style.fontSize ?? 10} onChange={(e) => updateColor(key, 'fontSize', parseInt(e.target.value))} className="w-full h-1 bg-slate-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer" />
-                        <span className="text-[10px] w-5 text-right font-medium text-slate-600 dark:text-slate-300">{style.fontSize ?? 10}</span>
-                      </div>
-                    </div>
-
-                    {/* Bar Width Row (only for bar series) */}
-                    {style.barSize !== undefined && (
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400 w-8">{t('chart.field.width', 'Width')}</span>
-                        <div className="flex items-center gap-1 flex-1">
-                          <input type="range" min="10" max="100" step="5" value={style.barSize} onChange={(e) => updateColor(key, 'barSize', parseInt(e.target.value))} className="w-full h-1 bg-slate-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer" />
-                          <span className="text-[10px] w-7 text-right font-medium text-slate-600 dark:text-slate-300">{style.barSize}px</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Bold + Stroke Row */}
-                    <div className="flex items-center gap-3">
-                      <label className="flex items-center gap-1 cursor-pointer">
-                        <input type="checkbox" checked={style.bold ?? true} onChange={(e) => updateColor(key, 'bold', e.target.checked)} className="w-3 h-3" />
-                        <span className="text-[10px] text-slate-600 dark:text-slate-400 font-bold">{t('chart.field.bold', 'Bold')}</span>
-                      </label>
-                      <label className="flex items-center gap-1 cursor-pointer">
-                        <input type="checkbox" checked={style.stroke ?? false} onChange={(e) => updateColor(key, 'stroke', e.target.checked)} className="w-3 h-3" />
-                        <span className="text-[10px] text-slate-600 dark:text-slate-400">{t('chart.field.outline', 'Outline')}</span>
-                      </label>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Global: Highlight Current Month */}
-            <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={showCurrentMonth} onChange={(e) => setShowCurrentMonth(e.target.checked)} className="w-4 h-4 accent-orange-500" />
-                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('chart.highlightCurrentMonth', 'Highlight current month')}</span>
-              </label>
-            </div>
-          </div>
-        )}
-
-        {/* Chart Container */}
-        <div id="monthly-plan-actual-chart" className="flex-1 min-h-[420px] w-full relative overflow-visible">
-
-          {/* Pinned Detail Card Overlay */}
-          {pinnedMonth !== null && (() => {
-            const pinnedData = monthlyData.find((d) => d.month === pinnedMonth);
-            if (!pinnedData) return null;
-
-            const isCardOnLeft = pinnedMonth > 8;
-            const targetX = columnCoordsRef.current[pinnedMonth] || 100;
-            const cardX = isCardOnLeft ? targetX - 230 : targetX + 40;
-
-            return (
-              <div
-                className="absolute z-10 pointer-events-none transition-all duration-200 ease-in-out drop-shadow-md"
-                style={{
-                  left: cardX,
-                  top: '45%',
-                  transform: 'translateY(-50%)'
-                }}
-              >
-                {/* Connecting Arrow */}
-                <div
-                  className={`absolute top-1/2 -translate-y-1/2 w-[14px] h-[14px] bg-white dark:bg-slate-900 transform rotate-45 pointer-events-none ${
-                    isCardOnLeft
-                      ? '-right-[7px] border-t border-r border-slate-300 dark:border-slate-700'
-                      : '-left-[7px] border-b border-l border-slate-300 dark:border-slate-700'
-                  }`}
-                  style={{ zIndex: 0 }}
-                />
-                <div className="relative z-10">
-                  <MonthDetailCard data={pinnedData} chartColors={chartColors} t={t} nf={nf} hideShadow={true} />
-                </div>
+    <Page {...header}>
+      {/* The card is the capture target: an exported image carries its title,
+          year and key along with the plot. */}
+      <Card id="monthly-plan-actual-chart" padding="lg" className="animate-fade-up">
+        <CardHeader
+          title={<WithYear year={currentYear}>{t('monthlyPlanActual.chartTitle', 'OS contract work: plan vs actual')}</WithYear>}
+          description={t('monthlyPlanActual.chartDesc', 'Sales on the left axis, working hours on the right')}
+          actions={
+            <>
+              <div data-html2canvas-ignore="true">
+                <Select
+                  controlSize="sm"
+                  aria-label={t('chart.monthDetailsHint', 'Show the numbers for one month')}
+                  title={t('chart.monthDetailsHint', 'Show the numbers for one month')}
+                  value={pinnedMonth ?? ''}
+                  onChange={event => setPinnedMonth(event.target.value ? Number(event.target.value) : null)}
+                  className="w-36"
+                >
+                  <option value="">{t('chart.monthDetails', 'Month details')}</option>
+                  {monthlyData.map(d => (
+                    <option key={d.month} value={d.month}>{d.monthLabel}</option>
+                  ))}
+                </Select>
               </div>
-            );
-          })()}
-
-          <ResponsiveContainer width="100%" height="100%" minHeight={420}>
-            <ComposedChart
-              data={monthlyData}
-              margin={{ top: 20, right: 60, left: 20, bottom: 5 }}
-              onClick={(state) => {
-                // recharts 3 `MouseHandlerDataParam` has no `activePayload` — recover the
-                // clicked datum from the active index instead.
-                const rawIndex = state?.activeIndex;
-                if (rawIndex === undefined || rawIndex === null) return;
-                const index = Number(rawIndex);
-                if (!Number.isInteger(index) || index < 0) return;
-                const clicked = monthlyData[index];
-                if (!clicked) return;
-
-                // Toggle off if clicking the same month, otherwise set the month
-                setPinnedMonth(prev => (prev === clicked.month ? null : clicked.month));
-              }}
-            >
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_PALETTE.grid} />
-
-              {/* Current Month Highlight */}
-              {showCurrentMonth && currentMonth !== null && (() => {
-                const monthEntry = monthlyData.find(d => d.month === currentMonth);
-                const monthLabel = monthEntry?.monthLabel;
-                return monthLabel ? (
-                  <>
-                    <ReferenceArea yAxisId="left" xAxisId="main" x1={monthLabel} x2={monthLabel} fill="rgba(251,146,60,0.12)" />
-                    <ReferenceLine yAxisId="left" xAxisId="main" x={monthLabel} stroke="#f97316" strokeWidth={2} strokeDasharray="6 3" label={{ value: t('chart.thisMonth', '今月'), position: 'top', fontSize: 10, fill: '#f97316', fontWeight: 'bold' }} />
-                  </>
-                ) : null;
-              })()}
-
-              {/* X-Axis: Months */}
-              <XAxis
-                xAxisId="main"
-                dataKey="monthLabel"
-                fontSize={12}
-                interval={0}
-                tick={{ fontSize: 12 }}
-                tickLine={false}
-                height={24}
-                padding={{ left: 0, right: 0 }}
-              />
-              {/* Hidden X-Axis for Bullet Chart Overlay */}
-              <XAxis
-                xAxisId="actualLayer"
-                dataKey="monthLabel"
-                hide={true}
-                interval={0}
-                height={0}
-              />
-
-              {/* Y1-Axis (Left): Sales in 万円 */}
-              <YAxis
-                yAxisId="left"
-                orientation="left"
-                fontSize={11}
-                domain={[0, maxSales]}
-                label={{
-                  value: t('monthlyPlanActual.axis.sales', '売上（万円）'),
-                  angle: -90,
-                  position: 'insideLeft',
-                  style: { fill: chartColors.salesActual.color }
+              <SeriesStyleButton
+                series={SERIES_KEYS.map(key => ({ key, label: labels[key], style: chartColors[key] }))}
+                onChange={updateSeries}
+                onReset={() => {
+                  resetChartColors();
+                  setShowCurrentMonth(true);
                 }}
-              />
-
-              {/* Y2-Axis (Right): Working Hours */}
-              <YAxis
-                yAxisId="right"
-                orientation="right"
-                fontSize={11}
-                domain={[0, maxWorkingHours]}
-                label={{
-                  value: t('monthlyPlanActual.axis.workingHours', '月間稼働時間（時間）'),
-                  angle: 90,
-                  position: 'insideRight',
-                  style: { fill: chartColors.workingHoursActual.color }
-                }}
-              />
-
-              <Tooltip content={<CustomTooltip chartColors={chartColors} t={t} nf={nf} />} />
-              <Legend
-                verticalAlign="top"
-                height={36}
-                wrapperStyle={{ paddingBottom: '10px' }}
-                content={({ payload }) => (
-                  <div style={{ textAlign: 'center', padding: '4px 0' }}>
-                    {payload?.filter((entry) => entry.value !== 'salesActual').map((entry, index) => {
-                      const isDashed = entry.dataKey === 'capacityLine';
-                      const isLine = entry.type === 'line' || entry.dataKey === 'salesPlan' || entry.dataKey === 'capacityLine';
-                      return (
-                        <div key={index} style={{ display: 'inline-flex', alignItems: 'center', margin: '4px 10px', verticalAlign: 'middle' }}>
-                          {isLine ? (
-                            <div style={{
-                              width: 20,
-                              height: 0,
-                              marginRight: 6,
-                              borderTop: `2px ${isDashed ? 'dashed' : 'solid'} ${entry.color}`,
-                            }} />
-                          ) : (
-                            <div style={{
-                              width: 12,
-                              height: 12,
-                              marginRight: 6,
-                              backgroundColor: entry.color,
-                              borderRadius: 2,
-                            }} />
-                          )}
-                          {/* Mid-tone label so the legend stays legible in both themes */}
-                          <span style={{ fontSize: 12, color: CHART_PALETTE.labelNeutral }}>{entry.value}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
+                barSizeRange={[10, 100]}
+                extra={currentMonth !== null && (
+                  <SeriesStyleCheck checked={showCurrentMonth} onChange={setShowCurrentMonth}>
+                    {t('chart.highlightCurrentMonth', 'Mark this month')}
+                  </SeriesStyleCheck>
                 )}
               />
-
-              {/* Series 1: Capacity Line - Dashed Gray Line (Y2) */}
-              <Line
-                xAxisId="main"
-                yAxisId="right"
-                type="monotone"
-                dataKey="capacityLine"
-                name={t('monthlyPlanActual.legend.capacityLine', '能力線')}
-                stroke={chartColors.capacityLine.color}
-                strokeOpacity={chartColors.capacityLine.opacity}
-                strokeWidth={2}
-                strokeDasharray="5 5"
-                dot={false}
-              >
-                <LabelList dataKey="capacityLine" position="left" content={<CustomLabel position="left" dataKey="capacityLine" chartColors={chartColors} nf={nf} />} />
-              </Line>
-
-              {/* Series 2: Working Hours Plan - Stacked Column (Y2) */}
-              <Bar
-                xAxisId="main"
-                yAxisId="right"
-                dataKey="workingHoursPlan"
-                name={t('monthlyPlanActual.legend.workingPlan', '稼働計画')}
-                fill={chartColors.workingHoursPlan.color}
-                fillOpacity={chartColors.workingHoursPlan.opacity}
-                maxBarSize={chartColors.workingHoursPlan.barSize ?? 60}
-              >
-                <LabelList dataKey="workingHoursPlan" position="insideTop" content={<CustomLabel position="insideTop" dataKey="workingHoursPlan" chartColors={chartColors} nf={nf} />} />
-              </Bar>
-
-              {/* Series 4: Sales Plan - Line with Markers and Data Labels (Y1) */}
-              <Line
-                xAxisId="main"
-                yAxisId="left"
-                type="monotone"
-                dataKey="salesPlan"
-                name={t('monthlyPlanActual.legend.salesPlan', '売上計画')}
-                stroke={chartColors.salesPlan.color}
-                strokeOpacity={chartColors.salesPlan.opacity}
-                strokeWidth={3}
-                dot={{ fill: chartColors.salesPlan.color, r: 5 }}
-              >
-                <LabelList dataKey="salesPlan" position="top" content={<CustomLabel position="top" dataKey="salesPlan" chartColors={chartColors} nf={nf} />} />
-              </Line>
-
-              {/* Series 5: Sales Actual - Column (Y1) */}
-              <Bar
-                xAxisId="main"
-                yAxisId="left"
-                dataKey="salesActual"
-                name={t('monthlyPlanActual.legend.salesActual', '売上実績')}
-                fill={chartColors.salesActual.color}
-                fillOpacity={chartColors.salesActual.opacity}
-                radius={[4, 4, 0, 0]}
-                maxBarSize={chartColors.salesActual.barSize ?? 40}
-              >
-                <LabelList dataKey="salesActual" position="top" content={<CustomLabel position="top" dataKey="salesActual" chartColors={chartColors} nf={nf} />} />
-                <LabelList content={<ZeroLabel chartColors={chartColors} />} />
-              </Bar>
-
-              {/* === BULLET CHART ACTUAL LAYER === */}
-              {/* Series 3: Working Hours Actual - Column inside Plan Column with Gap Connector */}
-              <Bar
-                xAxisId="actualLayer"
-                yAxisId="right"
-                dataKey="workingHoursActual"
-                name={t('monthlyPlanActual.legend.workingActual', '稼働実績')}
-                fill={chartColors.workingHoursActual.color}
-                fillOpacity={chartColors.workingHoursActual.opacity}
-                maxBarSize={chartColors.workingHoursActual.barSize ?? 30}
-                shape={<WorkingHoursActualBar chartColors={chartColors} onColumnCoord={recordColumnCoord} />}
-              >
-                <LabelList dataKey="workingHoursActual" position="insideTop" content={<CustomLabel position="insideTop" dataKey="workingHoursActual" chartColors={chartColors} nf={nf} />} />
-              </Bar>
-
-              {/* Invisible spacer to maintain layout mapping for actualLayer */}
-              <Bar
-                xAxisId="actualLayer"
-                yAxisId="left"
-                dataKey="salesActual"
-                fill="transparent"
-                legendType="none"
-                tooltipType="none"
-                style={{ pointerEvents: 'none' }}
+              <ExportButton
+                targetId="monthly-plan-actual-chart"
+                filename={`monthly_plan_actual_${currentYear}`}
+                data={monthlyData}
+                csvColumns={csvColumns}
+                disabled={loading}
               />
-            </ComposedChart>
-          </ResponsiveContainer>
+            </>
+          }
+        />
+
+        {loading && <RefreshBar className="mt-4" />}
+
+        <div className={`transition-opacity duration-200 ${loading ? 'opacity-40' : ''}`}>
+          <ul className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-600 dark:text-slate-300">
+            {SERIES_KEYS.map(key => (
+              <li key={key} className="flex items-center gap-2">
+                <Swatch style={chartColors[key]} shape={SERIES_SHAPE[key]} />
+                {labels[key]}
+              </li>
+            ))}
+          </ul>
+
+          {/* Narrow screens scroll the plot sideways rather than squeezing
+              twelve months of labelled columns into a phone's width. */}
+          <div className="-mx-2 mt-3 overflow-x-auto px-2 custom-scrollbar">
+            <div className="relative h-[max(360px,calc(100dvh-20rem))] min-w-[680px]">
+              {pinnedData && (() => {
+                // Beside its column, on whichever side has the room.
+                const onLeft = pinnedData.month > 8;
+                const columnX = columnCoordsRef.current[pinnedData.month] ?? 100;
+                return (
+                  <div
+                    className={`pointer-events-none absolute top-1/2 z-10 -translate-y-1/2 transition-[left] duration-200 ease-out ${onLeft ? '-translate-x-full' : ''}`}
+                    style={{ left: onLeft ? columnX - 24 : columnX + 24 }}
+                  >
+                    <MonthDetailCard data={pinnedData} {...cardProps} onClose={unpin} />
+                  </div>
+                );
+              })()}
+
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart
+                  data={monthlyData}
+                  margin={{ top: 28, right: 16, left: 8, bottom: 4 }}
+                  onClick={state => {
+                    // recharts 3 `MouseHandlerDataParam` has no `activePayload` — recover the
+                    // clicked datum from the active index instead.
+                    const rawIndex = state?.activeIndex;
+                    if (rawIndex === undefined || rawIndex === null) return;
+                    const index = Number(rawIndex);
+                    if (!Number.isInteger(index) || index < 0) return;
+                    const clicked = monthlyData[index];
+                    // Idempotent: the card's close button and Esc release it.
+                    if (clicked) setPinnedMonth(clicked.month);
+                  }}
+                  className="cursor-pointer"
+                >
+                  <CartesianGrid vertical={false} stroke={theme.grid} yAxisId="left" xAxisId="main" />
+
+                  {showCurrentMonth && currentMonthLabel && (
+                    <ReferenceArea yAxisId="left" xAxisId="main" x1={currentMonthLabel} x2={currentMonthLabel} fill="rgba(251,146,60,0.1)" />
+                  )}
+                  {showCurrentMonth && currentMonthLabel && (
+                    <ReferenceLine
+                      yAxisId="left"
+                      xAxisId="main"
+                      x={currentMonthLabel}
+                      stroke={theme.marker}
+                      strokeWidth={1.5}
+                      strokeDasharray="4 4"
+                      label={<CurrentMonthBadge label={t('chart.thisMonth', 'This month')} color={theme.marker} />}
+                    />
+                  )}
+
+                  <XAxis
+                    xAxisId="main"
+                    dataKey="monthLabel"
+                    interval={0}
+                    tick={{ fontSize: 12, fontWeight: 600, fill: theme.text }}
+                    tickLine={false}
+                    axisLine={{ stroke: theme.line }}
+                    height={28}
+                    tickMargin={8}
+                  />
+                  {/* The actual-hours bars sit on their own axis so they can be
+                      drawn inside the planned-hours columns. */}
+                  <XAxis xAxisId="actualLayer" dataKey="monthLabel" hide interval={0} height={0} />
+
+                  <YAxis
+                    yAxisId="left"
+                    orientation="left"
+                    domain={[0, maxSales]}
+                    width={64}
+                    tickLine={false}
+                    axisLine={{ stroke: theme.line }}
+                    tick={{ fontSize: 11, fill: theme.muted }}
+                    tickFormatter={nf}
+                    label={{
+                      value: t('monthlyPlanActual.axis.sales', 'Sales (10k JPY)'),
+                      angle: -90,
+                      position: 'insideLeft',
+                      style: { fontSize: 12, fontWeight: 600, fill: chartColors.salesActual.color, textAnchor: 'middle' },
+                    }}
+                  />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    domain={[0, maxWorkingHours]}
+                    width={64}
+                    tickLine={false}
+                    axisLine={{ stroke: theme.line }}
+                    tick={{ fontSize: 11, fill: theme.muted }}
+                    tickFormatter={nf}
+                    label={{
+                      value: t('monthlyPlanActual.axis.workingHours', 'Working hours per month'),
+                      angle: 90,
+                      position: 'insideRight',
+                      style: { fontSize: 12, fontWeight: 600, fill: chartColors.workingHoursActual.color, textAnchor: 'middle' },
+                    }}
+                  />
+
+                  {/* One card at a time: hover shows one, a selected month holds its own. */}
+                  <Tooltip
+                    active={pinnedMonth !== null ? false : undefined}
+                    cursor={{ fill: theme.focus }}
+                    content={<HoverCard {...cardProps} />}
+                  />
+
+                  <Line
+                    xAxisId="main"
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="capacityLine"
+                    name={labels.capacityLine}
+                    stroke={chartColors.capacityLine.color}
+                    strokeOpacity={chartColors.capacityLine.opacity}
+                    strokeWidth={2}
+                    strokeDasharray="5 5"
+                    dot={false}
+                  >
+                    <LabelList dataKey="capacityLine" position="left" content={<ValueLabel position="left" dataKey="capacityLine" chartColors={chartColors} nf={nf} theme={theme} suffix="h" />} />
+                  </Line>
+
+                  <Bar
+                    xAxisId="main"
+                    yAxisId="right"
+                    dataKey="workingHoursPlan"
+                    name={labels.workingHoursPlan}
+                    fill={chartColors.workingHoursPlan.color}
+                    fillOpacity={chartColors.workingHoursPlan.opacity}
+                    maxBarSize={chartColors.workingHoursPlan.barSize ?? 60}
+                  >
+                    <LabelList dataKey="workingHoursPlan" position="insideTop" content={<ValueLabel position="insideTop" dataKey="workingHoursPlan" chartColors={chartColors} nf={nf} theme={theme} />} />
+                  </Bar>
+
+                  <Line
+                    xAxisId="main"
+                    yAxisId="left"
+                    type="monotone"
+                    dataKey="salesPlan"
+                    name={labels.salesPlan}
+                    stroke={chartColors.salesPlan.color}
+                    strokeOpacity={chartColors.salesPlan.opacity}
+                    strokeWidth={3}
+                    dot={{ fill: chartColors.salesPlan.color, r: 5 }}
+                  >
+                    <LabelList dataKey="salesPlan" position="top" content={<ValueLabel position="top" dataKey="salesPlan" chartColors={chartColors} nf={nf} theme={theme} />} />
+                  </Line>
+
+                  <Bar
+                    xAxisId="main"
+                    yAxisId="left"
+                    dataKey="salesActual"
+                    name={labels.salesActual}
+                    fill={chartColors.salesActual.color}
+                    fillOpacity={chartColors.salesActual.opacity}
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={chartColors.salesActual.barSize ?? 40}
+                  >
+                    <LabelList dataKey="salesActual" position="top" content={<ValueLabel position="top" dataKey="salesActual" chartColors={chartColors} nf={nf} theme={theme} />} />
+                    <LabelList content={<ZeroLabel shownThrough={finishedMonths} chartColors={chartColors} theme={theme} />} />
+                  </Bar>
+
+                  <Bar
+                    xAxisId="actualLayer"
+                    yAxisId="right"
+                    dataKey="workingHoursActual"
+                    name={labels.workingHoursActual}
+                    fill={chartColors.workingHoursActual.color}
+                    fillOpacity={chartColors.workingHoursActual.opacity}
+                    maxBarSize={chartColors.workingHoursActual.barSize ?? 30}
+                    shape={<WorkingHoursActualBar chartColors={chartColors} onColumnCoord={recordColumnCoord} />}
+                  >
+                    <LabelList dataKey="workingHoursActual" position="insideTop" content={<ValueLabel position="insideTop" dataKey="workingHoursActual" chartColors={chartColors} nf={nf} theme={theme} />} />
+                  </Bar>
+
+                  {/* Invisible spacer that keeps the actual layer's columns
+                      lined up with the main layer's. */}
+                  <Bar
+                    xAxisId="actualLayer"
+                    yAxisId="left"
+                    dataKey="salesActual"
+                    fill="transparent"
+                    legendType="none"
+                    tooltipType="none"
+                    style={{ pointerEvents: 'none' }}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         </div>
-      </div>
-    </div >
+      </Card>
+    </Page>
   );
 };

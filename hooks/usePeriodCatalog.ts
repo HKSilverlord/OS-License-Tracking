@@ -84,9 +84,18 @@ export function usePeriodCatalog(userId: string | null): PeriodCatalog {
       void refreshFor(detail?.periodLabel ?? '');
     };
 
+    // A period deleted or edited elsewhere: re-read the list, stay on the year.
+    const handlePeriodsChanged = () => {
+      load().catch(error => log.error('Failed to reload the period list', error));
+    };
+
     window.addEventListener('periodCreated', handlePeriodCreated);
-    return () => window.removeEventListener('periodCreated', handlePeriodCreated);
-  }, [refreshFor]);
+    window.addEventListener('periodsChanged', handlePeriodsChanged);
+    return () => {
+      window.removeEventListener('periodCreated', handlePeriodCreated);
+      window.removeEventListener('periodsChanged', handlePeriodsChanged);
+    };
+  }, [refreshFor, load]);
 
   return { availablePeriods, availableYears, currentYear, setCurrentYear, refreshFor };
 }

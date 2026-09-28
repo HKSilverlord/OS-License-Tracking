@@ -1,160 +1,206 @@
-
-import React, { useState } from 'react';
-import { Lock, Mail, AlertCircle } from 'lucide-react';
-import { useLanguage } from '../contexts/LanguageContext';
+import React, { useRef, useState } from 'react';
+import { AlertCircle, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { SUPPORTED_LANGUAGES, useLanguage } from '../contexts/LanguageContext';
+import type { SupportedLanguage, TranslateFn } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
 import { createLogger } from '../utils/logger';
+import { AppIcon } from './ui/AppIcon';
+import { Button } from './ui/Button';
+import { cardClasses } from './ui/Card';
+import { Field, Input } from './ui/Field';
+import { SegmentedControl } from './ui/SegmentedControl';
 
 const log = createLogger('Auth');
-import { Button } from './ui/Button';
 
+/**
+ * What went wrong, said the way a person would say it. Supabase's own messages
+ * ("Invalid login credentials") are English-only and written for developers.
+ */
+const describeSignInError = (error: unknown, t: TranslateFn): string => {
+  const { code, status, message, name } = (error ?? {}) as {
+    code?: string;
+    status?: number;
+    message?: string;
+    name?: string;
+  };
+  if (code === 'invalid_credentials' || /invalid login credentials/i.test(message ?? '')) {
+    return t('auth.error.invalid', "That email and password don't match. Check both and try again.");
+  }
+  if (code === 'email_not_confirmed') {
+    return t('auth.error.unconfirmed', 'This account has not been confirmed yet. Ask an administrator to confirm it.');
+  }
+  if (status === 429 || code === 'over_request_rate_limit') {
+    return t('auth.error.rateLimited', 'Too many attempts. Wait a minute, then try again.');
+  }
+  if (name === 'AuthRetryableFetchError' || /fetch|network/i.test(message ?? '') || !navigator.onLine) {
+    return t('auth.error.network', "Can't reach the server. Check your connection and try again.");
+  }
+  return t('auth.error.generic', "Sign-in didn't work. Try again, or ask an administrator for help.");
+};
+
+/**
+ * The front door. One card, two fields, one button — and the language picker
+ * in the corner, because the first person to see this page may not read
+ * Japanese.
+ */
 export const Auth: React.FC = () => {
-  const [loading, setLoading] = useState(false);
+  const { t, language, setLanguage } = useLanguage();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [capsLock, setCapsLock] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { t } = useLanguage();
+  const passwordRef = useRef<HTMLInputElement>(null);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // A phone keyboard popping up before the page has even been read is rude;
+  // on a desktop the caret belongs in the first field.
+  const [autoFocusEmail] = useState(() => window.matchMedia('(min-width: 640px)').matches);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setLoading(true);
     setError(null);
-
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        throw error;
-      }
-      // Auth state change in App.tsx will handle the redirect/view switch
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (signInError) throw signInError;
+      // The session listener in useAuthSession switches to the app.
     } catch (err) {
-      const error = err as Error;
-      log.error('Login error:', error);
-      setError(error.message || 'Failed to login');
+      log.error('Sign-in failed', err);
+      setError(describeSignInError(err, t));
+      passwordRef.current?.select();
     } finally {
       setLoading(false);
     }
   };
 
-  // Generate public URLs from Supabase storage
-  const logoUrl = supabase.storage.from('public').getPublicUrl('logo.png').data.publicUrl;
-  const bgUrl = supabase.storage.from('public').getPublicUrl('auth-bg.jpg').data.publicUrl;
+  const trackCapsLock = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    setCapsLock(event.getModifierState('CapsLock'));
+  };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col md:flex-row">
-      {/* Left Panel - Branding (Hidden on small screens) */}
-      <div className="hidden md:flex flex-col flex-1 bg-slate-950 dark:bg-slate-950 text-white dark:text-white relative overflow-hidden">
-        {/* Abstract background elements */}
-        <div className="absolute inset-0 z-0 opacity-40">
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-blue-900 via-slate-900 to-slate-950" />
-          <img src={bgUrl} alt="Background" className="w-full h-full object-cover mix-blend-overlay" onError={(e) => e.currentTarget.style.display = 'none'} />
-        </div>
-        
-        <div className="relative z-10 flex flex-col justify-center items-start h-full p-16 lg:p-24">
-          <img 
-            src={logoUrl} 
-            alt="Company Logo" 
-            className="h-12 mb-auto"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-              // Fallback if logo fails to load
-              e.currentTarget.parentElement?.insertAdjacentHTML('afterbegin', `<div class="h-12 w-12 bg-blue-600 rounded-lg mb-auto flex items-center justify-center font-bold text-xl">OS</div>`);
-            }}
-          />
-          
-          <div className="mb-20">
-            <h1 className="text-4xl lg:text-5xl font-bold tracking-tight mb-6 text-white text-balance leading-tight">
-              Manage your engineering projects with precision.
-            </h1>
-            <p className="text-lg text-slate-300 max-w-lg text-balance">
-              Streamline operations, track period profitability, and manage license allocation—all in one place.
-            </p>
-          </div>
-          
-          <div className="mt-auto">
-            <p className="text-sm font-medium text-slate-400">OS Management System v2.0</p>
-          </div>
-        </div>
+    <div className="relative min-h-dvh overflow-hidden bg-slate-50 dark:bg-slate-950">
+      {/* A soft light from above: the only decoration on the page. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(ellipse_55%_60%_at_50%_0%,rgb(59_130_246/0.14),transparent)] dark:bg-[radial-gradient(ellipse_55%_60%_at_50%_0%,rgb(59_130_246/0.2),transparent)]"
+      />
+
+      <div className="relative flex justify-end p-4 sm:p-6">
+        <SegmentedControl<SupportedLanguage>
+          size="sm"
+          ariaLabel={t('language.select', 'Select language')}
+          value={language}
+          onChange={setLanguage}
+          options={SUPPORTED_LANGUAGES.map(({ code, label }) => ({ value: code, label }))}
+          className="bg-slate-200/60 dark:bg-slate-800/80"
+        />
       </div>
 
-      {/* Right Panel - Login Form */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-white dark:bg-slate-900">
-        <div className="w-full max-w-sm space-y-8 animate-fade-up">
-          <div className="text-center md:text-left">
-            {/* Mobile Logo Fallback */}
-            <div className="md:hidden flex justify-center mb-6">
-              <img src={logoUrl} alt="Logo" className="h-10" onError={(e) => e.currentTarget.style.display = 'none'} />
-            </div>
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
-              {t('app.title')}
-            </h2>
-            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-              {t('auth.subtitle')}
+      <main className="relative flex justify-center px-4 pb-24 pt-[6vh] sm:pt-[10vh]">
+        <div className="w-full max-w-[380px] animate-fade-up">
+          <div className="mb-8 text-center">
+            <AppIcon size={56} className="mx-auto mb-5 drop-shadow-[0_10px_24px_rgb(37_99_235/0.35)]" />
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
+              {t('app.title', 'OS Manager')}
+            </h1>
+            <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
+              {t('auth.welcome', 'Sign in to continue')}
             </p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-6">
-            {error && (
-              <div className="bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400 p-4 rounded-xl flex items-start text-sm">
-                <AlertCircle className="w-5 h-5 mr-3 shrink-0 mt-0.5" />
-                <p>{error}</p>
-              </div>
-            )}
+          <div className={`${cardClasses} p-6 sm:p-7`}>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {error && (
+                <div
+                  role="alert"
+                  className="flex gap-2.5 rounded-xl bg-rose-50 px-3.5 py-3 text-sm leading-5 text-rose-700 animate-fade-in dark:bg-rose-500/10 dark:text-rose-300"
+                >
+                  <AlertCircle className="mt-px h-4 w-4 shrink-0" aria-hidden="true" />
+                  <p>{error}</p>
+                </div>
+              )}
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                  Email
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3.5 top-3 w-5 h-5 text-slate-400" />
-                  <input
+              <Field label={t('auth.email', 'Email')}>
+                {id => (
+                  <Input
+                    id={id}
                     type="email"
+                    inputMode="email"
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    spellCheck={false}
                     required
+                    autoFocus={autoFocusEmail}
+                    controlSize="lg"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="pl-11 w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl py-2.5 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all sm:text-sm"
-                    placeholder="email@example.com"
+                    onChange={event => setEmail(event.target.value)}
+                    placeholder="name@esuhai.com"
                   />
-                </div>
-              </div>
+                )}
+              </Field>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                  Password
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3.5 top-3 w-5 h-5 text-slate-400" />
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="pl-11 w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl py-2.5 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all sm:text-sm"
-                    placeholder="••••••••"
-                  />
-                </div>
-              </div>
-            </div>
+              <Field
+                label={t('auth.password', 'Password')}
+                hint={capsLock ? (
+                  <span className="font-medium text-amber-600 dark:text-amber-400">
+                    {t('auth.capsLock', 'Caps Lock is on')}
+                  </span>
+                ) : undefined}
+              >
+                {id => (
+                  <div className="relative">
+                    <Input
+                      ref={passwordRef}
+                      id={id}
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      required
+                      controlSize="lg"
+                      className="pr-11"
+                      value={password}
+                      onChange={event => setPassword(event.target.value)}
+                      onKeyDown={trackCapsLock}
+                      onKeyUp={trackCapsLock}
+                      onBlur={() => setCapsLock(false)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(shown => !shown)}
+                      aria-label={showPassword ? t('auth.hidePassword', 'Hide password') : t('auth.showPassword', 'Show password')}
+                      aria-pressed={showPassword}
+                      title={showPassword ? t('auth.hidePassword', 'Hide password') : t('auth.showPassword', 'Show password')}
+                      className="absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                    >
+                      {showPassword
+                        ? <EyeOff className="h-[18px] w-[18px]" aria-hidden="true" />
+                        : <Eye className="h-[18px] w-[18px]" aria-hidden="true" />}
+                    </button>
+                  </div>
+                )}
+              </Field>
 
-            <Button
-              type="submit"
-              disabled={loading}
-              isLoading={loading}
-              className="w-full h-12 text-base font-semibold"
-            >
-              {t('auth.button')}
-            </Button>
-          </form>
+              <Button
+                type="submit"
+                size="lg"
+                isLoading={loading}
+                className="mt-2 w-full"
+              >
+                {loading ? t('auth.signingIn', 'Signing in…') : t('auth.signIn', 'Sign in')}
+                {!loading && <ArrowRight className="h-4 w-4" aria-hidden="true" />}
+              </Button>
+            </form>
+          </div>
 
-          <p className="text-center text-sm text-slate-500 dark:text-slate-400 md:hidden pt-8">
-            OS Management System v2.0
+          <p className="mx-auto mt-6 max-w-[320px] text-center text-[13px] leading-5 text-slate-500 dark:text-slate-400">
+            {t('auth.adminHint', 'Accounts are created by an administrator. If you need access, ask yours.')}
           </p>
         </div>
-      </div>
+      </main>
+
+      <p className="absolute inset-x-0 bottom-0 pb-6 text-center text-xs text-slate-400 dark:text-slate-500">
+        {t('app.subtitle', 'Esuhai Group')}
+      </p>
     </div>
   );
 };

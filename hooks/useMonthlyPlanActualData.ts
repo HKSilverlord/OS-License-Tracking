@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { dbService } from '../services/dbService';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
@@ -26,7 +26,14 @@ interface MonthlyAggregate {
 }
 
 export interface MonthlyPlanActualDataset {
+  /** A request is in flight. Before the first year lands there is nothing to show. */
   loading: boolean;
+  /** At least one year has arrived, so later loads can refresh in place. */
+  hasLoaded: boolean;
+  /** The last request failed. */
+  error: boolean;
+  /** Asks for the year again. */
+  reload: () => void;
   monthlyData: MonthlyPlanActualData[];
   /** Sales axis top, +10% headroom so the labels are not clipped. */
   maxSales: number;
@@ -50,6 +57,11 @@ export function useMonthlyPlanActualData(currentYear: number): MonthlyPlanActual
   const toast = useToast();
 
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [error, setError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  // Set by the `dataUpdated` listener so that refetch keeps the chart on screen.
+  const silentRef = useRef(false);
   const [aggregates, setAggregates] = useState<MonthlyAggregate[]>([]);
   const [capacities, setCapacities] = useState<{ month: number; capacity: number }[]>([]);
 
@@ -65,9 +77,11 @@ export function useMonthlyPlanActualData(currentYear: number): MonthlyPlanActual
     // year faster than a request completes. Without this guard an older response
     // lands after a newer one and the view shows the wrong year's numbers.
     let cancelled = false;
+    const silent = silentRef.current;
+    silentRef.current = false;
 
     const fetchData = async () => {
-      setLoading(true);
+      if (!silent) setLoading(true);
       try {
         // getCapacityLine(year) returns the real weekday count for `year` (WS-1).
         const [aggregatedData, capacityData] = await Promise.all([
@@ -78,10 +92,13 @@ export function useMonthlyPlanActualData(currentYear: number): MonthlyPlanActual
         if (cancelled) return; // superseded by a newer year
         setAggregates(aggregatedData);
         setCapacities(capacityData);
+        setError(false);
+        setHasLoaded(true);
       } catch (error) {
         if (cancelled) return;
         log.error('Failed to load monthly plan-actual data:', error);
-        toast.error(tRef.current('toast.loadFailed', 'Failed to load data'));
+        setError(true);
+        if (!silent) toast.error(tRef.current('toast.loadFailed', 'Failed to load data'));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -89,7 +106,19 @@ export function useMonthlyPlanActualData(currentYear: number): MonthlyPlanActual
 
     void fetchData();
     return () => { cancelled = true; };
-  }, [currentYear, toast]);
+  }, [currentYear, toast, reloadKey]);
+
+  // Saving hours in another view fires `dataUpdated`; refetch without blanking the chart.
+  useEffect(() => {
+    const handleDataUpdated = () => {
+      silentRef.current = true;
+      setReloadKey(key => key + 1);
+    };
+    window.addEventListener('dataUpdated', handleDataUpdated);
+    return () => window.removeEventListener('dataUpdated', handleDataUpdated);
+  }, []);
+
+  const reload = useCallback(() => setReloadKey(key => key + 1), []);
 
   const monthlyData = useMemo<MonthlyPlanActualData[]>(() => {
     const locale = localeFor(language);
@@ -119,5 +148,5 @@ export function useMonthlyPlanActualData(currentYear: number): MonthlyPlanActual
     return Math.ceil(max * 1.1);
   }, [monthlyData]);
 
-  return { loading, monthlyData, maxSales, maxWorkingHours };
+  return { loading, hasLoaded, error, reload, monthlyData, maxSales, maxWorkingHours };
 }

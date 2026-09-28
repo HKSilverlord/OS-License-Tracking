@@ -324,6 +324,21 @@ const unclipSingleLineText = (root: HTMLElement): void => {
 };
 
 /**
+ * Content that belongs in an exported image but not on screen, such as the
+ * title and year over the annual table, which on screen sit in the page header
+ * outside the table. It is marked `hidden data-export-only`. The capture shows
+ * it in the clone it paints, and for the instant it measures the live element,
+ * so the canvas is sized to include it and one pass is enough.
+ */
+const EXPORT_ONLY = '[data-export-only]';
+
+const revealExportOnly = (root: HTMLElement): HTMLElement[] => {
+  const hidden = Array.from(root.querySelectorAll<HTMLElement>(EXPORT_ONLY)).filter(el => el.hidden);
+  hidden.forEach(el => { el.hidden = false; });
+  return hidden;
+};
+
+/**
  * Browsers cap how big a canvas may be. Chrome and Safari refuse anything over
  * ~268M device pixels (and 16384 px on either side); past the cap they hand back
  * a canvas that is blank or never paints, so the export "succeeds" with an empty
@@ -437,6 +452,7 @@ const capturePass = async (
       // flickers. Must happen BEFORE the oklch pass, which freezes whatever
       // colours are in force at the time.
       if (exportsOnLightBackground()) clonedDoc.documentElement.classList.remove('dark');
+      revealExportOnly(clonedEl);
       await resolveOklchColors(clonedDoc);
       unclipSingleLineText(clonedEl);
       // Last thing before html2canvas paints, so this is the layout it paints.
@@ -476,7 +492,11 @@ const capture = async (
   // 3200px, which is more than any slide or document needs, and the 3x this
   // used to default to made every capture ~2.2x slower and heavier for nothing.
   const requested = options.scale ?? DEFAULT_CAPTURE_SCALE;
+  // Measured with the export-only content showing, then hidden again before the
+  // browser can paint, so it never appears on screen.
+  const revealed = revealExportOnly(element);
   let size = capturedSize(element);
+  revealed.forEach(el => { el.hidden = true; });
 
   if (size.width === 0 || size.height === 0) {
     throw new Error(
