@@ -222,7 +222,7 @@ const DetailRow = ({ label, value, unit, swatch }: {
       {label}
     </span>
     <span className="whitespace-nowrap font-medium tabular-nums text-slate-900 dark:text-slate-100">
-      {value} <span className="font-normal text-slate-400 dark:text-slate-500">{unit}</span>
+      {value} <span className="font-normal text-slate-500 dark:text-slate-400">{unit}</span>
     </span>
   </div>
 );

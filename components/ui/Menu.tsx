@@ -183,7 +183,7 @@ export const MenuItem: React.FC<MenuItemProps> = ({
         </span>
       )}
       <span className="min-w-0 flex-1 truncate">{children}</span>
-      {trailing && <span className="ml-3 shrink-0 text-xs text-slate-400 dark:text-slate-500">{trailing}</span>}
+      {trailing && <span className="ml-3 shrink-0 text-xs text-slate-500 dark:text-slate-400">{trailing}</span>}
     </button>
   );
 };
@@ -229,7 +229,7 @@ export const MenuCheckItem: React.FC<MenuCheckItemProps> = ({
 
 /** A small heading over a group of items. */
 export const MenuLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="px-2.5 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
+  <div className="px-2.5 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
     {children}
   </div>
 );

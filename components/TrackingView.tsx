@@ -916,7 +916,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
     label: (
       <>
         {half}
-        <span className="ml-1.5 hidden font-normal text-slate-400 sm:inline dark:text-slate-500">{halfMonths(half, t)}</span>
+        <span className="ml-1.5 hidden font-normal text-slate-500 sm:inline dark:text-slate-400">{halfMonths(half, t)}</span>
       </>
     ),
     title: `${half} (${halfMonths(half, t)})`,
@@ -1006,7 +1006,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
                 )}
                 <th scope="col" style={{ width: W.rate, minWidth: W.rate }} className={`${HEAD} text-right`}>
                   {t('tracker.rate', 'Rate')}
-                  <span className="block text-[11px] font-normal text-slate-400 dark:text-slate-500">{t('unit.yenPerHour', 'JPY/h')}</span>
+                  <span className="block text-[11px] font-normal text-slate-500 dark:text-slate-400">{t('unit.yenPerHour', 'JPY/h')}</span>
                 </th>
                 <th scope="col" data-col="kind" style={{ width: W.kind, minWidth: W.kind }} className={`${HEAD} ${HEAD_KIND} border-r`}>
                   <span className="sr-only">{t('tracker.rowKind', 'Plan or actual')}</span>
@@ -1069,7 +1069,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
                   <SortableRow key={project.id} id={project.id} disabled={!isEditMode || !canReorder} className="group">
                     {/* Plan */}
                     <tr data-project={project.id}>
-                      <td rowSpan={2} style={{ width: W.no, minWidth: W.no }} className={`${SURFACE} ${STICKY_NO} ${ROW_END} px-1 py-2 text-center align-top text-[13px] tabular-nums text-slate-400 dark:text-slate-500`}>
+                      <td rowSpan={2} style={{ width: W.no, minWidth: W.no }} className={`${SURFACE} ${STICKY_NO} ${ROW_END} px-1 py-2 text-center align-top text-[13px] tabular-nums text-slate-500 dark:text-slate-400`}>
                         {isEditMode && canReorder
                           ? <DragHandleCell label={t('tracker.dragToReorder', 'Drag to reorder')} />
                           : <span className="inline-block pt-1.5">{index + 1}</span>}
@@ -1094,7 +1094,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
                         <span className="line-clamp-2 text-[13px] font-medium leading-5 text-slate-900 dark:text-white" title={project.name}>
                           {project.name}
                         </span>
-                        <span className="mt-0.5 block font-mono text-[11px] text-slate-400 dark:text-slate-500">{project.code}</span>
+                        <span className="mt-0.5 block font-mono text-[11px] text-slate-500 dark:text-slate-400">{project.code}</span>
                       </th>
                       {showDetails && (
                         <>
@@ -1125,7 +1125,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
                           </td>
                         </>
                       )}
-                      <td className={`${SURFACE} px-2 py-1 text-right text-[13px] tabular-nums text-slate-400 dark:text-slate-500`}>
+                      <td className={`${SURFACE} px-2 py-1 text-right text-[13px] tabular-nums text-slate-500 dark:text-slate-400`}>
                         {nf(prices.plan)}
                       </td>
                       <td className={`${SURFACE} ${STICKY_KIND} border-r border-slate-100 px-2 py-1 text-[12px] text-slate-500 dark:border-slate-800 dark:text-slate-400`}>

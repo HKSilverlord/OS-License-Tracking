@@ -76,6 +76,6 @@ export const CardHeader: React.FC<CardHeaderProps> = ({
 export const WithYear: React.FC<{ year: number; children: React.ReactNode }> = ({ year, children }) => (
   <>
     {children}{' '}
-    <span className="font-normal tabular-nums text-slate-400 dark:text-slate-500">{year}</span>
+    <span className="font-normal tabular-nums text-slate-500 dark:text-slate-400">{year}</span>
   </>
 );
