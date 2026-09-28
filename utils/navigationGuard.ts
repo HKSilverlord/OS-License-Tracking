@@ -19,6 +19,9 @@ let activeBlocker: NavigationBlocker | null = null;
 
 /** The history entry the blocker guards, in react-router's numbering. */
 let guardedIndex: number | null = null;
+/** Its address and state, to put back when there is no telling how far away the move went. */
+let guardedUrl = '';
+let guardedState: unknown = null;
 
 const historyIndex = (state: unknown): number | null => {
   const idx = (state as { idx?: unknown } | null)?.idx;
@@ -29,12 +32,16 @@ const historyIndex = (state: unknown): number | null => {
 export function setNavigationBlocker(blocker: NavigationBlocker | null): () => void {
   activeBlocker = blocker;
   guardedIndex = blocker ? historyIndex(window.history.state) : null;
+  guardedUrl = window.location.href;
+  guardedState = window.history.state;
   return () => {
-    if (activeBlocker === blocker) {
-      activeBlocker = null;
-      guardedIndex = null;
-    }
+    if (activeBlocker === blocker) release();
   };
+}
+
+function release(): void {
+  activeBlocker = null;
+  guardedIndex = null;
 }
 
 export function hasNavigationBlocker(): boolean {
@@ -68,6 +75,12 @@ let restoring = false;
 /** The user's move, replayed after they chose to leave: the router must hear it. */
 let replaying = false;
 
+/*
+ * Once the user chooses to leave, the blocker is let go at once rather than when
+ * the page unmounts: the router finishes the move in a transition, and a second
+ * Back pressed in that time was caught against the page being left, putting its
+ * address back over the page the user had moved to.
+ */
 const onPopState = (event: PopStateEvent) => {
   if (replaying) {
     replaying = false;
@@ -78,18 +91,37 @@ const onPopState = (event: PopStateEvent) => {
     event.stopImmediatePropagation();
     return;
   }
+  if (!activeBlocker) return;
   const to = historyIndex(event.state);
-  // Without both numbers there is no telling how far to go back: let it through.
-  if (!activeBlocker || guardedIndex === null || to === null || to === guardedIndex) return;
+  if (to !== null && to === guardedIndex) return;
 
   event.stopImmediatePropagation();
-  const steps = to - guardedIndex;
-  restoring = true;
-  window.history.go(-steps);
+
+  if (to !== null && guardedIndex !== null) {
+    const steps = to - guardedIndex;
+    restoring = true;
+    window.history.go(-steps);
+    void confirmNavigation().then(leave => {
+      if (!leave) return;
+      release();
+      replaying = true;
+      window.history.go(steps);
+    });
+    return;
+  }
+
+  // An entry react-router never numbered: an address typed into the bar, or
+  // the history before it. There is no telling how far the move went, so the
+  // page stays as it is while the user decides. Staying writes the page's
+  // address back as a new entry; leaving lets the router follow the address.
   void confirmNavigation().then(leave => {
-    if (!leave) return;
+    if (!leave) {
+      window.history.pushState(guardedState, '', guardedUrl);
+      return;
+    }
+    release();
     replaying = true;
-    window.history.go(steps);
+    window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }));
   });
 };
 
