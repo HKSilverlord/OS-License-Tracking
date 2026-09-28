@@ -7,7 +7,6 @@ import { useNumberFormat } from '../hooks/useNumberFormat';
 import { useCatiaHydration } from '../hooks/useCatiaHydration';
 import { useCatiaStore, computeYearlyCost } from '../stores/useCatiaStore';
 import type { CatiaSyncStatus } from '../stores/useCatiaStore';
-import { formatCurrency } from '../utils/helpers';
 import { exportTableToCSV, generateCSVFilename } from '../utils/csvExport';
 import { ExportButton } from './ExportButton';
 import { YearControl } from './YearControl';
@@ -106,7 +105,7 @@ const exactText = (value: number, decimalMark: string): string =>
 const parseCell = (raw: string): number | null | undefined => {
   const text = raw.trim();
   if (text === '') return null;
-  if (!/^(\d+[.,]?\d*|[.,]\d+)$/.test(text)) return undefined;
+  if (!/^-?(\d+[.,]?\d*|[.,]\d+)$/.test(text)) return undefined;
   return Number(text.replace(',', '.'));
 };
 
@@ -259,7 +258,7 @@ const SyncState: React.FC<{
 
 export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear }) => {
   const { t } = useLanguage();
-  const { formatDecimal, localeTag } = useNumberFormat();
+  const { formatDecimal, formatYen, localeTag } = useNumberFormat();
   const { isAdmin, role } = useUserRole();
   const confirm = useConfirm();
 
@@ -460,20 +459,20 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
             <Metric
               size="lg"
               label={t('catia.metric.cost', 'Cost in {year}').replace('{year}', String(currentYear))}
-              value={formatCurrency(costYen)}
+              value={formatYen(costYen)}
               sub={toMan(costYen)}
               footnote={t('catia.costNote', 'The Dashboard uses this figure')}
             />
             <Metric
               size="lg"
               label={t('catia.metric.revenue', 'Revenue in {year}').replace('{year}', String(currentYear))}
-              value={revenueYen === null ? '–' : formatCurrency(revenueYen)}
+              value={revenueYen === null ? '–' : formatYen(revenueYen)}
               sub={revenueYen === null ? t('catia.notEntered', 'Not entered yet') : toMan(revenueYen)}
             />
             <Metric
               size="lg"
               label={t('catia.metric.net', 'Net in {year}').replace('{year}', String(currentYear))}
-              value={netYen === null ? '–' : `${netYen < 0 ? '-' : ''}${formatCurrency(Math.abs(netYen))}`}
+              value={netYen === null ? '–' : formatYen(netYen)}
               tone={netYen !== null && netYen < 0 ? 'negative' : 'default'}
               sub={netYen === null ? undefined : toMan(netYen)}
               footnote={t('catia.netNote', 'Revenue minus cost')}
