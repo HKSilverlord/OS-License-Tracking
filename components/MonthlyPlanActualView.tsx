@@ -493,9 +493,10 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
           </ul>
 
           {/* Narrow screens scroll the plot sideways rather than squeezing
-              twelve months of labelled columns into a phone's width. */}
+              twelve months of labelled columns into a phone's width: below
+              900 px a month's figures run into each other. */}
           <div className="-mx-2 mt-3 overflow-x-auto px-2 custom-scrollbar">
-            <div className="relative h-[max(360px,calc(100dvh-20rem))] min-w-[840px] sm:min-w-[680px]">
+            <div className="relative h-[max(360px,calc(100dvh-20rem))] min-w-[900px]">
               {pinnedData && (() => {
                 // Beside its column, on whichever side has the room.
                 const onLeft = pinnedData.month > 8;

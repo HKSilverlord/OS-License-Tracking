@@ -817,9 +817,10 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
           </div>
 
           {/* Narrow screens scroll the plot sideways rather than squeezing
-              twelve months of labelled bars into a phone's width. */}
+              twelve months of labelled bars into a phone's width: below
+              900 px a month is too narrow for its two figures side by side. */}
           <div className="-mx-2 mt-4 overflow-x-auto px-2 custom-scrollbar">
-            <div ref={plotRef} className="relative h-[max(320px,calc(100dvh-20rem))] min-w-[600px]">
+            <div ref={plotRef} className="relative h-[max(320px,calc(100dvh-20rem))] min-w-[900px]">
               {/* The one detail card. It follows the cursor over the plot and
                   parks on the selected month's bar; `placeCard` moves it. */}
               {focusedRow !== null && (

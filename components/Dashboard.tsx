@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, ClipboardList } from 'lucide-react';
 import {
@@ -20,7 +20,6 @@ import { ChartColorButton } from './ChartColorButton';
 import { YearControl, YearExportButton } from './YearControl';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useNumberFormat } from '../hooks/useNumberFormat';
-import { useMediaQuery } from '../hooks/useMediaQuery';
 import { formatVariance } from '../utils/variance';
 import { useUserRole } from '../contexts/UserRoleContext';
 import { computeYearlyCost, useCatiaStore } from '../stores/useCatiaStore';
@@ -131,6 +130,9 @@ const TOOLTIP_STYLE = {
 
 const AXIS_TICK = { fill: CHART_PALETTE.labelNeutral, fontSize: 11 };
 
+/** Below this chart width, a figure over each of the 24 bars runs into the next. */
+const BAR_LABELS_MIN_WIDTH = 680;
+
 /**
  * One shared setting: an input for an admin, the plain figure for everyone
  * else, with the same unit either way.
@@ -238,14 +240,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
 
   useCatiaHydration();
 
-  // Per-bar figures need room: on a phone the bars' own labels ran together.
-  const roomForBarLabels = useMediaQuery('(min-width: 640px)');
+  // Per-bar figures need room: in a narrow chart, on a phone or beside another
+  // chart, the bars' own labels ran together. The chart's width decides, not
+  // the window's.
+  const [barChartWidth, setBarChartWidth] = useState(0);
+  const roomForBarLabels = barChartWidth >= BAR_LABELS_MIN_WIDTH;
 
-  // The actual line stops at this month; after it there is nothing yet to add.
+  // Actual figures stop at this month: after it there is nothing yet to show,
+  // and a month that has not happened reads as a dash, not as ¥0.
   const today = new Date();
   const lastRealMonth = today.getFullYear() === currentYear
     ? today.getMonth() + 1
     : today.getFullYear() > currentYear ? 12 : 0;
+  const monthlyChart = stats.map((d, i) => ({
+    ...d,
+    actualRevenue: i < lastRealMonth ? d.actualRevenue : null,
+  }));
   const cumulativeChart = accumulatedStats.map((d, i) => ({
     ...d,
     accActualRevenue: i < lastRealMonth ? d.accActualRevenue : null,
@@ -613,12 +623,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
             }
           />
           <div className="mt-5 h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats} margin={{ top: 16, right: 4, left: -8, bottom: 0 }} aria-label={`${t('dashboard.chart.monthly', 'Monthly revenue')} ${currentYear}`}>
+            <ResponsiveContainer width="100%" height="100%" onResize={width => setBarChartWidth(width)}>
+              <BarChart data={monthlyChart} margin={{ top: 16, right: 4, left: -8, bottom: 0 }} aria-label={`${t('dashboard.chart.monthly', 'Monthly revenue')} ${currentYear}`}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_PALETTE.grid} />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={AXIS_TICK} />
                 <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} tickFormatter={(val: number) => `${nf(Math.round(val / 10000))}${manYen}`} />
-                <Tooltip formatter={(val: number) => fmt(val)} cursor={{ fill: 'rgba(148,163,184,0.12)' }} {...TOOLTIP_STYLE} />
+                <Tooltip formatter={val => (typeof val === 'number' ? fmt(val) : '–')} cursor={{ fill: 'rgba(148,163,184,0.12)' }} {...TOOLTIP_STYLE} />
                 <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '12px', color: CHART_PALETTE.labelNeutral }} />
                 <Bar dataKey="plannedRevenue" name={planShort} fill={chartColors.planRevenue} radius={[4, 4, 0, 0]}>
                   {roomForBarLabels && (
