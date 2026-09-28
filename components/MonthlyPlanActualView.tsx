@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, ClipboardList, X } from 'lucide-react';
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, TooltipContentProps, LabelList, ReferenceLine, ReferenceArea } from 'recharts';
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, TooltipContentProps, LabelList, ReferenceLine, ReferenceArea, usePlotArea, useYAxisDomain } from 'recharts';
 import { ExportButton } from './ExportButton';
 import { CurrentMonthBadge } from './CurrentMonthBadge';
 import { SeriesStyleButton, SeriesStyleCheck, type SeriesStyle } from './SeriesStyleButton';
@@ -193,6 +193,19 @@ const ZeroLabel = ({ x = 0, y = 0, width = 0, value, index = 0, shownThrough, ch
   );
 };
 
+/** Height of a value label's plate, and the gap kept between two of them. */
+const LABEL_PLATE_HEIGHT = 16;
+const LABEL_GAP = 2;
+
+/** Whether a label colour is light enough that a pale plate would swallow it. */
+const isLightColor = (color: string): boolean => {
+  const hex = color.trim().replace('#', '');
+  const full = hex.length === 3 ? hex.split('').map(c => c + c).join('') : hex;
+  if (!/^[0-9a-f]{6}$/i.test(full)) return false;
+  const [r, g, b] = [0, 2, 4].map(i => parseInt(full.slice(i, i + 2), 16) / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.7;
+};
+
 /** Value label on a soft plate, optionally outlined, in the series' own style. */
 const ValueLabel = ({ x = 0, y = 0, value, width = 0, dataKey, chartColors, nf, theme, offset = 10, position = 'top', suffix = '' }: {
   x?: number;
@@ -227,9 +240,15 @@ const ValueLabel = ({ x = 0, y = 0, value, width = 0, dataKey, chartColors, nf, 
     textX = x - offset;
   }
 
+  // The plate fits the figure. A light figure (white on the actual-hours bar)
+  // gets a plate of its own bar's colour: on the usual pale plate it vanished
+  // wherever a figure wider than its bar ran onto the paler bar beside it.
+  const plateWidth = Math.max(24, Math.ceil(formatted.length * fontSize * 0.62) + 8);
+  const plateFill = isLightColor(color) && style?.color ? style.color : theme.plate;
+
   return (
     <g>
-      <rect x={textX - 16} y={textY - 12} width={32} height={16} fill={theme.plate} rx={3} />
+      <rect x={textX - plateWidth / 2} y={textY - 12} width={plateWidth} height={LABEL_PLATE_HEIGHT} fill={plateFill} rx={3} />
       {style?.stroke && (
         <text x={textX} y={textY} stroke={theme.halo} strokeWidth={3} strokeLinejoin="round" paintOrder="stroke" fontSize={fontSize} fontWeight="bold" textAnchor="middle" alignmentBaseline="middle">
           {formatted}
@@ -240,6 +259,31 @@ const ValueLabel = ({ x = 0, y = 0, value, width = 0, dataKey, chartColors, nf, 
       </text>
     </g>
   );
+};
+
+/**
+ * The sales plan's figure, kept clear of the sales actual's. The plan's point
+ * is over the middle of the month and the actual's figure over its bar just
+ * beside it, so when the two were close in value their figures landed on top
+ * of each other. Then the plan's moves up, above the actual's.
+ */
+const SalesPlanLabel = ({ index = 0, y = 0, actuals, ...label }: React.ComponentProps<typeof ValueLabel> & {
+  index?: number;
+  /** Sales actual per month, in the chart's order. */
+  actuals: number[];
+}) => {
+  const plot = usePlotArea();
+  const top = Number(useYAxisDomain('left')?.[1]);
+  const actual = actuals[index] ?? 0;
+  let labelY = y;
+  if (plot && top > 0 && actual > 0) {
+    // Both figures sit the same distance above their point, so comparing the
+    // points compares the figures.
+    const actualY = plot.y + plot.height * (1 - actual / top);
+    const clear = LABEL_PLATE_HEIGHT + LABEL_GAP;
+    if (Math.abs(labelY - actualY) < clear) labelY = Math.min(labelY, actualY - clear);
+  }
+  return <ValueLabel {...label} y={labelY} />;
 };
 
 /**
@@ -345,6 +389,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
   const currentMonth = new Date().getFullYear() === currentYear ? new Date().getMonth() + 1 : null;
   const thisYear = new Date().getFullYear();
   const finishedMonths = currentYear < thisYear ? 12 : currentYear > thisYear ? 0 : new Date().getMonth();
+  const salesActuals = monthlyData.map(d => d.salesActual || 0);
   const [showCurrentMonth, setShowCurrentMonth] = useState(true);
   // Off by default: twelve near-identical figures sat on top of the columns. The
   // month card and the exports carry them; this is for a slide that needs them.
@@ -640,7 +685,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                     strokeWidth={3}
                     dot={{ fill: chartColors.salesPlan.color, r: 5 }}
                   >
-                    <LabelList dataKey="salesPlan" position="top" content={<ValueLabel position="top" dataKey="salesPlan" chartColors={chartColors} nf={nf} theme={theme} />} />
+                    <LabelList dataKey="salesPlan" position="top" content={<SalesPlanLabel position="top" dataKey="salesPlan" chartColors={chartColors} nf={nf} theme={theme} actuals={salesActuals} />} />
                   </Line>
 
                   <Bar

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, ClipboardList, X } from 'lucide-react';
-import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LabelList, ReferenceArea, ReferenceLine } from 'recharts';
+import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LabelList, ReferenceArea, ReferenceLine, usePlotArea, useYAxisDomain } from 'recharts';
 import { MonthlyRecord } from '../types';
 import { dbService } from '../services/dbService';
 import { ExportButton } from './ExportButton';
@@ -121,8 +121,22 @@ const signed = (delta: number, language: string, format: (value: number) => stri
  * `content=` / `shape=`, so everything from the view is threaded in explicitly.
  * ------------------------------------------------------------------------ */
 
-/** Value label for a <LabelList content=…>, optionally outlined in the card colour. */
-const OutlinedLabel = ({ x, y, value, dataKey, width = 0, chartColors, index, rows, nf, halo }: {
+/** Recharts' default gap between the two bars of a month. */
+const BAR_GAP = 4;
+
+/** A figure's rough width: the chart has no layout to measure before it draws. */
+const figureWidth = (text: string, style: SeriesStyle): number =>
+  text.length * style.fontSize * (style.bold ? 0.62 : 0.56) + (style.stroke ? 3 : 0);
+
+/**
+ * Value label for a <LabelList content=…>, optionally outlined in the card colour.
+ *
+ * A month's two figures are each centred over a bar, and a figure is wider than
+ * its bar, so when the bars were close in height the figures ran into each
+ * other and the outline of one hid the last digit of the other. Then the
+ * figure of the taller bar moves up, clear of the other.
+ */
+const OutlinedLabel = ({ x, y, value, dataKey, width = 0, chartColors, index, rows, nf, halo, other }: {
   x?: number;
   y?: number;
   value?: number | string;
@@ -134,14 +148,31 @@ const OutlinedLabel = ({ x, y, value, dataKey, width = 0, chartColors, index, ro
   rows: TotalChartRow[];
   nf: (value: number) => string;
   halo: string;
+  /** The month's other series, when it is showing. */
+  other: PlottedSeries | null;
 }) => {
+  const plot = usePlotArea();
+  const top = Number(useYAxisDomain('left')?.[1]);
   if (!value || value === 0) return null;
   const style = chartColors[dataKey];
   if (!style) return null;
   const tx = typeof x === 'number' && typeof width === 'number' ? x + width / 2 : x;
-  const ty = typeof y === 'number' ? y - 6 : y;
+  let ty = typeof y === 'number' ? y - 6 : y;
   const formatted = typeof value === 'number' ? nf(value) : value;
   const isFuture = typeof index === 'number' ? rows[index]?.isFuture === true : false;
+
+  const row = typeof index === 'number' ? rows[index] : undefined;
+  const otherValue = other && row ? row[other] : 0;
+  const otherStyle = other ? chartColors[other] : undefined;
+  const taller = typeof value === 'number' && (value > otherValue || (value === otherValue && dataKey === 'accPlan'));
+  if (plot && top > 0 && otherValue > 0 && otherStyle && taller && typeof ty === 'number') {
+    const otherText = nf(otherValue);
+    const touching = (figureWidth(formatted, style) + figureWidth(otherText, otherStyle)) / 2 + 2 > width + BAR_GAP;
+    const otherTy = plot.y + plot.height * (1 - otherValue / top) - 6;
+    // Baselines: this figure's descent must clear the other's cap height.
+    const highest = otherTy - otherStyle.fontSize * 0.75 - style.fontSize * 0.25 - 2;
+    if (touching && ty > highest) ty = highest;
+  }
   return (
     <g opacity={isFuture ? 0.55 : 1}>
       {style.stroke && (
@@ -921,13 +952,13 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                   {/* Animated only while `barsAnimating` is open: mount, a
                       legend toggle, a data reload. See BAR_ANIMATION_MS. */}
                   <Bar yAxisId="left" dataKey="accPlan" name={seriesLabels.accPlan} hide={hiddenSeries.accPlan} isAnimationActive={barsAnimating} animationDuration={BAR_ANIMATION_MS} animationEasing="ease-out" fill={chartColors.accPlan.color} fillOpacity={chartColors.accPlan.opacity} shape={<TrackingBar seriesKey="accPlan" onColumnMetrics={recordColumnMetrics} />}>
-                    <LabelList dataKey="accPlan" position="top" content={<OutlinedLabel dataKey="accPlan" chartColors={chartColors} rows={chartData} nf={nf} halo={axis.halo} />} />
+                    <LabelList dataKey="accPlan" position="top" content={<OutlinedLabel dataKey="accPlan" chartColors={chartColors} rows={chartData} nf={nf} halo={axis.halo} other={hiddenSeries.accActual ? null : 'accActual'} />} />
                   </Bar>
                   {/* Same shape as the plan bar so this series reports column
                       positions too — otherwise hiding the plan series would
                       leave the detail card with nowhere to anchor. */}
                   <Bar yAxisId="left" dataKey="accActual" name={seriesLabels.accActual} hide={hiddenSeries.accActual} isAnimationActive={barsAnimating} animationDuration={BAR_ANIMATION_MS} animationEasing="ease-out" fill={chartColors.accActual.color} fillOpacity={chartColors.accActual.opacity} shape={<TrackingBar seriesKey="accActual" onColumnMetrics={recordColumnMetrics} />}>
-                    <LabelList dataKey="accActual" position="top" content={<OutlinedLabel dataKey="accActual" chartColors={chartColors} rows={chartData} nf={nf} halo={axis.halo} />} />
+                    <LabelList dataKey="accActual" position="top" content={<OutlinedLabel dataKey="accActual" chartColors={chartColors} rows={chartData} nf={nf} halo={axis.halo} other={hiddenSeries.accPlan ? null : 'accPlan'} />} />
                   </Bar>
                 </ComposedChart>
               </ResponsiveContainer>
