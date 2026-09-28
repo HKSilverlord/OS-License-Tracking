@@ -375,6 +375,8 @@ export const ja: Record<string, string> = {
   'diagnostic.links': 'プロジェクトの紐付け',
   'diagnostic.noLinks': 'どのプロジェクトも期間に紐付いていないため、すべての画面が空になります。下で修復してください。',
   'diagnostic.emptyPeriods': '{periods}にはまだプロジェクトがありません。',
+  'diagnostic.linksWaiting': 'プロジェクトと期間がそれぞれ1件以上できるまで、紐付けるものはありません。',
+  'diagnostic.openPage': '{page}を開く',
   'diagnostic.records': '月次レコード',
   'diagnostic.noRecords': '時間がまだ記録されていません。案件トラッキングで入力してください。',
   'diagnostic.otherYears': 'その他の年',

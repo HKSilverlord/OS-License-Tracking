@@ -220,7 +220,7 @@ const SyncState: React.FC<{
 
   if (status === 'loading' || status === 'saving') {
     return (
-      <span className="flex items-center gap-1.5 text-[13px] text-slate-500 dark:text-slate-400">
+      <span className="flex items-center gap-1.5 whitespace-nowrap text-[13px] text-slate-500 dark:text-slate-400">
         <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
         {status === 'loading' ? t('catia.syncing', 'Getting the latest figures…') : t('catia.saving', 'Saving…')}
       </span>
@@ -247,7 +247,7 @@ const SyncState: React.FC<{
   }
   if (justSaved) {
     return (
-      <span className="flex items-center gap-1 text-[13px] font-medium text-emerald-600 animate-fade-in dark:text-emerald-400">
+      <span className="flex items-center gap-1 whitespace-nowrap text-[13px] font-medium text-emerald-600 animate-fade-in dark:text-emerald-400">
         <Check className="h-3.5 w-3.5" aria-hidden="true" />
         {t('tracker.autosaved', 'Saved')}
       </span>

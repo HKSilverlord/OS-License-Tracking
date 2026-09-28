@@ -231,7 +231,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex h-16 shrink-0 items-center gap-2.5 pl-4 pr-3">
           <AppIcon size={30} />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[15px] font-semibold leading-5 text-white">{t('app.title', 'OS Manager')}</p>
+            <p className="truncate text-sm font-semibold leading-5 tracking-tight text-white">{t('app.title', 'OS Manager')}</p>
             <p className="truncate text-xs leading-4 text-slate-400">{t('app.subtitle', 'Esuhai Group')}</p>
           </div>
           {variant === 'rail' ? (

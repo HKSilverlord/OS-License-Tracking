@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { AlertCircle, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { SUPPORTED_LANGUAGES, useLanguage } from '../contexts/LanguageContext';
-import type { SupportedLanguage, TranslateFn } from '../contexts/LanguageContext';
+import type { SupportedLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
 import { createLogger } from '../utils/logger';
 import { AppIcon } from './ui/AppIcon';
@@ -15,27 +15,30 @@ const log = createLogger('Auth');
 /**
  * What went wrong, said the way a person would say it. Supabase's own messages
  * ("Invalid login credentials") are English-only and written for developers.
+ * Kept as a key and worded when shown, so the message follows a language change.
  */
-const describeSignInError = (error: unknown, t: TranslateFn): string => {
+const SIGN_IN_ERRORS = {
+  invalid: ['auth.error.invalid', "That email and password don't match. Check both and try again."],
+  unconfirmed: ['auth.error.unconfirmed', 'This account has not been confirmed yet. Ask an administrator to confirm it.'],
+  rateLimited: ['auth.error.rateLimited', 'Too many attempts. Wait a minute, then try again.'],
+  network: ['auth.error.network', "Can't reach the server. Check your connection and try again."],
+  generic: ['auth.error.generic', "Sign-in didn't work. Try again, or ask an administrator for help."],
+} as const;
+
+type SignInError = keyof typeof SIGN_IN_ERRORS;
+
+const classifySignInError = (error: unknown): SignInError => {
   const { code, status, message, name } = (error ?? {}) as {
     code?: string;
     status?: number;
     message?: string;
     name?: string;
   };
-  if (code === 'invalid_credentials' || /invalid login credentials/i.test(message ?? '')) {
-    return t('auth.error.invalid', "That email and password don't match. Check both and try again.");
-  }
-  if (code === 'email_not_confirmed') {
-    return t('auth.error.unconfirmed', 'This account has not been confirmed yet. Ask an administrator to confirm it.');
-  }
-  if (status === 429 || code === 'over_request_rate_limit') {
-    return t('auth.error.rateLimited', 'Too many attempts. Wait a minute, then try again.');
-  }
-  if (name === 'AuthRetryableFetchError' || /fetch|network/i.test(message ?? '') || !navigator.onLine) {
-    return t('auth.error.network', "Can't reach the server. Check your connection and try again.");
-  }
-  return t('auth.error.generic', "Sign-in didn't work. Try again, or ask an administrator for help.");
+  if (code === 'invalid_credentials' || /invalid login credentials/i.test(message ?? '')) return 'invalid';
+  if (code === 'email_not_confirmed') return 'unconfirmed';
+  if (status === 429 || code === 'over_request_rate_limit') return 'rateLimited';
+  if (name === 'AuthRetryableFetchError' || /fetch|network/i.test(message ?? '') || !navigator.onLine) return 'network';
+  return 'generic';
 };
 
 /**
@@ -50,7 +53,7 @@ export const Auth: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [capsLock, setCapsLock] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<SignInError | null>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
 
   // A phone keyboard popping up before the page has even been read is rude;
@@ -67,7 +70,7 @@ export const Auth: React.FC = () => {
       // The session listener in useAuthSession switches to the app.
     } catch (err) {
       log.error('Sign-in failed', err);
-      setError(describeSignInError(err, t));
+      setError(classifySignInError(err));
       passwordRef.current?.select();
     } finally {
       setLoading(false);
@@ -117,7 +120,7 @@ export const Auth: React.FC = () => {
                   className="flex gap-2.5 rounded-xl bg-rose-50 px-3.5 py-3 text-sm leading-5 text-rose-700 animate-fade-in dark:bg-rose-500/10 dark:text-rose-300"
                 >
                   <AlertCircle className="mt-px h-4 w-4 shrink-0" aria-hidden="true" />
-                  <p>{error}</p>
+                  <p>{t(SIGN_IN_ERRORS[error][0], SIGN_IN_ERRORS[error][1])}</p>
                 </div>
               )}
 
