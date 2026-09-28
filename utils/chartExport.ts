@@ -308,18 +308,60 @@ export const captureBackgroundColor = (): string =>
  */
 const DESCENDER_ROOM_PX = 6;
 
+/**
+ * Whether a node in the capture's clone is an HTML element. Not `instanceof`:
+ * html2canvas copies the page's nodes into its iframe, and a copied node keeps
+ * the page's prototypes, so `instanceof` the iframe's HTMLElement is false for
+ * every one of them and the walks here silently changed nothing.
+ */
+const isHtmlElement = (el: Element): el is HTMLElement =>
+  el.namespaceURI === 'http://www.w3.org/1999/xhtml';
+
 const unclipSingleLineText = (root: HTMLElement): void => {
   const view = root.ownerDocument.defaultView;
   if (!view) return;
 
-  for (const el of root.querySelectorAll<HTMLElement>('*')) {
+  for (const el of root.querySelectorAll('*')) {
     // SVG ignores padding, so charts are unaffected either way — skip them so the
     // walk stays cheap and obviously scoped to HTML text boxes.
-    if (!(el instanceof view.HTMLElement)) continue;
+    if (!isHtmlElement(el)) continue;
     const styles = view.getComputedStyle(el);
     if (styles.overflow !== 'hidden' || styles.whiteSpace !== 'nowrap') continue;
     el.style.paddingBottom = `${parseFloat(styles.paddingBottom) + DESCENDER_ROOM_PX}px`;
     el.style.marginBottom = `${parseFloat(styles.marginBottom) - DESCENDER_ROOM_PX}px`;
+  }
+};
+
+/**
+ * Text html2canvas would draw wrong, set the way it can draw it.
+ *
+ * - The canvas has no tabular figures. html2canvas puts each word where the
+ *   browser laid it out with tabular digits, then draws it with proportional
+ *   ones, which are narrower, so gaps opened inside figures: "- 19.7 %", and,
+ *   in letter-spaced text, which it draws a character at a time, "¥7,064,1 67".
+ *   The clone is laid out with proportional digits and no letter-spacing, the
+ *   way the canvas will draw it.
+ * - A line-clamped box (`display: -webkit-box`) it cuts through the middle of
+ *   the text, so the clamp is released and the text wraps in full.
+ */
+const settleTextForCanvas = (root: HTMLElement): void => {
+  const view = root.ownerDocument.defaultView;
+  if (!view) return;
+
+  for (const el of [root, ...root.querySelectorAll('*')]) {
+    if (!isHtmlElement(el)) continue;
+    const styles = view.getComputedStyle(el);
+    if (styles.letterSpacing !== 'normal' && parseFloat(styles.letterSpacing) !== 0) {
+      el.style.letterSpacing = 'normal';
+    }
+    if (styles.fontVariantNumeric !== 'normal') {
+      el.style.fontVariantNumeric = 'normal';
+    }
+    if (styles.webkitLineClamp && styles.webkitLineClamp !== 'none') {
+      el.style.webkitLineClamp = 'none';
+      el.style.display = 'block';
+      el.style.overflow = 'visible';
+    }
   }
 };
 
@@ -454,6 +496,7 @@ const capturePass = async (
       if (exportsOnLightBackground()) clonedDoc.documentElement.classList.remove('dark');
       revealExportOnly(clonedEl);
       await resolveOklchColors(clonedDoc);
+      settleTextForCanvas(clonedEl);
       unclipSingleLineText(clonedEl);
       // Last thing before html2canvas paints, so this is the layout it paints.
       cloneSize = capturedSize(clonedEl);

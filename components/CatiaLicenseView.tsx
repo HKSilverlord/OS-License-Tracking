@@ -534,7 +534,9 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
             {/* On screen the page says what this is; an exported image has no page around it. */}
             <caption hidden data-export-only className="caption-top px-3 pb-3 pt-1 text-left text-[15px] font-semibold text-slate-900 dark:text-white">
               {t('nav.catiaLicense', 'CATIA licenses')}{' '}
-              <span className="font-normal text-slate-400 dark:text-slate-500">{t('catia.unitNote', 'Figures in 10,000 JPY')}</span>
+              <span className="font-normal tabular-nums text-slate-500 dark:text-slate-400">
+                {SHEET[0].year}–{SHEET[SHEET.length - 1].year} · {t('catia.unitNote', 'Figures in 10,000 JPY')}
+              </span>
             </caption>
             <thead>
               <tr>
