@@ -27,6 +27,12 @@ export interface CatiaState {
   hydrate: (options?: { force?: boolean; canSeed?: boolean }) => Promise<void>;
   /** Awaits any pending debounced save (call from a component unmount cleanup). */
   flush: () => Promise<void>;
+  /**
+   * Runs the request that failed again. Once hydrated, the failure was a save,
+   * so this browser's values (the newer ones) are sent again; before that it
+   * was the load, which is simply asked for again.
+   */
+  retry: (options?: { canSeed?: boolean }) => Promise<void>;
 
   getYearlyCost: (year: number) => number;
 }
@@ -268,6 +274,18 @@ export const useCatiaStore = create<CatiaState>()(
       },
 
       flush: flushSave,
+
+      retry: async (options) => {
+        if (!get().hydrated) {
+          await get().hydrate({ force: true, canSeed: options?.canSeed ?? false });
+          return;
+        }
+        if (saveTimer !== null) {
+          clearTimeout(saveTimer);
+          saveTimer = null;
+        }
+        await runSave();
+      },
 
       getYearlyCost: (year) => computeYearlyCost(get().licenseCosts, year),
     }),
