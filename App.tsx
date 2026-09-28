@@ -1,6 +1,6 @@
 import React, { lazy, Suspense, useCallback, useMemo } from 'react';
 import { HashRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import type { Variants } from 'framer-motion';
 import {
   BarChart3,
@@ -128,7 +128,6 @@ function App() {
 const pageVariants: Variants = {
   initial: { opacity: 0, y: 6 },
   enter: { opacity: 1, y: 0, transition: { duration: 0.22, ease: [0.22, 1, 0.36, 1] } },
-  exit: { opacity: 0, transition: { duration: 0.1, ease: 'easeOut' } },
 };
 
 /** Shown while a route's code is still downloading: the shape of a page. */
@@ -149,7 +148,6 @@ const PageWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <motion.div
     initial="initial"
     animate="enter"
-    exit="exit"
     variants={pageVariants}
     className="absolute inset-0 flex flex-col"
   >
@@ -164,24 +162,25 @@ const MainRoutes: React.FC<{ currentYear: number }> = ({ currentYear }) => {
   const { isAdmin } = useUserRole();
 
   return (
-    <AnimatePresence mode="wait" initial={false}>
-      <Routes location={location} key={location.pathname}>
-        <Route path="/" element={<PageWrapper><Dashboard currentYear={currentYear} /></PageWrapper>} />
-        <Route path="/tracking" element={<PageWrapper><TrackingView currentYear={currentYear} /></PageWrapper>} />
-        <Route path="/catia-license" element={<PageWrapper><CatiaLicenseView currentYear={currentYear} /></PageWrapper>} />
-        <Route path="/total" element={<PageWrapper><TotalView currentYear={currentYear} /></PageWrapper>} />
-        <Route path="/yearly-data" element={<PageWrapper><YearlyDataView currentYear={currentYear} /></PageWrapper>} />
-        <Route path="/long-term-plan" element={<PageWrapper><LongTermPlanView /></PageWrapper>} />
-        <Route path="/monthly-plan-actual" element={<PageWrapper><MonthlyPlanActualView currentYear={currentYear} /></PageWrapper>} />
-        <Route path="/period-management" element={<PageWrapper><PeriodManagement /></PageWrapper>} />
-        {/* Kept as a route so a bookmarked URL redirects instead of dead-ending. */}
-        <Route
-          path="/diagnostic"
-          element={isAdmin ? <PageWrapper><DatabaseDiagnostic /></PageWrapper> : <Navigate to="/" replace />}
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </AnimatePresence>
+    // Each page fades in; the one being left goes at once. An exit animation
+    // made the next page wait for it, and two moves in quick succession (Back,
+    // then Back again) could leave the old page on screen under the new address.
+    <Routes location={location} key={location.pathname}>
+      <Route path="/" element={<PageWrapper><Dashboard currentYear={currentYear} /></PageWrapper>} />
+      <Route path="/tracking" element={<PageWrapper><TrackingView currentYear={currentYear} /></PageWrapper>} />
+      <Route path="/catia-license" element={<PageWrapper><CatiaLicenseView currentYear={currentYear} /></PageWrapper>} />
+      <Route path="/total" element={<PageWrapper><TotalView currentYear={currentYear} /></PageWrapper>} />
+      <Route path="/yearly-data" element={<PageWrapper><YearlyDataView currentYear={currentYear} /></PageWrapper>} />
+      <Route path="/long-term-plan" element={<PageWrapper><LongTermPlanView /></PageWrapper>} />
+      <Route path="/monthly-plan-actual" element={<PageWrapper><MonthlyPlanActualView currentYear={currentYear} /></PageWrapper>} />
+      <Route path="/period-management" element={<PageWrapper><PeriodManagement /></PageWrapper>} />
+      {/* Kept as a route so a bookmarked URL redirects instead of dead-ending. */}
+      <Route
+        path="/diagnostic"
+        element={isAdmin ? <PageWrapper><DatabaseDiagnostic /></PageWrapper> : <Navigate to="/" replace />}
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 };
 
