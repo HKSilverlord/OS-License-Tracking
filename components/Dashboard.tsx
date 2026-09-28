@@ -15,7 +15,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { formatCurrency } from '../utils/helpers';
 import { ExportButton } from './ExportButton';
 import { ChartColorButton } from './ChartColorButton';
 import { YearControl, YearExportButton } from './YearControl';
@@ -81,10 +80,6 @@ const migrateChartColors = (raw: unknown): DashboardChartColors | null => {
 
 /** recharts 3 `LabelFormatter` receives `RenderableText`, which is not exported from the package root. */
 type ChartLabelValue = string | number | boolean | null | undefined;
-
-/** Bar/line data labels stay in 万 (10k JPY) units, as the slides they end up on use. */
-const manLabel = (value: ChartLabelValue): string =>
-  typeof value === 'number' && value > 0 ? (value / 10000).toFixed(0) : '';
 
 const TOOLTIP_STYLE = {
   contentStyle: {
@@ -208,7 +203,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
 
   useCatiaHydration();
 
-  const { format: nf, formatDecimal: nfDecimal } = useNumberFormat();
+  const { format: nf, formatDecimal: nfDecimal, formatYen: fmt } = useNumberFormat();
+  /** Bar/line data labels stay in 万 (10k JPY) units, as the slides they end up on use. */
+  const manLabel = (value: ChartLabelValue): string =>
+    typeof value === 'number' && value > 0 ? nf(Math.round(value / 10000)) : '';
   const manYen = t('catia.manYenUnit', '万');
 
   const header = {
@@ -287,8 +285,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
   const breakEvenHours = unitPrice !== 0 ? licenseTotal / unitPrice : 0;
 
   const toMan = (val: number) => `${nfDecimal(val / 10000)}${manYen}`;
-  const fmt = (val: number) => formatCurrency(val);
-  const fmtSigned = (val: number) => `${val < 0 ? '-' : ''}${formatCurrency(Math.abs(val))}`;
   const fmtHours = (val: number) => `${nf(Math.round(val))}h`;
   const fmtPercent = (fraction: number) => `${nfDecimal(fraction * 100)}%`;
   /** Actual over plan, or null where a ratio would mean nothing (no plan, or a plan at a loss). */
@@ -339,7 +335,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
       hint: t('dashboard.net.actual.subtitle', 'Gross revenue minus license cost'),
       plan: netRevenuePlan,
       actual: netRevenueActual,
-      format: fmtSigned,
+      format: fmt,
       man: true,
     },
   ].map(row => {
@@ -430,7 +426,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
           <Metric
             size="lg"
             label={t('dashboard.summary.net', 'Net revenue')}
-            value={fmtSigned(netRevenueActual)}
+            value={fmt(netRevenueActual)}
             tone={netRevenueActual < 0 ? 'negative' : 'default'}
             sub={toMan(netRevenueActual)}
             footnote={t('dashboard.net.actual.subtitle', 'Gross revenue minus license cost')}
@@ -676,7 +672,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
           />
           <Metric
             label={t('dashboard.costAnalysis.netRate', 'Net hourly rate')}
-            value={fmtSigned(netHourlyRate)}
+            value={fmt(netHourlyRate)}
             tone={netHourlyRate < 0 ? 'negative' : 'default'}
             footnote={t('dashboard.notes.unitMinusLicense', 'Hourly rate minus license cost per hour')}
           />

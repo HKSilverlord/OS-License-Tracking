@@ -1,17 +1,6 @@
 
 import { PeriodType } from '../types';
 
-export const formatCurrency = (amount: number, currency: string = 'JPY') => {
-  if (currency === 'VND') {
-      return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(amount);
-  }
-  // ja-JP writes the full-width ￥, which Inter lacks: the fallback glyph is
-  // CJK-wide and leaves a gap before every figure. The half-width ¥ is the same sign.
-  return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 })
-    .format(amount)
-    .replace('￥', '¥');
-};
-
 export const getCurrentPeriod = (): { year: number; type: PeriodType; label: string } => {
   const date = new Date();
   const year = date.getFullYear();

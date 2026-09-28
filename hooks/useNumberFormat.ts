@@ -16,6 +16,8 @@ export interface NumberFormat {
   format: (value: number) => string;
   /** One decimal place, with the language's own decimal mark. */
   formatDecimal: (value: number) => string;
+  /** Whole yen with the half-width sign: `¥9.600` in Vietnamese, `-¥9,600` in English. */
+  formatYen: (value: number) => string;
 }
 
 /**
@@ -40,5 +42,9 @@ export function useNumberFormat(): NumberFormat {
     localeTag,
     format: useCallback((value: number) => whole.format(value), [whole]),
     formatDecimal: useCallback((value: number) => decimal.format(value), [decimal]),
+    formatYen: useCallback((value: number) => {
+      const yen = Math.round(Math.abs(value));
+      return `${value < 0 && yen > 0 ? '-' : ''}¥${whole.format(yen)}`;
+    }, [whole]),
   };
 }
