@@ -457,7 +457,11 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
     tRef.current = t;
   }, [t]);
 
+  // Switching periods quickly must not let an older response land last.
+  const loadSeqRef = useRef(0);
+
   const fetchData = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     setLoadError(false);
     try {
@@ -465,6 +469,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
         dbService.getProjects(currentPeriodLabel),
         dbService.getRecords(currentPeriodLabel)
       ]);
+      if (seq !== loadSeqRef.current) return;
 
       setProjects(projectsData);
 
@@ -475,10 +480,11 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
       });
       setRecords(groupedRecords);
     } catch (error) {
+      if (seq !== loadSeqRef.current) return;
       log.error('Failed to load data', error);
       setLoadError(true);
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [currentPeriodLabel]);
 
@@ -596,7 +602,8 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
   ];
 
   const handleSaveAll = async () => {
-    const changesToSave: MonthlyRecord[] = Object.values(pendingChanges);
+    const snapshot = pendingChanges;
+    const changesToSave: MonthlyRecord[] = Object.values(snapshot);
     if (changesToSave.length === 0) {
       toast.info(t('toast.nothingToSave', 'No changes to save'));
       return;
@@ -624,7 +631,15 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
         });
       }
 
-      setPendingChanges({});
+      // Only what was saved: a cell typed into while the requests were out is
+      // a new object under its key, and stays pending.
+      setPendingChanges(prev => {
+        const next = { ...prev };
+        for (const [key, record] of Object.entries(snapshot)) {
+          if (next[key] === record) delete next[key];
+        }
+        return next;
+      });
       leaveConfirmedRef.current = false;
       // Dashboard, TotalView and YearlyDataView refetch on this event — keep it.
       window.dispatchEvent(new CustomEvent('dataUpdated'));
@@ -786,45 +801,41 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
       setProjects(prev => prev.map(p => (p.id === id ? { ...p, ...updates } : p)));
 
       // 2. Prepare logic for API call
+      // Throws: the debounced path reports its own failure, the edit dialog reports the other.
       const performSave = async () => {
-        try {
-          // Separate price updates from other updates
-          const priceUpdates: { plan_price?: number; actual_price?: number } = {};
-          const otherUpdates: Partial<Project> = { ...updates };
+        // Separate price updates from other updates
+        const priceUpdates: { plan_price?: number; actual_price?: number } = {};
+        const otherUpdates: Partial<Project> = { ...updates };
 
-          let hasPriceUpdates = false;
-          if ('plan_price' in updates) {
-            priceUpdates.plan_price = updates.plan_price;
-            delete otherUpdates.plan_price;
-            hasPriceUpdates = true;
-          }
-          if ('actual_price' in updates) {
-            priceUpdates.actual_price = updates.actual_price;
-            delete otherUpdates.actual_price;
-            hasPriceUpdates = true;
-          }
-
-          // Prices are set for every period of the year at once.
-          if (hasPriceUpdates) {
-            const priceYear = parseInt(currentPeriodLabel.split('-')[0]);
-            if (!isNaN(priceYear)) {
-              await dbService.updateProjectPriceForYear(id, priceYear, priceUpdates);
-            } else {
-              await dbService.updateProjectPriceForPeriod(id, currentPeriodLabel, priceUpdates);
-            }
-          }
-
-          // Everything else lives on the project itself.
-          if (Object.keys(otherUpdates).length > 0) {
-            await dbService.updateProject(id, otherUpdates);
-          }
-
-          window.dispatchEvent(new CustomEvent('dataUpdated'));
-          markAutosaved();
-        } catch (error) {
-          log.error('Failed to save project update', error);
-          toast.error(t('toast.saveFailed', 'Save failed'));
+        let hasPriceUpdates = false;
+        if ('plan_price' in updates) {
+          priceUpdates.plan_price = updates.plan_price;
+          delete otherUpdates.plan_price;
+          hasPriceUpdates = true;
         }
+        if ('actual_price' in updates) {
+          priceUpdates.actual_price = updates.actual_price;
+          delete otherUpdates.actual_price;
+          hasPriceUpdates = true;
+        }
+
+        // Prices are set for every period of the year at once.
+        if (hasPriceUpdates) {
+          const priceYear = parseInt(currentPeriodLabel.split('-')[0]);
+          if (!isNaN(priceYear)) {
+            await dbService.updateProjectPriceForYear(id, priceYear, priceUpdates);
+          } else {
+            await dbService.updateProjectPriceForPeriod(id, currentPeriodLabel, priceUpdates);
+          }
+        }
+
+        // Everything else lives on the project itself.
+        if (Object.keys(otherUpdates).length > 0) {
+          await dbService.updateProject(id, otherUpdates);
+        }
+
+        window.dispatchEvent(new CustomEvent('dataUpdated'));
+        markAutosaved();
       };
 
       // 3. Execute with debounce logic
@@ -833,7 +844,12 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
         const key = `proj-${id}-${Object.keys(updates).sort().join('-')}`;
         if (debounceTimers.current[key]) clearTimeout(debounceTimers.current[key]);
         debounceTimers.current[key] = setTimeout(async () => {
-          await performSave();
+          try {
+            await performSave();
+          } catch (error) {
+            log.error('Failed to save project update', error);
+            toast.error(t('toast.saveFailed', 'Save failed'));
+          }
           delete debounceTimers.current[key];
         }, debounceMs);
       } else {
@@ -841,7 +857,6 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
       }
     } catch (error) {
       log.error('Failed to update project', error);
-      toast.error(t('toast.saveFailed', 'Save failed'));
       throw error;
     }
   };

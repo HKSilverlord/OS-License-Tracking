@@ -27,12 +27,14 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ project, isO
   const toast = useToast();
   const formId = useId();
   const [formData, setFormData] = useState<Partial<Project>>({});
+  /** The form as it opened: only what differs from it is saved. */
+  const [initial, setInitial] = useState<Partial<Project>>({});
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (isOpen && project) {
       const prices = resolvePrices(null, project);
-      setFormData({
+      const opened: Partial<Project> = {
         name: project.name,
         software: project.software,
         type: project.type,
@@ -40,7 +42,9 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ project, isO
         actual_price: prices.actual,
         exclusion_mark: project.exclusion_mark,
         notes: project.notes,
-      });
+      };
+      setFormData(opened);
+      setInitial(opened);
     }
   }, [isOpen, project]);
 
@@ -49,9 +53,18 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ project, isO
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    // A price sent unchanged would still be written to both halves of the year,
+    // over a half that was priced differently.
+    const changes = Object.fromEntries(
+      Object.entries(formData).filter(([key, value]) => value !== initial[key as keyof Project])
+    ) as Partial<Project>;
+    if (Object.keys(changes).length === 0) {
+      onClose();
+      return;
+    }
     setSaving(true);
     try {
-      await onSave(project.id, formData);
+      await onSave(project.id, changes);
       toast.success(t('editProject.saved', 'Project updated'));
       onClose();
     } catch (error) {
