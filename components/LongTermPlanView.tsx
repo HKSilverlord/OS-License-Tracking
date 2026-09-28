@@ -14,6 +14,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
 import { useNumberFormat } from '../hooks/useNumberFormat';
 import { useIsDarkTheme } from '../hooks/useDarkMode';
+import { useGrowIn } from '../hooks/useGrowIn';
 import { dbService } from '../services/dbService';
 import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
 import { chartTheme } from '../utils/chartTheme';
@@ -283,6 +284,7 @@ export const LongTermPlanView: React.FC = () => {
     hourlyRatePlan: d.hourlyRatePlan ?? undefined,
     hourlyRateActual: d.hourlyRateActual ?? undefined,
   })), [longTermData]);
+  const [seriesAnimating, settleSeries] = useGrowIn(chartData);
 
   const planRates = useMemo(() => chartData.map(d => d.hourlyRatePlan), [chartData]);
   const actualRates = useMemo(() => chartData.map(d => d.hourlyRateActual), [chartData]);
@@ -386,6 +388,7 @@ export const LongTermPlanView: React.FC = () => {
                 data={chartData}
                 csvColumns={csvColumns}
                 disabled={loading}
+                onBeforeCapture={settleSeries}
               />
             </>
           }
@@ -456,10 +459,10 @@ export const LongTermPlanView: React.FC = () => {
                     content={<HoverCard chartColors={chartColors} labels={labels} units={units} nf={nf} />}
                   />
 
-                  <Bar yAxisId="left" dataKey="salesPlan" name={labels.salesPlan} fill={chartColors.salesPlan} radius={[4, 4, 0, 0]} maxBarSize={60}>
+                  <Bar yAxisId="left" dataKey="salesPlan" name={labels.salesPlan} isAnimationActive={seriesAnimating} fill={chartColors.salesPlan} radius={[4, 4, 0, 0]} maxBarSize={60}>
                     <LabelList dataKey="salesPlan" position="top" formatter={formatLabel} fontSize={10} fill={chartColors.salesPlan} />
                   </Bar>
-                  <Bar yAxisId="left" dataKey="salesActual" name={labels.salesActual} fill={chartColors.salesActual} radius={[4, 4, 0, 0]} maxBarSize={60}>
+                  <Bar yAxisId="left" dataKey="salesActual" name={labels.salesActual} isAnimationActive={seriesAnimating} fill={chartColors.salesActual} radius={[4, 4, 0, 0]} maxBarSize={60}>
                     <LabelList dataKey="salesActual" position="top" formatter={formatLabel} fontSize={11} fill={chartColors.salesActual} fontWeight="bold" />
                   </Bar>
                   <Line
@@ -471,6 +474,7 @@ export const LongTermPlanView: React.FC = () => {
                     strokeWidth={3}
                     dot={{ fill: chartColors.hourlyRatePlan, r: 5 }}
                     connectNulls={false}
+                    isAnimationActive={seriesAnimating}
                   >
                     <LabelList dataKey="hourlyRatePlan" content={<RateLabel other={actualRates} color={chartColors.hourlyRatePlan} nf={nf} />} />
                   </Line>
@@ -483,6 +487,7 @@ export const LongTermPlanView: React.FC = () => {
                     strokeWidth={3}
                     dot={{ fill: chartColors.hourlyRateActual, r: 5 }}
                     connectNulls={false}
+                    isAnimationActive={seriesAnimating}
                   >
                     <LabelList dataKey="hourlyRateActual" content={<RateLabel other={planRates} color={chartColors.hourlyRateActual} bold nf={nf} />} />
                   </Line>

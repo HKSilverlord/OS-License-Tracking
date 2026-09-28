@@ -18,6 +18,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import type { TranslateFn } from '../contexts/LanguageContext';
 import { useNumberFormat } from '../hooks/useNumberFormat';
 import { useIsDarkTheme } from '../hooks/useDarkMode';
+import { useGrowIn } from '../hooks/useGrowIn';
 import { useMonthKeys } from '../hooks/useMonthKeys';
 import { useMonthlyPlanActualData } from '../hooks/useMonthlyPlanActualData';
 import type { MonthlyPlanActualData } from '../hooks/useMonthlyPlanActualData';
@@ -343,6 +344,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
   const columnCoordsRef = useRef<Record<number, number>>({});
   const isDark = useIsDarkTheme();
   const theme = useMemo(() => chartTheme(isDark), [isDark]);
+  const [seriesAnimating, settleSeries] = useGrowIn(monthlyData);
 
   const hoursUnit = t('monthlyPlanActual.unit.hours', 'h');
   const salesUnit = t('monthlyPlanActual.unit.sales', '10k JPY');
@@ -520,6 +522,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 data={monthlyData}
                 csvColumns={csvColumns}
                 disabled={loading}
+                onBeforeCapture={settleSeries}
               />
             </>
           }
@@ -646,6 +649,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                   />
 
                   <Line
+                    isAnimationActive={seriesAnimating}
                     xAxisId="main"
                     yAxisId="right"
                     type="monotone"
@@ -663,6 +667,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                   </Line>
 
                   <Bar
+                    isAnimationActive={seriesAnimating}
                     xAxisId="main"
                     yAxisId="right"
                     dataKey="workingHoursPlan"
@@ -675,6 +680,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                   </Bar>
 
                   <Line
+                    isAnimationActive={seriesAnimating}
                     xAxisId="main"
                     yAxisId="left"
                     type="monotone"
@@ -689,6 +695,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                   </Line>
 
                   <Bar
+                    isAnimationActive={seriesAnimating}
                     xAxisId="main"
                     yAxisId="left"
                     dataKey="salesActual"
@@ -703,6 +710,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                   </Bar>
 
                   <Bar
+                    isAnimationActive={seriesAnimating}
                     xAxisId="actualLayer"
                     yAxisId="right"
                     dataKey="workingHoursActual"
@@ -718,6 +726,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                   {/* Invisible spacer that keeps the actual layer's columns
                       lined up with the main layer's. */}
                   <Bar
+                    isAnimationActive={seriesAnimating}
                     xAxisId="actualLayer"
                     yAxisId="left"
                     dataKey="salesActual"
