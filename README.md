@@ -13,15 +13,15 @@ revenue, achievement rate, capacity utilisation and — after subtracting CATIA 
 
 | Route | View | What it does |
 |---|---|---|
-| `/` | Dashboard | KPI cards (hours, gross revenue, licence cost, net profit) and monthly charts |
-| `/tracking` | Tracking | The editable grid: planned/actual hours per project per month |
-| `/catia-license` | CATIA Licence | Licence cost and licence revenue per machine |
-| `/total` | Total | Aggregated totals for the selected year |
-| `/yearly-data` | Yearly Data | Per-project yearly breakdown with manual ordering |
-| `/long-term-plan` | Long-Term Plan | Multi-year revenue and hourly-rate trend |
-| `/monthly-plan-actual` | Monthly Plan vs Actual | Plan/actual hours and revenue by month |
-| `/period-management` | Period Management | Create periods and assign projects to them |
-| `/diagnostic` | Diagnostic | Read-only database connectivity checks |
+| `/` | Dashboard | The year's revenue, licence cost and net revenue, plan vs actual, monthly charts |
+| `/total` | Cumulative hours | Running plan and actual hours for the year; months still to come shown as forecast |
+| `/monthly-plan-actual` | Monthly plan vs actual | Sales and working hours per month against plan and capacity |
+| `/yearly-data` | Annual data | Every project's hours month by month, with year totals |
+| `/long-term-plan` | Long-term plan | Sales and average hourly rate, 2024–2030 |
+| `/tracking` | Project tracking | The editable grid: planned and actual hours per project per month |
+| `/catia-license` | CATIA licenses | Monthly cost and yearly revenue per licence; saves as you type |
+| `/period-management` | Periods | Create half-year periods and choose the projects tracked in each |
+| `/diagnostic` | Database repair (admins) | Counts what the database holds; links projects missing from their period |
 
 Access is role based: every signed-in user can read everything, only users with the
 `admin` role can write (see [Roles](#roles-and-access-control)).
@@ -65,6 +65,9 @@ Netlify, Docker, …) set the same two variables in the platform's environment s
 | `npm run dev` | Vite dev server with HMR |
 | `npm run build` | Production build into `dist/` |
 | `npm run typecheck` | `tsc --noEmit` — must be clean before every commit |
+| `npm run lint` | ESLint, including the React hooks rules |
+| `npm run check:locales` | The three locale files hold the same keys |
+| `npm run verify` | All three checks, then a production build |
 | `npm run preview` | Serve the built `dist/` locally |
 
 ### Database setup
@@ -135,16 +138,18 @@ Sign-up is disabled in the app: users are created manually in the Supabase dashb
 ## Project layout
 
 ```
-App.tsx                 shell: routing, top bar, year selector, sidebar
-components/             one file per view, plus modals/
-components/ui/          shared presentational pieces (Button, Card, KpiCard, Skeleton)
-contexts/               LanguageContext (ja/en/vn), UserRoleContext
+App.tsx                 sign-in gate, navigation and routes
+components/             one file per view, plus modals/ and tracking/
+components/shell/       the sidebar (a drawer on phones) around every view
+components/ui/          shared presentational pieces (Button, Card, Metric, Modal, Menu, Page, Skeleton, …)
+contexts/               language (ja/en/vn), theme, role, toasts, the selected year
+hooks/                  data loading per view, the session, keyboard helpers
 services/               *Service.ts (extend BaseService) behind the dbService facade
 lib/supabase.ts         the single Supabase client
 stores/                 Zustand stores (CATIA licence data)
 utils/                  logger, export helpers, chart export, diagnostics
 db/                     schema.sql, migrations, setup guide, data import
-docs/                   design specification
+docs/                   design specification; the interface's principles (redesign-brief.md)
 ```
 
 There is no `src/` tree. It used to hold an unfinished Clean-Architecture skeleton
