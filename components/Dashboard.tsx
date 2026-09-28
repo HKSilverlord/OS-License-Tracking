@@ -261,10 +261,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
   const roomForBarLabels = barChartWidth >= BAR_LABELS_MIN_WIDTH;
 
   // Actual figures stop at this month: after it there is nothing yet to show,
-  // and a month that has not happened reads as a dash, not as ¥0.
+  // and a month that has not happened reads as a dash, not as ¥0. The month
+  // under way counts once its first hours are in.
   const today = new Date();
+  const thisMonth = today.getMonth();
   const lastRealMonth = today.getFullYear() === currentYear
-    ? today.getMonth() + 1
+    ? thisMonth + ((stats[thisMonth]?.actualRevenue ?? 0) > 0 ? 1 : 0)
     : today.getFullYear() > currentYear ? 12 : 0;
   const monthlyChart = stats.map((d, i) => ({
     ...d,
