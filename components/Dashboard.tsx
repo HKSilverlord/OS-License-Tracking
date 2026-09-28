@@ -126,13 +126,21 @@ const TOOLTIP_STYLE = {
   },
   itemStyle: { color: '#fff' },
   labelStyle: { color: '#fff', fontWeight: 600 },
-  // Series order, plan then actual, in every language. Recharts sorts by name
-  // by default, which put the two the other way round in Vietnamese.
-  itemSorter: () => 0,
+  itemSorter: (item: { dataKey?: unknown }) => seriesRank(item),
 } as const;
 
-/** Legend text in the axis grey: the dot carries the series colour, and a pale colour as text is hard to read. */
-const legendText = (value: string) => <span style={{ color: CHART_PALETTE.labelNeutral }}>{value}</span>;
+/**
+ * Plan before actual in every legend and tooltip, in every language. Recharts
+ * sorts them by name, which put the two the other way round in Vietnamese, and
+ * the cumulative chart draws actual first so the plan line sits on top.
+ */
+const SERIES_ORDER = ['plannedRevenue', 'actualRevenue', 'accPlannedRevenue', 'accActualRevenue'];
+function seriesRank(item: { dataKey?: unknown }): number {
+  return SERIES_ORDER.indexOf(String(item.dataKey));
+}
+
+/** Legend text in grey: the dot carries the series colour, and a pale colour as text is hard to read. */
+const legendText = (value: string) => <span className="text-slate-500 dark:text-slate-400">{value}</span>;
 
 const AXIS_TICK = { fill: CHART_PALETTE.labelNeutral, fontSize: 11 };
 
@@ -635,7 +643,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={AXIS_TICK} />
                 <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} tickFormatter={(val: number) => `${nf(Math.round(val / 10000))}${manYen}`} />
                 <Tooltip formatter={val => (typeof val === 'number' ? fmt(val) : '–')} cursor={{ fill: 'rgba(148,163,184,0.12)' }} {...TOOLTIP_STYLE} />
-                <Legend iconType="circle" iconSize={8} itemSorter={null} formatter={legendText} wrapperStyle={{ fontSize: '12px', color: CHART_PALETTE.labelNeutral }} />
+                <Legend iconType="circle" iconSize={8} itemSorter={seriesRank} formatter={legendText} wrapperStyle={{ fontSize: '12px', color: CHART_PALETTE.labelNeutral }} />
                 <Bar dataKey="plannedRevenue" name={planShort} fill={chartColors.planRevenue} radius={[4, 4, 0, 0]}>
                   {roomForBarLabels && (
                     <LabelList dataKey="plannedRevenue" position="top" formatter={manLabel} fontSize={10} fill={chartColors.planRevenue} />
@@ -686,7 +694,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={AXIS_TICK} />
                 <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} tickFormatter={(val: number) => `${nf(Math.round(val / 10000))}${manYen}`} />
                 <Tooltip formatter={val => (typeof val === 'number' ? fmt(val) : '–')} {...TOOLTIP_STYLE} />
-                <Legend iconType="circle" iconSize={8} itemSorter={null} formatter={legendText} wrapperStyle={{ fontSize: '12px', color: CHART_PALETTE.labelNeutral }} />
+                <Legend iconType="circle" iconSize={8} itemSorter={seriesRank} formatter={legendText} wrapperStyle={{ fontSize: '12px', color: CHART_PALETTE.labelNeutral }} />
                 <Area
                   type="monotone"
                   dataKey="accActualRevenue"

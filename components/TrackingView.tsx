@@ -927,7 +927,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
     label: (
       <>
         {half}
-        <span className="ml-1.5 hidden font-normal text-slate-500 sm:inline dark:text-slate-400">{halfMonths(half, t)}</span>
+        <span className="ml-1.5 hidden font-normal text-slate-600 sm:inline dark:text-slate-400">{halfMonths(half, t)}</span>
       </>
     ),
     title: `${half} (${halfMonths(half, t)})`,
