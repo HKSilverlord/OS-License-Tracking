@@ -549,15 +549,15 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
    * ---------------------------------------------------------------- */
 
   // (a) In-app navigation: the shell calls confirmNavigation() before every
-  // route/year change it controls and only proceeds when this returns null or
-  // the user accepts.
+  // route/year change it controls and only proceeds when this resolves true.
   useEffect(() => {
-    return setNavigationBlocker(() => {
-      if (pendingCount === 0) return null;
-      leaveConfirmedRef.current = true;
-      return t('tracker.unsavedLeaveConfirm', 'You have unsaved changes. Leave without saving?');
+    return setNavigationBlocker(async () => {
+      const hadEdits = Object.keys(pendingChangesRef.current).length > 0;
+      const leave = await confirmDiscardPending();
+      if (leave && hadEdits) leaveConfirmedRef.current = true;
+      return leave;
     });
-  }, [pendingCount, t]);
+  }, [confirmDiscardPending]);
 
   // (b) Refresh / tab close.
   useEffect(() => {

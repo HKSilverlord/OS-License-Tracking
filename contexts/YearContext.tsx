@@ -7,11 +7,10 @@ interface YearContextValue {
   /** Every period label ('2025-H1'), for the few controls that work per half. */
   periods: string[];
   /**
-   * Switch year, after the navigation guard has had its say. Returns false when
-   * the user chose to stay (unsaved edits in Tracking), so a control that
-   * already moved can put itself back.
+   * Switch year, after the navigation guard has had its say. Resolves false
+   * when the user chose to stay with unsaved edits in Tracking.
    */
-  requestYear: (next: number) => boolean;
+  requestYear: (next: number) => Promise<boolean>;
 }
 
 const YearContext = createContext<YearContextValue | null>(null);

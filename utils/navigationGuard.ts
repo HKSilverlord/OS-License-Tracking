@@ -8,8 +8,11 @@
  * `beforeunload` handler in the view that registers the blocker.
  */
 
-/** Returns a human-readable reason to block (already translated), or null when navigation is free. */
-export type NavigationBlocker = () => string | null;
+/**
+ * Resolves true when navigation may go ahead: nothing would be lost, or the
+ * user agreed to lose it (asked in the app's own dialog, never window.confirm).
+ */
+export type NavigationBlocker = () => Promise<boolean>;
 
 let activeBlocker: NavigationBlocker | null = null;
 
@@ -27,22 +30,14 @@ export function hasNavigationBlocker(): boolean {
   return activeBlocker !== null;
 }
 
-/**
- * Calls the blocker; if it returns a reason, shows window.confirm(reason) and
- * returns the user's answer; returns true when navigation is free.
- */
-export function confirmNavigation(): boolean {
+/** Resolves true when navigation is free or the user agreed to leave. */
+export async function confirmNavigation(): Promise<boolean> {
   const blocker = activeBlocker;
   if (!blocker) return true;
-
-  let reason: string | null = null;
   try {
-    reason = blocker();
+    return await blocker();
   } catch {
     // A broken blocker must never trap the user on a page.
     return true;
   }
-
-  if (!reason) return true;
-  return window.confirm(reason);
 }

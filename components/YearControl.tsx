@@ -44,7 +44,7 @@ export const YearControl: React.FC<{ className?: string }> = ({ className = '' }
         type="button"
         className={STEP}
         disabled={previous === null}
-        onClick={() => previous !== null && requestYear(previous)}
+        onClick={() => previous !== null && void requestYear(previous)}
         aria-label={t('year.previous', 'Previous year')}
         title={previous !== null ? String(previous) : undefined}
       >
@@ -55,12 +55,11 @@ export const YearControl: React.FC<{ className?: string }> = ({ className = '' }
         onChange={event => {
           const picked = Number.parseInt(event.target.value, 10);
           if (Number.isNaN(picked) || picked === year) return;
-          // A controlled select has already moved in the DOM; put it back when
-          // the user decides to stay with their unsaved edits.
-          if (!requestYear(picked)) event.target.value = String(year);
+          // Controlled: it shows `year` again until the year really changes.
+          void requestYear(picked);
         }}
         aria-label={t('year.select', 'Select year')}
-        className="appearance-none border-x border-slate-200 bg-transparent px-3 text-center text-sm font-semibold tabular-nums text-slate-900 outline-none transition-colors hover:bg-slate-50 focus-visible:bg-slate-50 dark:border-slate-700 dark:text-white dark:hover:bg-slate-800 dark:focus-visible:bg-slate-800"
+        className="appearance-none border-x border-slate-200 bg-transparent px-3 text-center text-sm font-semibold tabular-nums text-slate-900 outline-none transition-colors hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 dark:border-slate-700 dark:text-white dark:hover:bg-slate-800 dark:focus-visible:bg-slate-800"
       >
         {options.map(option => (
           <option key={option} value={option}>{option}</option>
@@ -70,7 +69,7 @@ export const YearControl: React.FC<{ className?: string }> = ({ className = '' }
         type="button"
         className={STEP}
         disabled={next === null}
-        onClick={() => next !== null && requestYear(next)}
+        onClick={() => next !== null && void requestYear(next)}
         aria-label={t('year.next', 'Next year')}
         title={next !== null ? String(next) : undefined}
       >

@@ -53,16 +53,16 @@ function App() {
   const { availablePeriods, availableYears, currentYear, setCurrentYear } = usePeriodCatalog(userId);
 
   /** Every year change goes through the unsaved-changes guard. */
-  const requestYear = useCallback((next: number): boolean => {
+  const requestYear = useCallback(async (next: number): Promise<boolean> => {
     if (next === currentYear) return true;
-    if (!confirmNavigation()) return false;
+    if (!(await confirmNavigation())) return false;
     setCurrentYear(next);
     return true;
   }, [currentYear, setCurrentYear]);
 
   const handleSignOut = useCallback(async () => {
     // Signing out unmounts every view; treat it as navigation so unsaved edits prompt.
-    if (!confirmNavigation()) return;
+    if (!(await confirmNavigation())) return;
     await signOut();
   }, [signOut]);
 
