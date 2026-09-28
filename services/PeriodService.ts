@@ -99,27 +99,40 @@ export class PeriodService extends BaseService {
     }
 
     /**
-     * Update projects assigned to a period
+     * Make `projectIds` the projects assigned to a period.
+     *
+     * Only the difference is written. A link row carries the prices set for that
+     * project in that period, so deleting every link and inserting them again
+     * (as this used to) silently reset every price in the period to the
+     * project's global fallback.
      */
     async updatePeriodProjects(periodLabel: string, projectIds: string[]) {
-        // 1. Delete existing links
-        const { error: deleteError } = await this.supabase
+        const { data: existing, error: readError } = await this.supabase
             .from('period_projects')
-            .delete()
+            .select('project_id')
             .eq('period_label', periodLabel);
 
-        if (deleteError) throw deleteError;
+        if (readError) throw readError;
 
-        // 2. Insert new links
-        if (projectIds.length > 0) {
-            const periodProjects = projectIds.map(projectId => ({
-                period_label: periodLabel,
-                project_id: projectId
-            }));
+        const current = new Set((existing || []).map((row: { project_id: string }) => row.project_id));
+        const wanted = new Set(projectIds);
+        const toRemove = [...current].filter(id => !wanted.has(id));
+        const toAdd = [...wanted].filter(id => !current.has(id));
 
+        if (toRemove.length > 0) {
+            const { error: deleteError } = await this.supabase
+                .from('period_projects')
+                .delete()
+                .eq('period_label', periodLabel)
+                .in('project_id', toRemove);
+
+            if (deleteError) throw deleteError;
+        }
+
+        if (toAdd.length > 0) {
             const { error: insertError } = await this.supabase
                 .from('period_projects')
-                .insert(periodProjects);
+                .insert(toAdd.map(projectId => ({ period_label: periodLabel, project_id: projectId })));
 
             if (insertError) throw insertError;
         }
