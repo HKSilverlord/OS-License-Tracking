@@ -17,6 +17,7 @@ export const vn: Record<string, string> = {
   'chartExport.notFound': 'Không tìm thấy biểu đồ, không có gì được xuất',
   'chart.customizeColors': 'Màu biểu đồ',
   'chart.highlightCurrentMonth': 'Đánh dấu tháng này',
+  'chart.showCapacityValues': 'Hiện số của đường năng lực',
   'chart.thisMonth': 'Tháng này',
   'chart.toggleSeries': 'Ẩn hoặc hiện chuỗi này',
   'chart.field.color': 'Màu',

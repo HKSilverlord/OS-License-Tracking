@@ -17,6 +17,7 @@ export const en: Record<string, string> = {
   'chartExport.notFound': 'Chart not found, nothing was exported',
   'chart.customizeColors': 'Chart colors',
   'chart.highlightCurrentMonth': 'Mark this month',
+  'chart.showCapacityValues': 'Show capacity figures',
   'chart.thisMonth': 'This month',
   'chart.toggleSeries': 'Show or hide this series',
   'chart.field.color': 'Color',

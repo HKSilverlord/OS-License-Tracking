@@ -345,6 +345,9 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
   const thisYear = new Date().getFullYear();
   const finishedMonths = currentYear < thisYear ? 12 : currentYear > thisYear ? 0 : new Date().getMonth();
   const [showCurrentMonth, setShowCurrentMonth] = useState(true);
+  // Off by default: twelve near-identical figures sat on top of the columns. The
+  // month card and the exports carry them; this is for a slide that needs them.
+  const [showCapacityValues, setShowCapacityValues] = useState(false);
 
   const hasData = monthlyData.some(d => d.workingHoursPlan || d.workingHoursActual || d.salesPlan || d.salesActual);
 
@@ -448,13 +451,21 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 onReset={() => {
                   resetChartColors();
                   setShowCurrentMonth(true);
+                  setShowCapacityValues(false);
                 }}
                 barSizeRange={[10, 100]}
-                extra={currentMonth !== null && (
-                  <SeriesStyleCheck checked={showCurrentMonth} onChange={setShowCurrentMonth}>
-                    {t('chart.highlightCurrentMonth', 'Mark this month')}
-                  </SeriesStyleCheck>
-                )}
+                extra={
+                  <>
+                    {currentMonth !== null && (
+                      <SeriesStyleCheck checked={showCurrentMonth} onChange={setShowCurrentMonth}>
+                        {t('chart.highlightCurrentMonth', 'Mark this month')}
+                      </SeriesStyleCheck>
+                    )}
+                    <SeriesStyleCheck checked={showCapacityValues} onChange={setShowCapacityValues}>
+                      {t('chart.showCapacityValues', 'Show capacity figures')}
+                    </SeriesStyleCheck>
+                  </>
+                }
               />
               <ExportButton
                 targetId="monthly-plan-actual-chart"
@@ -597,7 +608,9 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                     strokeDasharray="5 5"
                     dot={false}
                   >
-                    <LabelList dataKey="capacityLine" position="left" content={<ValueLabel position="left" dataKey="capacityLine" chartColors={chartColors} nf={nf} theme={theme} suffix="h" />} />
+                    {showCapacityValues && (
+                      <LabelList dataKey="capacityLine" position="left" content={<ValueLabel position="left" dataKey="capacityLine" chartColors={chartColors} nf={nf} theme={theme} suffix="h" />} />
+                    )}
                   </Line>
 
                   <Bar
