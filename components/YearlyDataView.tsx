@@ -38,7 +38,7 @@ const EMPTY_PRICE_INDEX: PriceIndex = buildPriceIndex([], []);
 const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 /** Column widths in px, matching Project tracking so the two tables read alike. */
-const W = { no: 48, kind: 96, month: 76, total: 88, revenue: 124 } as const;
+const W = { no: 48, month: 76, total: 88, revenue: 124 } as const;
 
 /* Frozen cells stay opaque while the months slide under them, hover included. */
 const SURFACE =
@@ -47,10 +47,13 @@ const SURFACE =
 /* The year's totals: a quieter band pinned under the column headings. */
 const TOTALS = 'bg-slate-50 dark:bg-[color-mix(in_oklab,var(--color-slate-900),var(--color-slate-800)_70%)]';
 
-/* On a phone only the project name stays frozen; from `sm` up, No. does too. */
+/* The project name and Plan/Actual stay frozen, so a row always says what it
+   is; from `sm` up, No. does too. The offsets are the widths before each. */
 const STICKY_NO = 'sm:sticky sm:left-0 sm:z-10';
 const STICKY_NAME = 'sticky left-0 z-10 sm:left-[48px]';
-const NAME_WIDTH = 'w-[152px] min-w-[152px] max-w-[152px] sm:w-[224px] sm:min-w-[224px] sm:max-w-[224px]';
+const NAME_WIDTH = 'w-[128px] min-w-[128px] max-w-[128px] sm:w-[224px] sm:min-w-[224px] sm:max-w-[224px]';
+const STICKY_KIND = 'sticky left-[128px] z-10 sm:left-[272px]';
+const KIND_WIDTH = 'w-[72px] min-w-[72px] sm:w-[96px] sm:min-w-[96px]';
 
 const HEAD =
   'h-10 border-b border-slate-200 bg-white px-2 text-[12px] font-medium text-slate-500 ' +
@@ -392,7 +395,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
                 <th scope="col" className={`${HEAD} ${STICKY_NAME} ${NAME_WIDTH} border-r px-3 text-left`}>
                   {t('tracker.projectName', 'Company name')}
                 </th>
-                <th scope="col" style={{ width: W.kind, minWidth: W.kind }} className={`${HEAD} border-r`}>
+                <th scope="col" className={`${HEAD} ${STICKY_KIND} ${KIND_WIDTH} border-r`}>
                   <span className="sr-only">{t('tracker.rowKind', 'Plan or actual')}</span>
                 </th>
                 {months.map(m => (
@@ -434,7 +437,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
                         </th>
                       </>
                     )}
-                    <th scope="row" className={`${TOTALS} ${edge} border-r border-r-slate-200 px-2 py-1.5 text-left text-[12px] font-medium leading-4 text-slate-500 dark:border-r-slate-700 dark:text-slate-400`}>
+                    <th scope="row" className={`${TOTALS} ${STICKY_KIND} ${edge} border-r border-r-slate-200 px-2 py-1.5 text-left text-[12px] font-medium leading-4 text-slate-500 dark:border-r-slate-700 dark:text-slate-400`}>
                       {row.label}
                     </th>
                     {row.values.map((value, idx) => (
@@ -479,7 +482,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
                       </span>
                       <span className="mt-0.5 block font-mono text-[11px] text-slate-400 dark:text-slate-500">{project.code}</span>
                     </th>
-                    <th scope="row" className={`${SURFACE} border-r border-slate-100 px-2 py-1.5 text-left text-[12px] font-normal text-slate-500 dark:border-slate-800 dark:text-slate-400`}>
+                    <th scope="row" className={`${SURFACE} ${STICKY_KIND} border-r border-slate-100 px-2 py-1.5 text-left text-[12px] font-normal text-slate-500 dark:border-slate-800 dark:text-slate-400`}>
                       {planLabel}
                     </th>
                     {monthlyData.map((d, idx) => (
@@ -498,7 +501,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
                     </td>
                   </tr>
                   <tr>
-                    <th scope="row" className={`${SURFACE} ${ROW_END} border-r border-r-slate-100 px-2 py-1.5 text-left text-[12px] font-medium text-blue-700 dark:border-r-slate-800 dark:text-blue-300`}>
+                    <th scope="row" className={`${SURFACE} ${STICKY_KIND} ${ROW_END} border-r border-r-slate-100 px-2 py-1.5 text-left text-[12px] font-medium text-blue-700 dark:border-r-slate-800 dark:text-blue-300`}>
                       {actualLabel}
                     </th>
                     {monthlyData.map((d, idx) => (
