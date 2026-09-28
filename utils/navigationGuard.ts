@@ -74,6 +74,8 @@ export async function confirmNavigation(): Promise<boolean> {
 let restoring = false;
 /** The user's move, replayed after they chose to leave: the router must hear it. */
 let replaying = false;
+/** A dialog is open for a move of unknown distance: it decides for wherever the address goes next. */
+let askingUnnumbered = false;
 
 /*
  * Once the user chooses to leave, the blocker is let go at once rather than when
@@ -93,11 +95,13 @@ const onPopState = (event: PopStateEvent) => {
   }
   if (!activeBlocker) return;
   const to = historyIndex(event.state);
-  if (to !== null && to === guardedIndex) return;
+  const home = window.location.href === guardedUrl;
+  if (to !== null && to === guardedIndex && home) return;
 
   event.stopImmediatePropagation();
+  if (askingUnnumbered) return;
 
-  if (to !== null && guardedIndex !== null) {
+  if (to !== null && guardedIndex !== null && to !== guardedIndex) {
     const steps = to - guardedIndex;
     restoring = true;
     window.history.go(-steps);
@@ -111,14 +115,20 @@ const onPopState = (event: PopStateEvent) => {
   }
 
   // An entry react-router never numbered: an address typed into the bar, or
-  // the history before it. There is no telling how far the move went, so the
-  // page stays as it is while the user decides. Staying writes the page's
-  // address back as a new entry; leaving lets the router follow the address.
+  // the history before it (or a number it handed out twice after one). There
+  // is no telling how far the move went, so the page stays as it is while the
+  // user decides, and further moves meanwhile only change what "leave" means.
+  // Staying writes the page's address back as a new entry; leaving lets the
+  // router follow the address, unless the moves came back to this page.
+  askingUnnumbered = true;
   void confirmNavigation().then(leave => {
+    askingUnnumbered = false;
+    const moved = window.location.href !== guardedUrl;
     if (!leave) {
-      window.history.pushState(guardedState, '', guardedUrl);
+      if (moved) window.history.pushState(guardedState, '', guardedUrl);
       return;
     }
+    if (!moved) return;
     release();
     replaying = true;
     window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }));
