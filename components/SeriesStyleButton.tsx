@@ -162,7 +162,7 @@ export const SeriesStyleButton: React.FC<{
               <Slider
                 id={`${id}-opacity`}
                 value={style.opacity}
-                min={0.1}
+                min={0}
                 max={1}
                 step={0.05}
                 onChange={opacity => set({ opacity })}
