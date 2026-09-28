@@ -374,6 +374,22 @@ const settleTextForCanvas = (root: HTMLElement): void => {
  */
 const EXPORT_ONLY = '[data-export-only]';
 
+/**
+ * What the pointer leaves on a chart: the tooltip, the hover band and the
+ * highlighted dot. The menu that starts an export closes with the pointer over
+ * the chart, so they are usually showing. They have no place in the image, and
+ * a tooltip near the edge also widened the measured size into a blank strip.
+ */
+const HOVER_ONLY = '.recharts-tooltip-wrapper, .recharts-tooltip-cursor, .recharts-active-dot';
+
+/** Hides the hover-only parts of the live element for a measurement; returns the undo. */
+const hideHoverOnly = (root: HTMLElement): (() => void) => {
+  const nodes = Array.from(root.querySelectorAll<HTMLElement | SVGElement>(HOVER_ONLY));
+  const previous = nodes.map(node => node.style.display);
+  nodes.forEach(node => { node.style.display = 'none'; });
+  return () => nodes.forEach((node, i) => { node.style.display = previous[i]; });
+};
+
 const revealExportOnly = (root: HTMLElement): HTMLElement[] => {
   const hidden = Array.from(root.querySelectorAll<HTMLElement>(EXPORT_ONLY)).filter(el => el.hidden);
   hidden.forEach(el => { el.hidden = false; });
@@ -495,6 +511,7 @@ const capturePass = async (
       // colours are in force at the time.
       if (exportsOnLightBackground()) clonedDoc.documentElement.classList.remove('dark');
       revealExportOnly(clonedEl);
+      clonedEl.querySelectorAll(HOVER_ONLY).forEach(node => node.remove());
       await resolveOklchColors(clonedDoc);
       settleTextForCanvas(clonedEl);
       unclipSingleLineText(clonedEl);
@@ -538,7 +555,9 @@ const capture = async (
   // Measured with the export-only content showing, then hidden again before the
   // browser can paint, so it never appears on screen.
   const revealed = revealExportOnly(element);
+  const showHover = hideHoverOnly(element);
   let size = capturedSize(element);
+  showHover();
   revealed.forEach(el => { el.hidden = true; });
 
   if (size.width === 0 || size.height === 0) {
@@ -715,6 +734,8 @@ export const exportChartToSVG = async (elementId: string, filename: string = 'ch
       // Copy all computed styles inline for standalone rendering
       log.debug('Copying styles...');
       inlineAllStyles(svgElement, clonedSvg);
+      // After the style walk, which pairs the two trees node for node.
+      clonedSvg.querySelectorAll(HOVER_ONLY).forEach(node => node.remove());
 
       clonedSvg.setAttribute('width', width.toString());
       clonedSvg.setAttribute('height', height.toString());
