@@ -267,7 +267,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {collapsed ? (
               index > 0 && <div className="mx-auto mb-4 h-px w-6 bg-white/10" aria-hidden="true" />
             ) : (
-              <p className="mb-1 px-2.5 text-[11px] font-medium uppercase tracking-wider text-slate-500">
+              <p className="mb-1 px-2.5 text-[11px] font-medium uppercase tracking-wider text-slate-400">
                 {group.label}
               </p>
             )}

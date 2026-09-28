@@ -84,7 +84,7 @@ export function SegmentedControl<T extends string>({
             } ${
               selected
                 ? 'text-slate-900 dark:text-white'
-                : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
           >
             {selected && (
