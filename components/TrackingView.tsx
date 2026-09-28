@@ -347,17 +347,26 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
     });
   };
 
-  const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  /** Debounced project-field saves by key: the timer, and the save it will run. */
+  const debouncedSaves = useRef<Record<string, { timer: ReturnType<typeof setTimeout>; run: () => void }>>({});
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const year = currentYear;
   const periodType = activeTerm as PeriodType;
   const months = useMemo(() => getMonthsForPeriod(periodType), [periodType]);
 
-  /** Cancels every debounced project-field save; they all target the current period. */
-  const clearDebounceTimers = useCallback(() => {
-    Object.values(debounceTimers.current).forEach(timer => clearTimeout(timer));
-    debounceTimers.current = {};
+  /**
+   * Runs every debounced project-field save now instead of waiting. The screen
+   * already shows those edits as made, so leaving the page or the period within
+   * the debounce must not drop them; each save keeps the period it was typed in.
+   */
+  const flushDebouncedSaves = useCallback(() => {
+    const saves = Object.values(debouncedSaves.current);
+    debouncedSaves.current = {};
+    saves.forEach(({ timer, run }) => {
+      clearTimeout(timer);
+      run();
+    });
   }, []);
 
   /**
@@ -365,10 +374,10 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
    * obtained the user's consent — nothing else may clear `pendingChanges`.
    */
   const discardPendingChanges = useCallback(() => {
-    clearDebounceTimers();
+    flushDebouncedSaves();
     leaveConfirmedRef.current = false;
     setPendingChanges({});
-  }, [clearDebounceTimers]);
+  }, [flushDebouncedSaves]);
 
   /** Asks before losing edits. Resolves true when it is safe to continue. */
   const confirmDiscardPending = useCallback(async (): Promise<boolean> => {
@@ -496,13 +505,8 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
     void fetchData();
   }, [fetchData]);
 
-  // Cleanup debounce timers on unmount
-  useEffect(() => {
-    return () => {
-      Object.values(debounceTimers.current).forEach(timer => clearTimeout(timer));
-      debounceTimers.current = {};
-    };
-  }, []);
+  // Leaving the page saves what is still waiting on its debounce.
+  useEffect(() => flushDebouncedSaves, [flushDebouncedSaves]);
 
   /* ---------------------------------------------------------------- *
    * New project
@@ -552,16 +556,18 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
    * U3 — unsaved-changes guard
    * ---------------------------------------------------------------- */
 
-  // (a) In-app navigation: the shell calls confirmNavigation() before every
-  // route/year change it controls and only proceeds when this resolves true.
+  // (a) Navigation: while hours are unsaved, the shell calls confirmNavigation()
+  // before every route/year change it controls, and so does browser Back or
+  // Forward; each only proceeds when this resolves true.
   useEffect(() => {
+    if (!hasPendingChanges) return;
     return setNavigationBlocker(async () => {
       const hadEdits = Object.keys(pendingChangesRef.current).length > 0;
       const leave = await confirmDiscardPending();
       if (leave && hadEdits) leaveConfirmedRef.current = true;
       return leave;
     });
-  }, [confirmDiscardPending]);
+  }, [hasPendingChanges, confirmDiscardPending]);
 
   // (b) Refresh / tab close.
   useEffect(() => {
@@ -583,8 +589,8 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
     if (periodRef.current === currentPeriodLabel) return;
     periodRef.current = currentPeriodLabel;
 
-    // Debounced project-field saves always target the period being left.
-    clearDebounceTimers();
+    // Debounced project-field saves belong to the period being left: save them now.
+    flushDebouncedSaves();
 
     if (Object.keys(pendingChangesRef.current).length === 0) return;
 
@@ -597,7 +603,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
     toast.warning(
       t('tracker.unsavedKept', 'Your unsaved changes were kept. Press Save to store them.')
     );
-  }, [currentPeriodLabel, clearDebounceTimers, toast, t]);
+  }, [currentPeriodLabel, flushDebouncedSaves, toast, t]);
 
   /** Cell keys the per-cell save indicator watches for one record. */
   const savingKeysFor = (record: MonthlyRecord): string[] => [
@@ -846,16 +852,16 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
       if (debounceMs > 0) {
         // One timer per project and set of fields, so typing in two cells saves both.
         const key = `proj-${id}-${Object.keys(updates).sort().join('-')}`;
-        if (debounceTimers.current[key]) clearTimeout(debounceTimers.current[key]);
-        debounceTimers.current[key] = setTimeout(async () => {
-          try {
-            await performSave();
-          } catch (error) {
+        const run = () => {
+          delete debouncedSaves.current[key];
+          performSave().catch(error => {
             log.error('Failed to save project update', error);
             toast.error(t('toast.saveFailed', 'Save failed'));
-          }
-          delete debounceTimers.current[key];
-        }, debounceMs);
+          });
+        };
+        const waiting = debouncedSaves.current[key];
+        if (waiting) clearTimeout(waiting.timer);
+        debouncedSaves.current[key] = { timer: setTimeout(run, debounceMs), run };
       } else {
         await performSave();
       }
