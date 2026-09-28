@@ -183,7 +183,7 @@ export const SeriesStyleButton: React.FC<{
               </Row>
             )}
 
-            <p className="pb-1 pt-3 text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
+            <p className="pb-1 pt-3 text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
               {t('chart.valueLabels', 'Value labels')}
             </p>
             <Row label={t('chart.field.color', 'Color')}>

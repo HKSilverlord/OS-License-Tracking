@@ -94,7 +94,7 @@ export const Field: React.FC<FieldProps> = ({ label, hint, error, aside, classNa
         <label htmlFor={id} className="text-[13px] font-medium text-slate-700 dark:text-slate-300">
           {label}
         </label>
-        {aside && <span className="text-xs text-slate-400 dark:text-slate-500">{aside}</span>}
+        {aside && <span className="text-xs text-slate-500 dark:text-slate-400">{aside}</span>}
       </div>
       {children(id)}
       {error ? (

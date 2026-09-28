@@ -170,7 +170,7 @@ const Assumption: React.FC<{
           {suffix && <span className="text-[13px] font-normal text-slate-500 dark:text-slate-400">{suffix}</span>}
         </p>
       )}
-      {hint && <p className="mt-1 text-xs leading-5 text-slate-400 dark:text-slate-500">{hint}</p>}
+      {hint && <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{hint}</p>}
     </dd>
   </div>
 );
@@ -523,15 +523,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
               <tr key={row.key}>
                 <th scope="row" className="py-3.5 pr-4 text-left align-top font-medium text-slate-900 dark:text-white">
                   {row.label}
-                  {row.hint && <span className="block text-xs font-normal text-slate-400 dark:text-slate-500">{row.hint}</span>}
+                  {row.hint && <span className="block text-xs font-normal text-slate-500 dark:text-slate-400">{row.hint}</span>}
                 </th>
                 <td className="py-3.5 pr-4 text-right align-top tabular-nums text-slate-600 dark:text-slate-300">
                   {row.format(row.plan)}
-                  {row.man && <span className="block text-xs text-slate-400 dark:text-slate-500">{toMan(row.plan)}</span>}
+                  {row.man && <span className="block text-xs text-slate-500 dark:text-slate-400">{toMan(row.plan)}</span>}
                 </td>
                 <td className="py-3.5 pr-4 text-right align-top font-semibold tabular-nums text-slate-900 dark:text-white">
                   {row.format(row.actual)}
-                  {row.man && <span className="block text-xs font-normal text-slate-400 dark:text-slate-500">{toMan(row.actual)}</span>}
+                  {row.man && <span className="block text-xs font-normal text-slate-500 dark:text-slate-400">{toMan(row.actual)}</span>}
                 </td>
                 <td className={`py-3.5 pr-4 text-right align-top font-medium tabular-nums ${varianceTone(row.delta)}`}>
                   {row.variance.arrow && <span className="mr-0.5" title={arrowHint}>{row.variance.arrow}</span>}
@@ -585,7 +585,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
           ))}
         </div>
 
-        {showsArrow && <p className="mt-4 text-xs text-slate-400 dark:text-slate-500">{arrowHint}</p>}
+        {showsArrow && <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">{arrowHint}</p>}
       </Card>
 
       {/* Charts. Each card is its own export, title and year included. */}

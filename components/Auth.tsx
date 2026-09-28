@@ -198,7 +198,7 @@ export const Auth: React.FC = () => {
         </div>
       </main>
 
-      <p className="absolute inset-x-0 bottom-0 pb-6 text-center text-xs text-slate-400 dark:text-slate-500">
+      <p className="absolute inset-x-0 bottom-0 pb-6 text-center text-xs text-slate-500 dark:text-slate-400">
         {t('app.subtitle', 'Esuhai Group')}
       </p>
     </div>

@@ -129,7 +129,7 @@ const MonthDetailCard = ({ data, chartColors, labels, nf, hoursUnit, salesUnit, 
         {labels[key]}
       </span>
       <span className="whitespace-nowrap font-medium tabular-nums text-slate-900 dark:text-slate-100">
-        {nf(data[key])} <span className="font-normal text-slate-400 dark:text-slate-500">{unit}</span>
+        {nf(data[key])} <span className="font-normal text-slate-500 dark:text-slate-400">{unit}</span>
       </span>
     </div>
   );

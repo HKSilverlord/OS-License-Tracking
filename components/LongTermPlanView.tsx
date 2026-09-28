@@ -173,7 +173,7 @@ const HoverCard = ({ active, payload, chartColors, labels, units, nf }: Partial<
           {labels[key]}
         </span>
         <span className="whitespace-nowrap font-medium tabular-nums text-slate-900 dark:text-slate-100">
-          {nf(value)} <span className="font-normal text-slate-400 dark:text-slate-500">{units[key]}</span>
+          {nf(value)} <span className="font-normal text-slate-500 dark:text-slate-400">{units[key]}</span>
         </span>
       </div>
     );
@@ -366,7 +366,7 @@ export const LongTermPlanView: React.FC = () => {
           title={
             <>
               {t('longTermPlan.title', 'OS business long-term plan')}{' '}
-              <span className="font-normal tabular-nums text-slate-400 dark:text-slate-500">{range}</span>
+              <span className="font-normal tabular-nums text-slate-500 dark:text-slate-400">{range}</span>
             </>
           }
           description={t('longTermPlan.chartDesc', 'Sales on the left axis, average hourly rate on the right')}

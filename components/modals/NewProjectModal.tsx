@@ -124,7 +124,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
       description={
         <>
           {t('modals.project.addsTo', 'Adds to {period}').replace('{period}', describePeriod(currentPeriod, t))}
-          {form.code && <span className="font-mono text-slate-400 dark:text-slate-500"> · {form.code}</span>}
+          {form.code && <span className="font-mono text-slate-500 dark:text-slate-400"> · {form.code}</span>}
         </>
       }
       footer={

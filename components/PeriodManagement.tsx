@@ -172,7 +172,7 @@ const ProjectPicker: React.FC<ProjectPickerProps> = ({ projects, selected, onCha
                     <span className="min-w-0 flex-1">
                       <span className="flex items-baseline gap-2">
                         <span className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{project.name}</span>
-                        <span className="shrink-0 font-mono text-[11px] text-slate-400 dark:text-slate-500">{project.code}</span>
+                        <span className="shrink-0 font-mono text-[11px] text-slate-500 dark:text-slate-400">{project.code}</span>
                       </span>
                       {detail && (
                         <span className="block truncate text-xs leading-5 text-slate-500 dark:text-slate-400">{detail}</span>
@@ -321,7 +321,7 @@ const PeriodEditor: React.FC<PeriodEditorProps> = ({
                     label: (
                       <>
                         {half}
-                        <span className="hidden font-normal text-slate-400 min-[400px]:inline dark:text-slate-500">
+                        <span className="hidden font-normal text-slate-500 min-[400px]:inline dark:text-slate-400">
                           {halfMonths(half, t)}
                         </span>
                       </>
@@ -391,7 +391,7 @@ const HalfRow: React.FC<HalfRowProps> = ({ year, half, period, isAdmin, onEdit, 
     return (
       <li className="flex min-h-[64px] items-center gap-3 px-4 py-3 sm:px-5">
         {name}
-        <span className="text-[13px] text-slate-400 dark:text-slate-500">
+        <span className="text-[13px] text-slate-500 dark:text-slate-400">
           {t('periodManagement.notCreated', 'Not set up')}
         </span>
         {isAdmin && (
