@@ -409,7 +409,8 @@ const FONT_LOAD_TIMEOUT_MS = 3000;
  * each word in the fallback font, which is narrower, and drew it in Inter, so
  * now and then an image came out with its words run together: "Salesplan".
  * The wait is capped, so a font that never arrives costs a moment, not the
- * export.
+ * export. Giving up is logged: an image with its words run together then has
+ * a cause in the console.
  */
 const loadCloneFonts = async (root: HTMLElement): Promise<void> => {
   const doc = root.ownerDocument;
@@ -417,13 +418,19 @@ const loadCloneFonts = async (root: HTMLElement): Promise<void> => {
   if (!doc.fonts || !view) return;
   const family = view.getComputedStyle(root).fontFamily;
   const text = root.textContent ?? '';
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    await Promise.race([
-      Promise.all(['400', '600', '700'].map(weight => doc.fonts.load(`${weight} 16px ${family}`, text))),
-      new Promise(resolve => setTimeout(resolve, FONT_LOAD_TIMEOUT_MS)),
+    const loaded = await Promise.race([
+      Promise.all(['400', '600', '700'].map(weight => doc.fonts.load(`${weight} 16px ${family}`, text))).then(() => true),
+      new Promise<false>(resolve => { timer = setTimeout(() => resolve(false), FONT_LOAD_TIMEOUT_MS); }),
     ]);
+    if (!loaded) {
+      log.warn(`Web font still loading after ${FONT_LOAD_TIMEOUT_MS} ms, capturing without waiting further; words may run together.`);
+    }
   } catch (error) {
     log.warn('Web font did not load for capture, drawing in the fallback:', error);
+  } finally {
+    clearTimeout(timer);
   }
 };
 
