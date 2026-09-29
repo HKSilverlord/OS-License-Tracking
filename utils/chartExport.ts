@@ -34,10 +34,9 @@ const log = createLogger('chartExport');
  * utility as `color-mix(in oklab, var(--color-blue-50) 60%, transparent)`, so
  * without this the whole palette was unresolvable — see `toRgbaViaCanvas`.
  */
-const resolveCssVars = (value: string, depth = 0): string => {
+const resolveCssVars = (value: string, rootStyle: CSSStyleDeclaration, depth = 0): string => {
   if (depth > 4 || !value.includes('var(')) return value;
 
-  const rootStyle = getComputedStyle(document.documentElement);
   let out = '';
   let i = 0;
 
@@ -73,18 +72,38 @@ const resolveCssVars = (value: string, depth = 0): string => {
   }
 
   // A custom property can itself be defined in terms of another one.
-  return resolveCssVars(out, depth + 1);
+  return resolveCssVars(out, rootStyle, depth + 1);
 };
 
-const toRgbaViaCanvas = (colorStr: string): string => {
-  try {
-    const canvas = document.createElement('canvas');
-    canvas.width = 1;
-    canvas.height = 1;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return colorStr;
+/** Turns one colour token into rgba(), or hands it back if it cannot. */
+type ColorResolver = (colorStr: string) => string;
 
-    const resolved = resolveCssVars(colorStr);
+/**
+ * A `toRgbaViaCanvas` for one capture: one canvas for every token, and each
+ * distinct token painted once. A stylesheet repeats the same few hundred
+ * tokens thousands of times, and a canvas made for each one cost a capture
+ * 20 s of script and 13 s of garbage collection on a busy machine.
+ */
+const createColorResolver = (): ColorResolver => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1;
+  canvas.height = 1;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const rootStyle = getComputedStyle(document.documentElement);
+  const seen = new Map<string, string>();
+  return (colorStr) => {
+    let rgba = seen.get(colorStr);
+    if (rgba === undefined) {
+      rgba = ctx ? toRgbaViaCanvas(ctx, rootStyle, colorStr) : colorStr;
+      seen.set(colorStr, rgba);
+    }
+    return rgba;
+  };
+};
+
+const toRgbaViaCanvas = (ctx: CanvasRenderingContext2D, rootStyle: CSSStyleDeclaration, colorStr: string): string => {
+  try {
+    const resolved = resolveCssVars(colorStr, rootStyle);
 
     // Per spec a canvas IGNORES a fillStyle it cannot parse and keeps whatever
     // was there — which defaults to #000. Returning that default painted every
@@ -110,7 +129,7 @@ const toRgbaViaCanvas = (colorStr: string): string => {
   }
 };
 
-const replaceUnsupportedColors = (cssText: string): string => {
+const replaceUnsupportedColors = (cssText: string, toRgba: ColorResolver): string => {
   const targets = ['oklch', 'color-mix', 'oklab', 'lch', 'lab'];
   let result = cssText;
   for (const fn of targets) {
@@ -136,7 +155,7 @@ const replaceUnsupportedColors = (cssText: string): string => {
       }
       if (end !== -1) {
         const token = result.slice(start, end + 1);
-        const rgba = toRgbaViaCanvas(token);
+        const rgba = toRgba(token);
         result = result.slice(0, start) + rgba + result.slice(end + 1);
         start += rgba.length;
       } else {
@@ -148,6 +167,8 @@ const replaceUnsupportedColors = (cssText: string): string => {
 };
 
 const resolveOklchColors = async (clonedDoc: Document): Promise<void> => {
+  const toRgba = createColorResolver();
+
   // 1. Read <link> stylesheets, patch oklch/color-mix, swap to inline <style>
   const linkEls = Array.from(
     clonedDoc.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')
@@ -194,7 +215,7 @@ const resolveOklchColors = async (clonedDoc: Document): Promise<void> => {
         return;
       }
       const style = clonedDoc.createElement('style');
-      style.textContent = replaceUnsupportedColors(css);
+      style.textContent = replaceUnsupportedColors(css, toRgba);
       link.parentNode?.replaceChild(style, link);
     })
   );
@@ -202,18 +223,19 @@ const resolveOklchColors = async (clonedDoc: Document): Promise<void> => {
   // 2. Patch inline <style> tags
   clonedDoc.querySelectorAll('style').forEach(style => {
     if (style.textContent) {
-      style.textContent = replaceUnsupportedColors(style.textContent);
+      style.textContent = replaceUnsupportedColors(style.textContent, toRgba);
     }
   });
 
-  // 3. Patch element-level attributes
+  // 3. Patch element-level attributes. Written back only where a colour
+  // changed: the clone is the whole page, and a write restyles the element.
   clonedDoc.querySelectorAll<HTMLElement | SVGElement>('*').forEach(el => {
-    const inlineStyle = el.getAttribute('style');
-    if (inlineStyle) el.setAttribute('style', replaceUnsupportedColors(inlineStyle));
-    const fill = el.getAttribute('fill');
-    if (fill) el.setAttribute('fill', replaceUnsupportedColors(fill));
-    const stroke = el.getAttribute('stroke');
-    if (stroke) el.setAttribute('stroke', replaceUnsupportedColors(stroke));
+    for (const name of ['style', 'fill', 'stroke']) {
+      const value = el.getAttribute(name);
+      if (!value) continue;
+      const patched = replaceUnsupportedColors(value, toRgba);
+      if (patched !== value) el.setAttribute(name, patched);
+    }
   });
 };
 
@@ -265,7 +287,7 @@ const SVG_STYLES: Record<string, { initial: string; inherited: boolean }> = {
  * the rest only where they leave their initial value, and colours the page
  * keeps as `oklch()` are written as rgb() for readers that predate it.
  */
-const inlineSvgStyles = (source: Element, target: Element, parent: CSSStyleDeclaration | null = null): void => {
+const inlineSvgStyles = (source: Element, target: Element, toRgba: ColorResolver, parent: CSSStyleDeclaration | null = null): void => {
   const computed = window.getComputedStyle(source);
   const style = (target as SVGElement).style;
   if (computed.display === 'none') style.setProperty('display', 'none');
@@ -274,13 +296,13 @@ const inlineSvgStyles = (source: Element, target: Element, parent: CSSStyleDecla
     if (!value) continue;
     const from = inherited && parent ? parent.getPropertyValue(property) : initial;
     if (value === from) continue;
-    style.setProperty(property, value.includes('(') ? replaceUnsupportedColors(value) : value);
+    style.setProperty(property, value.includes('(') ? replaceUnsupportedColors(value, toRgba) : value);
   }
 
   const sourceChildren = Array.from(source.children);
   const targetChildren = Array.from(target.children);
   sourceChildren.forEach((child, i) => {
-    if (targetChildren[i]) inlineSvgStyles(child, targetChildren[i], computed);
+    if (targetChildren[i]) inlineSvgStyles(child, targetChildren[i], toRgba, computed);
   });
 };
 
@@ -888,7 +910,7 @@ export const exportChartToSVG = async (elementId: string, filename: string = 'ch
 
       // Copy all computed styles inline for standalone rendering
       log.debug('Copying styles...');
-      inlineSvgStyles(svgElement, clonedSvg);
+      inlineSvgStyles(svgElement, clonedSvg, createColorResolver());
       // After the style walk, which pairs the two trees node for node.
       clonedSvg.querySelectorAll(HOVER_ONLY).forEach(node => node.remove());
 
