@@ -221,6 +221,65 @@ const isLightColor = (color: string): boolean => {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.7;
 };
 
+/** A colour's relative luminance, from `#rgb`, `#rrggbb` or `rgb[a]()`; null for anything else. */
+const luminance = (color: string): number | null => {
+  const value = color.trim();
+  let channels: number[] | null = null;
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(value)?.[1];
+  if (hex) {
+    const full = hex.length === 3 ? hex.split('').map(c => c + c).join('') : hex;
+    channels = [0, 2, 4].map(i => parseInt(full.slice(i, i + 2), 16));
+  } else {
+    const rgb = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i.exec(value);
+    if (rgb) channels = rgb.slice(1, 4).map(Number);
+  }
+  if (!channels) return null;
+  const [r, g, b] = channels.map(c => {
+    const s = c / 255;
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+
+/** How far apart two colours are in lightness, from 1 (none) to 21; Infinity if either is unreadable. */
+const contrast = (a: string, b: string): number => {
+  const la = luminance(a);
+  const lb = luminance(b);
+  if (la === null || lb === null) return Infinity;
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+};
+
+/**
+ * Below this a figure all but disappears into what is behind it. The palest
+ * pair the default colours make, the sales plan's emerald on white, is 2.5.
+ */
+const MIN_LABEL_CONTRAST = 2;
+
+/** The two plates a figure can fall back to: one for dark figures, one for light. */
+const FALLBACK_PLATES = [chartTheme(false).plate, chartTheme(true).plate];
+
+/**
+ * What a figure is drawn on: an outline in the card's colour, or a plate.
+ *
+ * The plate fits the figure. A light figure (white on the actual-hours bar)
+ * gets a plate of its own bar's colour: on the usual pale plate it vanished
+ * wherever a figure wider than its bar ran onto the paler bar beside it.
+ * An outlined figure has no plate: its halo does that job, and a plate
+ * reaching past a narrow bar covered the end of the figure beside it.
+ * A halo or plate about as light as the figure hides it instead (white on
+ * white in light mode, a pale figure on a pale bar, a dark figure in dark
+ * mode). That figure keeps no halo, and its plate turns light or dark,
+ * whichever stands out from it.
+ */
+const labelBacking = (style: SeriesStyle | undefined, color: string, theme: ChartTheme): { halo: boolean; plateFill: string } => {
+  const halo = !!style?.stroke && contrast(color, theme.halo) >= MIN_LABEL_CONTRAST;
+  const preferred = isLightColor(color) && style?.color ? style.color : theme.plate;
+  const plateFill = contrast(color, preferred) >= MIN_LABEL_CONTRAST
+    ? preferred
+    : FALLBACK_PLATES.reduce((best, plate) => (contrast(color, plate) > contrast(color, best) ? plate : best));
+  return { halo, plateFill };
+};
+
 /** Value label on a soft plate, optionally outlined, in the series' own style. */
 const ValueLabel = ({ x = 0, y = 0, value, width = 0, dataKey, chartColors, nf, theme, offset = 10, position = 'top', suffix = '' }: {
   x?: number;
@@ -255,16 +314,8 @@ const ValueLabel = ({ x = 0, y = 0, value, width = 0, dataKey, chartColors, nf, 
     textX = x - offset;
   }
 
-  // The plate fits the figure. A light figure (white on the actual-hours bar)
-  // gets a plate of its own bar's colour: on the usual pale plate it vanished
-  // wherever a figure wider than its bar ran onto the paler bar beside it.
-  // An outlined figure has no plate: its halo does that job, and a plate
-  // reaching past a narrow bar covered the end of the figure beside it. A halo
-  // as light as the figure (white on white, in light mode) does not, so that
-  // figure drops the halo and keeps its plate.
-  const halo = !!style?.stroke && !(isLightColor(color) && isLightColor(theme.halo));
+  const { halo, plateFill } = labelBacking(style, color, theme);
   const plateWidth = Math.max(24, Math.ceil(formatted.length * fontSize * 0.62) + 8);
-  const plateFill = isLightColor(color) && style?.color ? style.color : theme.plate;
 
   return (
     <g>
