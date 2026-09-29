@@ -398,6 +398,35 @@ const settleTextForCanvas = (root: HTMLElement): void => {
   }
 };
 
+/** How long a capture waits for the web font before drawing in the fallback. */
+const FONT_LOAD_TIMEOUT_MS = 3000;
+
+/**
+ * Load the web font in the clone before anything there is measured.
+ *
+ * `resolveOklchColors` swaps the Google Fonts `<link>` for a `<style>`, which
+ * gives the clone fresh, unloaded copies of Inter. html2canvas then measured
+ * each word in the fallback font, which is narrower, and drew it in Inter, so
+ * now and then an image came out with its words run together: "Salesplan".
+ * The wait is capped, so a font that never arrives costs a moment, not the
+ * export.
+ */
+const loadCloneFonts = async (root: HTMLElement): Promise<void> => {
+  const doc = root.ownerDocument;
+  const view = doc.defaultView;
+  if (!doc.fonts || !view) return;
+  const family = view.getComputedStyle(root).fontFamily;
+  const text = root.textContent ?? '';
+  try {
+    await Promise.race([
+      Promise.all(['400', '600', '700'].map(weight => doc.fonts.load(`${weight} 16px ${family}`, text))),
+      new Promise(resolve => setTimeout(resolve, FONT_LOAD_TIMEOUT_MS)),
+    ]);
+  } catch (error) {
+    log.warn('Web font did not load for capture, drawing in the fallback:', error);
+  }
+};
+
 /**
  * Content that belongs in an exported image but not on screen, such as the
  * title and year over the annual table, which on screen sit in the page header
@@ -604,6 +633,7 @@ const capturePass = async (
         clonedEl.style.maxWidth = 'none';
       }
       await resolveOklchColors(clonedDoc);
+      await loadCloneFonts(clonedEl);
       settleTextForCanvas(clonedEl);
       unclipSingleLineText(clonedEl);
       // Last thing before html2canvas paints, so this is the layout it paints.
