@@ -49,11 +49,12 @@ The mock harness files and `harness-tests/` are **not in the repo**. They exist 
     - `chart-harness.tsx`: stores `lang` and `theme` from the query in localStorage, then imports `./index`.
     - `vite.harness.config.ts`: the app's Vite config plus aliases that replace `services/dbService` with `harness-db.ts` and `lib/supabase` with `harness-supabase.ts`. It serves on port 4190 and keeps its own cache in `node_modules/.vite-harness`.
     - `harness-db.ts` and `harness-supabase.ts`: in-memory stand-ins.
+    - `vite.harness-bundle.config.ts`: the bundled harness below.
   - **When the disk is saturated** (page loads take 20 s or more in dev mode), serve a bundled harness instead:
-    1. Write a config that extends `vite.harness.config.ts` with `build.rollupOptions.input` set to `chart-harness.html` and an `outDir` outside the repo.
-    2. Run `vite build`, then `vite preview` on port 4190.
+    1. `npx vite build --config vite.harness-bundle.config.ts`. It builds `chart-harness.html` into `node_modules/.harness-dist`, so `dist` keeps the real build.
+    2. `npx vite preview --config vite.harness-bundle.config.ts` serves it on port 4190.
 
-    Pages then load in about 3 s.
+    Pages then load in about 3 s. A bundle does not pick up code changes: build again after each edit. If the config is missing, it is the harness config merged with those two settings.
 
 ## Browser test kit (`harness-tests/`)
 
@@ -67,15 +68,27 @@ Like the harness, this kit is not in the repo (see the top of this file). The ki
 - `font/` reproduces the run-together-words bug and checks for it:
   - `cdp7.mjs` and `lib7.mjs` provide the `exportCard` helper; set `DLT=240` to allow slow downloads.
   - `spc.mjs` exports the same card as PNG repeatedly.
-  - `spcw.py` finds images whose words ran together.
-  - `slowfont.mjs` delays Inter's files; `VARIANT=old` removes the fix.
+  - `spcw.py` finds images whose words ran together. It groups images by where three lines of text end; a clean Inter export of the long-term card at 390 px ends at (612, 696, 1082).
+  - `slowfont.mjs` delays Inter's files by `DELAY` ms (default 1500) and waits `SETTLE` ms before exporting. `VARIANT=old` removes the fix, in dev mode only. `DELAY=6000 SETTLE=9000` exercises the fallback font.
+- `perf/` holds one-off probes:
+  - `ptime.mjs`: PNG export time per theme.
+  - `pprof.mjs`: a CPU profile of one export, summed by script and function.
+  - `pgeo.mjs`: Monthly's column geometry.
+  - `pshot.mjs`: a screenshot of Monthly with stored colours (`PREFS` holds the JSON).
+- `qa/` holds the QA agent's checks for PR #5. They use their own `lib.mjs`, and write their output to `qa/out/`.
+  - `q-crafted.mjs`: Monthly with crafted data. The bundled harness's monthly fixture is patched in the test browser only, so it needs the bundled harness. `SETS=lvl4,lvl5 WS=390` runs the level-months case.
+  - `q-colors.mjs`: Monthly with stored series styles.
+  - `q-exp.mjs`: exports in ja and vn.
+  - `q-slowfont.mjs`: `slowfont` for other languages and cards.
 
-Expected results at `80425b7`:
+Expected results at PR #5:
 
 | Test | Expected |
 |---|---|
 | `t-overlap` | Monthly 40 labels, Total 24; 0 overlaps at 390/1024/1440 |
 | `t-plates` | 0 figures covered, light and dark |
+| `t-halo` | 0 covered at 390/1024/1440, light and dark, counting the 1.5 px a halo reaches past its figure |
+| `t-contrast` | Defaults unchanged (contrast 2.5–7, indigo halo in both themes). A pale figure on a pale bar and a dark figure in dark mode go on a contrasting plate (about 15–18) |
 | `t-svg` | 14–56 KB each, `oklch: false`. Label texts: Monthly 48, Total 36, Long-term 20, Dashboard cumulative 2 |
 | `t-growin` | `exported` 48 (Monthly) and 20 (Long-term) even when clicked mid-animation; year change ends at 60 |
 | `t-dashgrow` | Cumulative: `exported: 2, curves: 2` (the monthly chart shows bar figures only from 1920 px) |
@@ -83,6 +96,9 @@ Expected results at `80425b7`:
 | `t-back`, `guard`, `t-note` | Unsaved-changes dialog appears; Stay and Leave both work; the note is saved; no console logs |
 | `t-tableexp` | `yearly-data-table` 1492×551, `catia-license-table` 3176×820 |
 | `t-pngexport` | Every card exports; charts that scroll sideways export at full width |
+| `perf/ptime` | About 2–4 s per PNG export at 1440, light and dark alike, on a loaded machine |
+| `font/slowfont` | `DELAY=1500`: Inter, no warning. `DELAY=6000`: system font, words spaced, one warning |
+| `qa/q-crafted` | 0 covered at 1440 and for `d4`, `d5` and `lvl3`. At 390, `lvl4` covers 0.3–0.8 px each side and `lvl5` 1.2–3.6 px (see Known limitations) |
 
 ## Where the chart and export code lives
 
@@ -95,10 +111,13 @@ Expected results at `80425b7`:
 - `hooks/useGrowIn.ts`: series animate only when their data changes, and `settle()` stops them.
 - `utils/chartTheme.ts`: halo and plate colours for each theme.
 - `components/MonthlyPlanActualView.tsx`:
-  - `ValueLabel` decides between plate and halo.
+  - `labelBacking` decides between plate and halo, and their colour: whatever stands apart from the figure (a contrast of at least 2).
+  - `ValueLabel` draws a figure.
   - `SalesPlanLabel` lifts the plan figure above the actual's.
+  - `HoursPlanLabel` moves the planned hours left, clear of the sales figure's halo but not under the previous month's. Where both stand level and there is no room between them, it sits halfway.
   - `LABEL_Z` fixes the stacking order of labels.
-- `components/TotalView.tsx`: the Cumulative hours chart. `OutlinedLabel` does the lifting; `figureWidth` measures text on a canvas.
+- `components/TotalView.tsx`: the Cumulative hours chart. `OutlinedLabel` does the lifting.
+- `utils/textWidth.ts`: measures a figure's width on a canvas, for both charts.
 - `components/Dashboard.tsx`: `lastRealMonth` counts the current month only once it has actual revenue.
 - `utils/logger.ts`: create loggers with `createLogger(scope)`. `debug` and `info` log only in development; `warn` and `error` always log.
 
@@ -109,12 +128,17 @@ Expected results at `80425b7`:
 - `LabelList` passes `offset = 5` to custom content.
 - With an explicit domain, `useYAxisDomain` returns that exact domain; it is not rounded ("niced").
 - Labels render into a z-index portal layer (`DefaultZIndexes.label` = 2000), in mount order unless they are given a `zIndex`.
+- Bars without a fixed `barSize` share a month equally:
+  - Each share is `floor((band × 0.8 − 4 × (bars − 1)) / bars)` wide, where `band = plot width / months`, 10 % stays clear at each side, and bars are 4 px apart.
+  - Each bar is centred in its share, and `maxBarSize` only narrows the bar.
+  - `HoursPlanLabel` relies on this; if the chart ever sets `barGap` or `barCategoryGap`, update its constants.
 
 **html2canvas 1.4.1**
 - Tailwind's preflight rule `img{display:block}` breaks its baseline measurement, so text sat low. `withInlineMeasuringImage` fixes this for the length of a capture.
-- It cannot parse `oklch()` or `color-mix()`, so `resolveOklchColors` rewrites the stylesheets inside the clone. That step also swaps the Google Fonts `<link>` for a `<style>`, which makes the clone load Inter again.
-  - `loadCloneFonts` waits up to 3 s for it and logs a warning if it gives up.
-  - Without that wait, words were measured in the fallback font and drawn in Inter, so they ran together ("Salesplan").
+- It cannot parse `oklch()` or `color-mix()`, so `resolveOklchColors` rewrites the stylesheets inside the clone.
+  - Each colour is converted by painting it on a canvas. `createColorResolver` keeps one canvas per capture and converts each distinct colour once. A canvas per colour made one export spend 20 s converting and 13 s in garbage collection.
+  - That step also swaps the Google Fonts `<link>` for a `<style>`, which makes the clone load Inter again. `loadCloneFonts` waits up to 3 s for it. If Inter is still missing then, it takes Inter out of the clone's font stacks (`dropWebFonts`) and logs a warning. The image then comes out in the system font with words spaced right.
+  - The canvas draws with the page's fonts, but the words are laid out in the clone. Words laid out in the fallback font and drawn in Inter ran together ("Salesplan"), so both sides must use the same font.
 - The canvas has no tabular figures and handles letter-spacing badly; `settleTextForCanvas` adjusts the clone for both.
 
 **Windows and Git Bash**
@@ -125,16 +149,22 @@ Expected results at `80425b7`:
 
 ## State (2026-09-29)
 
-- `main` is at `80425b7`. These PRs are merged:
+- PRs:
   - #1 Redesign, every screen, for desktop, tablet and phone.
   - #2 Polish: chart labels, export baseline and file size, the current month.
   - #3 A console warning when the web font takes longer than the wait.
-- Branches that are merged but still exist: `fix/polish` and `fix/font-timeout-warning` on origin, and local `backup/fix-polish-*`. Delete them only once the user agrees. The older branches (`chore/cleanup`, `feat/ux-pass`, `feature/redesign`, `fix/export-input-and-race-bugs`, `fix/ux-and-architecture-repair`) predate this work; ask before touching them.
+  - #4 This file.
+  - #5 The four limitations left after #3: slow image exports, a late font running words together, figures lost on a plate or halo of their own lightness, and the sales figure's halo nicking the planned hours.
+- The branches merged through #1–#4 are deleted. The older branches (`chore/cleanup`, `feat/ux-pass`, `feature/redesign`, `fix/export-input-and-race-bugs`, `fix/ux-and-architecture-repair`) predate this work; ask before touching them.
 
 ## Known limitations and possible next steps
 
-- If the web font is more than 3 s late or fails to load, the export still goes ahead and words may run together. A console warning says so.
-- Monthly at 390 and 1024 px: February's planned-hours "1,400" sits 0.8 px under the halo of "400". This is cosmetic and already known.
+- If the web font is more than 3 s late or fails to load, the image comes out in the system font instead of Inter. The spacing is right, and a console warning says why.
 - With crafted data, a figure's corner can sit under the hours-actual plate, and the sales plan can overlap hours actual. Both were there before this work and are better than they were.
-- If a user picks a light bar colour and a light figure colour, the plate is hard to read. This was there before this work.
-- A PNG export in dark mode is slow because of the palette swap and the capture (about 17 s on a loaded machine).
+- At Monthly's 900 px minimum, several months in a row can have sales figures level with the planned hours. The planned hours then have no room between this month's sales figure and last month's, so they sit halfway.
+  - With sales in the thousands, each side covers under 1 px; before, one side covered 5–6 px.
+  - With sales in the tens of thousands, each side covers up to 3.6 px.
+  - Clearing both would mean moving the figure up or down its column. A version of that was tried in `75fc275` (branch deleted; the commit is still reachable by hash) and left out as too involved.
+- The contrast check covers `ValueLabel` on Monthly only.
+  - Cumulative hours' outlined figures and Monthly's "0" plate still use the theme's colours whatever the figure's colour. In dark mode, a dark figure there would disappear.
+  - The axis titles take the bar's colour, so a pale bar gives a pale title.
