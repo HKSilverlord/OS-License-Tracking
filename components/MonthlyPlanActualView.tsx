@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, ClipboardList, X } from 'lucide-react';
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, TooltipContentProps, LabelList, ReferenceLine, ReferenceArea, usePlotArea, useYAxisDomain } from 'recharts';
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, TooltipContentProps, LabelList, ReferenceLine, ReferenceArea, usePlotArea, useYAxisDomain, DefaultZIndexes } from 'recharts';
 import { ExportButton } from './ExportButton';
 import { CurrentMonthBadge } from './CurrentMonthBadge';
 import { SeriesStyleButton, SeriesStyleCheck, type SeriesStyle } from './SeriesStyleButton';
@@ -197,6 +197,20 @@ const ZeroLabel = ({ x = 0, y = 0, width = 0, value, index = 0, shownThrough, ch
 /** Height of a value label's plate, and the gap kept between two of them. */
 const LABEL_PLATE_HEIGHT = 16;
 const LABEL_GAP = 2;
+
+/**
+ * Which figure is drawn over which where two meet: the columns' figures,
+ * then the lines', the sales plan's on top. Recharts draws every label into
+ * one layer in the order they arrive, and that order followed the timing of
+ * the grow-in, so a toggle mid-animation could reshuffle it.
+ */
+const LABEL_Z: Record<SeriesKey, number> = {
+  workingHoursPlan: DefaultZIndexes.label,
+  salesActual: DefaultZIndexes.label + 1,
+  workingHoursActual: DefaultZIndexes.label + 2,
+  capacityLine: DefaultZIndexes.label + 3,
+  salesPlan: DefaultZIndexes.label + 4,
+};
 
 /** Whether a label colour is light enough that a pale plate would swallow it. */
 const isLightColor = (color: string): boolean => {
@@ -669,7 +683,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                     dot={false}
                   >
                     {showCapacityValues && (
-                      <LabelList dataKey="capacityLine" position="left" content={<ValueLabel position="left" dataKey="capacityLine" chartColors={chartColors} nf={nf} theme={theme} suffix="h" />} />
+                      <LabelList dataKey="capacityLine" zIndex={LABEL_Z.capacityLine} position="left" content={<ValueLabel position="left" dataKey="capacityLine" chartColors={chartColors} nf={nf} theme={theme} suffix="h" />} />
                     )}
                   </Line>
 
@@ -683,7 +697,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                     fillOpacity={chartColors.workingHoursPlan.opacity}
                     maxBarSize={chartColors.workingHoursPlan.barSize ?? 60}
                   >
-                    <LabelList dataKey="workingHoursPlan" position="insideTop" content={<ValueLabel position="insideTop" dataKey="workingHoursPlan" chartColors={chartColors} nf={nf} theme={theme} />} />
+                    <LabelList dataKey="workingHoursPlan" zIndex={LABEL_Z.workingHoursPlan} position="insideTop" content={<ValueLabel position="insideTop" dataKey="workingHoursPlan" chartColors={chartColors} nf={nf} theme={theme} />} />
                   </Bar>
 
                   <Line
@@ -698,7 +712,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                     strokeWidth={3}
                     dot={{ fill: chartColors.salesPlan.color, r: 5 }}
                   >
-                    <LabelList dataKey="salesPlan" position="top" content={<SalesPlanLabel position="top" dataKey="salesPlan" chartColors={chartColors} nf={nf} theme={theme} actuals={salesActuals} />} />
+                    <LabelList dataKey="salesPlan" zIndex={LABEL_Z.salesPlan} position="top" content={<SalesPlanLabel position="top" dataKey="salesPlan" chartColors={chartColors} nf={nf} theme={theme} actuals={salesActuals} />} />
                   </Line>
 
                   <Bar
@@ -712,8 +726,8 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                     radius={[4, 4, 0, 0]}
                     maxBarSize={chartColors.salesActual.barSize ?? 40}
                   >
-                    <LabelList dataKey="salesActual" position="top" content={<ValueLabel position="top" dataKey="salesActual" chartColors={chartColors} nf={nf} theme={theme} />} />
-                    <LabelList content={<ZeroLabel shownThrough={finishedMonths} chartColors={chartColors} theme={theme} />} />
+                    <LabelList dataKey="salesActual" zIndex={LABEL_Z.salesActual} position="top" content={<ValueLabel position="top" dataKey="salesActual" chartColors={chartColors} nf={nf} theme={theme} />} />
+                    <LabelList zIndex={LABEL_Z.salesActual} content={<ZeroLabel shownThrough={finishedMonths} chartColors={chartColors} theme={theme} />} />
                   </Bar>
 
                   <Bar
@@ -727,7 +741,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                     maxBarSize={chartColors.workingHoursActual.barSize ?? 30}
                     shape={<WorkingHoursActualBar chartColors={chartColors} onColumnCoord={recordColumnCoord} />}
                   >
-                    <LabelList dataKey="workingHoursActual" position="insideTop" content={<ValueLabel position="insideTop" dataKey="workingHoursActual" chartColors={chartColors} nf={nf} theme={theme} />} />
+                    <LabelList dataKey="workingHoursActual" zIndex={LABEL_Z.workingHoursActual} position="insideTop" content={<ValueLabel position="insideTop" dataKey="workingHoursActual" chartColors={chartColors} nf={nf} theme={theme} />} />
                   </Bar>
 
                   {/* Invisible spacer that keeps the actual layer's columns
