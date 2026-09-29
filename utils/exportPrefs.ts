@@ -144,12 +144,19 @@ const veilOver = (element: HTMLElement): (() => void) => {
  * with the light palette, one for the browser to paint it. Restoring in
  * `finally` matters — a throw mid-capture must not strand the UI in the wrong
  * theme, or leave the veil up over a chart nobody can then read.
+ *
+ * Without a swap it still waits a paint: the export button has just told the
+ * chart to stop its grow-in (`onBeforeCapture`), and a capture taken before
+ * that lands comes out without figures.
  */
 export const withExportTheme = async <T>(
   element: HTMLElement,
   capture: () => Promise<T>
 ): Promise<T> => {
-  if (!exportsOnLightBackground()) return capture();
+  if (!exportsOnLightBackground()) {
+    await nextPaint();
+    return capture();
+  }
   const removeVeil = veilOver(element);
   setExportThemeActive(true);
   try {
