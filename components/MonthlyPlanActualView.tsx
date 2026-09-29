@@ -244,13 +244,20 @@ const ValueLabel = ({ x = 0, y = 0, value, width = 0, dataKey, chartColors, nf, 
   // The plate fits the figure. A light figure (white on the actual-hours bar)
   // gets a plate of its own bar's colour: on the usual pale plate it vanished
   // wherever a figure wider than its bar ran onto the paler bar beside it.
+  // An outlined figure has no plate: its halo does that job, and a plate
+  // reaching past a narrow bar covered the end of the figure beside it. A halo
+  // as light as the figure (white on white, in light mode) does not, so that
+  // figure drops the halo and keeps its plate.
+  const halo = !!style?.stroke && !(isLightColor(color) && isLightColor(theme.halo));
   const plateWidth = Math.max(24, Math.ceil(formatted.length * fontSize * 0.62) + 8);
   const plateFill = isLightColor(color) && style?.color ? style.color : theme.plate;
 
   return (
     <g>
-      <rect x={textX - plateWidth / 2} y={textY - 12} width={plateWidth} height={LABEL_PLATE_HEIGHT} fill={plateFill} rx={3} />
-      {style?.stroke && (
+      {!halo && (
+        <rect x={textX - plateWidth / 2} y={textY - 12} width={plateWidth} height={LABEL_PLATE_HEIGHT} fill={plateFill} rx={3} />
+      )}
+      {halo && (
         <text x={textX} y={textY} stroke={theme.halo} strokeWidth={3} strokeLinejoin="round" paintOrder="stroke" fontSize={fontSize} fontWeight="bold" textAnchor="middle" alignmentBaseline="middle">
           {formatted}
         </text>
