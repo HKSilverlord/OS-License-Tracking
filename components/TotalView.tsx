@@ -26,6 +26,7 @@ import { useIsDarkTheme } from '../hooks/useDarkMode';
 import { useMonthKeys } from '../hooks/useMonthKeys';
 import { chartTheme } from '../utils/chartTheme';
 import { createLogger } from '../utils/logger';
+import { textWidth } from '../utils/textWidth';
 
 const log = createLogger('TotalView');
 
@@ -124,24 +125,9 @@ const signed = (delta: number, language: string, format: (value: number) => stri
 /** Recharts' default gap between the two bars of a month. */
 const BAR_GAP = 4;
 
-let measuring: { context: CanvasRenderingContext2D | null; family: string } | null = null;
-
-/**
- * A figure's width, measured in the page's font on a canvas: the chart has no
- * layout to measure before it draws. A per-character guess ran a third wide,
- * which lifted figures that had room where they were.
- */
-const figureWidth = (text: string, style: SeriesStyle): number => {
-  const halo = style.stroke ? 3 : 0;
-  measuring ??= {
-    context: document.createElement('canvas').getContext('2d'),
-    family: getComputedStyle(document.body).fontFamily,
-  };
-  const { context, family } = measuring;
-  if (!context) return text.length * style.fontSize * (style.bold ? 0.62 : 0.56) + halo;
-  context.font = `${style.bold ? 'bold' : 'normal'} ${style.fontSize}px ${family}`;
-  return context.measureText(text).width + halo;
-};
+/** A figure's width with its outline, if it has one. */
+const figureWidth = (text: string, style: SeriesStyle): number =>
+  textWidth(text, style.fontSize, style.bold) + (style.stroke ? 3 : 0);
 
 /**
  * Value label for a <LabelList content=…>, optionally outlined in the card colour.

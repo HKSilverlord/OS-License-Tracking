@@ -24,6 +24,7 @@ import { useMonthlyPlanActualData } from '../hooks/useMonthlyPlanActualData';
 import type { MonthlyPlanActualData } from '../hooks/useMonthlyPlanActualData';
 import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
 import { chartTheme, type ChartTheme } from '../utils/chartTheme';
+import { textWidth } from '../utils/textWidth';
 
 interface MonthlyChartColors {
   capacityLine: SeriesStyle;
@@ -280,6 +281,13 @@ const labelBacking = (style: SeriesStyle | undefined, color: string, theme: Char
   return { halo, plateFill };
 };
 
+/** A figure's plate: as wide as the figure, never narrower than a short one's. */
+const plateWidthFor = (text: string, fontSize: number): number =>
+  Math.max(24, Math.ceil(text.length * fontSize * 0.62) + 8);
+
+const labelText = (value: number | string, nf: (value: number) => string, suffix = ''): string =>
+  `${typeof value === 'number' && value > 1000 ? nf(value) : value}${suffix}`;
+
 /** Value label on a soft plate, optionally outlined, in the series' own style. */
 const ValueLabel = ({ x = 0, y = 0, value, width = 0, dataKey, chartColors, nf, theme, offset = 10, position = 'top', suffix = '' }: {
   x?: number;
@@ -296,7 +304,7 @@ const ValueLabel = ({ x = 0, y = 0, value, width = 0, dataKey, chartColors, nf, 
 }) => {
   if (value === 0 || !value) return null;
 
-  const formatted = `${typeof value === 'number' && value > 1000 ? nf(value) : value}${suffix}`;
+  const formatted = labelText(value, nf, suffix);
   const style = chartColors[dataKey];
   const color = style?.labelColor || CHART_PALETTE.labelNeutral;
   const fontSize = style?.fontSize || 10;
@@ -315,7 +323,7 @@ const ValueLabel = ({ x = 0, y = 0, value, width = 0, dataKey, chartColors, nf, 
   }
 
   const { halo, plateFill } = labelBacking(style, color, theme);
-  const plateWidth = Math.max(24, Math.ceil(formatted.length * fontSize * 0.62) + 8);
+  const plateWidth = plateWidthFor(formatted, fontSize);
 
   return (
     <g>
@@ -357,6 +365,76 @@ const SalesPlanLabel = ({ index = 0, y = 0, actuals, ...label }: React.Component
     if (Math.abs(labelY - actualY) < clear) labelY = Math.min(labelY, actualY - clear);
   }
   return <ValueLabel {...label} y={labelY} />;
+};
+
+/** Recharts' default space between the two columns of a month. */
+const BAR_GAP = 4;
+/** Recharts' default space left clear at each side of a month, as a share of it. */
+const BAR_CATEGORY_GAP = 0.1;
+/** How far below its column's top ValueLabel sets an insideTop figure. */
+const INSIDE_TOP_DROP = 15;
+/** The offset LabelList hands its content: a top figure sits this far above its column. */
+const LABEL_LIST_OFFSET = 5;
+
+/** How far a line of figures reaches above and below its middle, as a share of its font size. */
+const HALF_LINE = 0.6;
+
+/**
+ * The planned hours' figure, kept clear of the sales actual's. The two sit
+ * over neighbouring columns, and where the chart is at its narrowest a figure
+ * is wider than its column, so when they also stood at the same height the
+ * sales figure's outline covered the last digit of the planned hours. Then
+ * the planned hours move left, just far enough, but not under the previous
+ * month's sales figure. Where that one stands level too and there is no room
+ * between them, the planned hours sit halfway, so neither covers much.
+ */
+const HoursPlanLabel = ({ index = 0, x = 0, y = 0, width = 0, value, sales, ...label }: React.ComponentProps<typeof ValueLabel> & {
+  index?: number;
+  /** Sales actual per month, in the chart's order. */
+  sales: number[];
+}) => {
+  const plot = usePlotArea();
+  const top = Number(useYAxisDomain('left')?.[1]);
+  let shift = 0;
+  if (plot && top > 0 && typeof value === 'number' && value > 0) {
+    const { chartColors, nf, theme } = label;
+    const own = chartColors.workingHoursPlan;
+    const ownFontSize = own.fontSize || 10;
+    const ownY = y + INSIDE_TOP_DROP;
+    const other = chartColors.salesActual;
+    const otherFontSize = other.fontSize || 10;
+    const { halo } = labelBacking(other, other.labelColor || CHART_PALETTE.labelNeutral, theme);
+    // A halo is drawn bold and 3 px wide, so it reaches 1.5 px past its figure
+    // all round. A plate reaches 12 px above its figure's middle and 4 below.
+    const [above, below] = halo
+      ? [otherFontSize * HALF_LINE + 1.5, otherFontSize * HALF_LINE + 1.5]
+      : [12, LABEL_PLATE_HEIGHT - 12];
+    /** Half the width a month's sales figure covers, if it stands level with this figure. */
+    const salesCover = (month: number): number | null => {
+      const sale = sales[month] ?? 0;
+      if (!(sale > 0)) return null;
+      const salesY = plot.y + plot.height * (1 - sale / top) - LABEL_LIST_OFFSET;
+      if (ownY + ownFontSize * HALF_LINE <= salesY - above || ownY - ownFontSize * HALF_LINE >= salesY + below) return null;
+      const text = labelText(sale, nf);
+      return halo ? textWidth(text, otherFontSize, true) / 2 + 1.5 : plateWidthFor(text, otherFontSize) / 2;
+    };
+    const cover = salesCover(index);
+    if (cover !== null) {
+      // Each column is centred in an equal share of the month.
+      const band = plot.width / sales.length;
+      const share = Math.floor((band * (1 - 2 * BAR_CATEGORY_GAP) - BAR_GAP) / 2);
+      const apart = Math.max(width, share) + BAR_GAP;
+      const ownHalf = textWidth(labelText(value, nf), ownFontSize, own.bold !== false) / 2;
+      const needed = ownHalf + cover + 1 - apart;
+      if (needed > 0) {
+        // The previous month's sales figure stands one month to the left of this month's.
+        const previous = index > 0 ? salesCover(index - 1) : null;
+        const room = previous === null ? Infinity : band - apart - ownHalf - previous - 1;
+        shift = Math.max(-width / 2, Math.min(width / 2, room >= needed ? needed : (needed + room) / 2));
+      }
+    }
+  }
+  return <ValueLabel {...label} x={x - shift} y={y} width={width} value={value} />;
 };
 
 /**
@@ -748,7 +826,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                     fillOpacity={chartColors.workingHoursPlan.opacity}
                     maxBarSize={chartColors.workingHoursPlan.barSize ?? 60}
                   >
-                    <LabelList dataKey="workingHoursPlan" zIndex={LABEL_Z.workingHoursPlan} position="insideTop" content={<ValueLabel position="insideTop" dataKey="workingHoursPlan" chartColors={chartColors} nf={nf} theme={theme} />} />
+                    <LabelList dataKey="workingHoursPlan" zIndex={LABEL_Z.workingHoursPlan} position="insideTop" content={<HoursPlanLabel position="insideTop" dataKey="workingHoursPlan" chartColors={chartColors} nf={nf} theme={theme} sales={salesActuals} />} />
                   </Bar>
 
                   <Line
