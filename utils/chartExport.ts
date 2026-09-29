@@ -424,6 +424,27 @@ const settleTextForCanvas = (root: HTMLElement): void => {
 const FONT_LOAD_TIMEOUT_MS = 3000;
 
 /**
+ * Take the web fonts out of every font stack in the clone, so its text is laid
+ * out in the fallback font that html2canvas will then draw it in too.
+ */
+const dropWebFonts = (root: HTMLElement): void => {
+  const doc = root.ownerDocument;
+  const view = doc.defaultView;
+  if (!view) return;
+  const unquote = (name: string): string => name.trim().replace(/^["']|["']$/g, '').toLowerCase();
+  const webFonts = new Set<string>();
+  doc.fonts.forEach(face => webFonts.add(unquote(face.family)));
+  // Font stacks are inherited, so after the root only elements that set their
+  // own stack still name a web font.
+  for (const el of [root, ...root.querySelectorAll('*')]) {
+    if (!isHtmlElement(el)) continue;
+    const stack = view.getComputedStyle(el).fontFamily.split(',');
+    const kept = stack.filter(name => !webFonts.has(unquote(name)));
+    if (kept.length < stack.length) el.style.fontFamily = kept.join(',') || 'sans-serif';
+  }
+};
+
+/**
  * Load the web font in the clone before anything there is measured.
  *
  * `resolveOklchColors` swaps the Google Fonts `<link>` for a `<style>`, which
@@ -431,8 +452,9 @@ const FONT_LOAD_TIMEOUT_MS = 3000;
  * each word in the fallback font, which is narrower, and drew it in Inter, so
  * now and then an image came out with its words run together: "Salesplan".
  * The wait is capped, so a font that never arrives costs a moment, not the
- * export. Giving up is logged: an image with its words run together then has
- * a cause in the console.
+ * export. A font still missing then is dropped from the clone, so the image
+ * comes out in the fallback font, plainer but spaced right, and the console
+ * says why.
  */
 const loadCloneFonts = async (root: HTMLElement): Promise<void> => {
   const doc = root.ownerDocument;
@@ -441,19 +463,21 @@ const loadCloneFonts = async (root: HTMLElement): Promise<void> => {
   const family = view.getComputedStyle(root).fontFamily;
   const text = root.textContent ?? '';
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let loaded = false;
   try {
-    const loaded = await Promise.race([
+    loaded = await Promise.race([
       Promise.all(['400', '600', '700'].map(weight => doc.fonts.load(`${weight} 16px ${family}`, text))).then(() => true),
       new Promise<false>(resolve => { timer = setTimeout(() => resolve(false), FONT_LOAD_TIMEOUT_MS); }),
     ]);
     if (!loaded) {
-      log.warn(`Web font still loading after ${FONT_LOAD_TIMEOUT_MS} ms, capturing without waiting further; words may run together.`);
+      log.warn(`Web font still loading after ${FONT_LOAD_TIMEOUT_MS} ms, capturing in the fallback font instead.`);
     }
   } catch (error) {
-    log.warn('Web font did not load for capture, drawing in the fallback:', error);
+    log.warn('Web font did not load for capture, capturing in the fallback font instead:', error);
   } finally {
     clearTimeout(timer);
   }
+  if (!loaded) dropWebFonts(root);
 };
 
 /**
