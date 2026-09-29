@@ -33,6 +33,7 @@ import { Page } from './ui/Page';
 import { Skeleton } from './ui/Skeleton';
 import { useDashboardData } from '../hooks/useDashboardData';
 import { useCatiaHydration } from '../hooks/useCatiaHydration';
+import { useGrowIn } from '../hooks/useGrowIn';
 
 export interface DashboardProps {
   /** Single source of truth for the year — owned by the App shell. */
@@ -278,6 +279,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
   }));
   const accPlans = cumulativeChart.map(d => d.accPlannedRevenue);
   const accActuals = cumulativeChart.map(d => d.accActualRevenue);
+  const [seriesAnimating, settleSeries] = useGrowIn(stats);
 
   const { format: nf, formatDecimal: nfDecimal, formatYen: fmt } = useNumberFormat();
   /** Bar/line data labels stay in 万 (10k JPY) units, as the slides they end up on use. */
@@ -634,6 +636,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
                   filename={`monthly_revenue_${currentYear}`}
                   data={stats}
                   csvColumns={monthlyCsvColumns}
+                  onBeforeCapture={settleSeries}
                 />
               </>
             }
@@ -646,12 +649,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
                 <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} tickFormatter={(val: number) => `${nf(Math.round(val / 10000))}${manYen}`} />
                 <Tooltip formatter={val => (typeof val === 'number' ? fmt(val) : '–')} cursor={{ fill: 'rgba(148,163,184,0.12)' }} {...TOOLTIP_STYLE} />
                 <Legend iconType="circle" iconSize={8} itemSorter={seriesRank} formatter={legendText} wrapperStyle={{ fontSize: '12px', color: CHART_PALETTE.labelNeutral }} />
-                <Bar dataKey="plannedRevenue" name={planShort} fill={chartColors.planRevenue} radius={[4, 4, 0, 0]}>
+                <Bar dataKey="plannedRevenue" name={planShort} isAnimationActive={seriesAnimating} fill={chartColors.planRevenue} radius={[4, 4, 0, 0]}>
                   {roomForBarLabels && (
                     <LabelList dataKey="plannedRevenue" position="top" formatter={manLabel} fontSize={10} fill={chartColors.planRevenue} />
                   )}
                 </Bar>
-                <Bar dataKey="actualRevenue" name={actualShort} fill={chartColors.actualRevenue} radius={[4, 4, 0, 0]}>
+                <Bar dataKey="actualRevenue" name={actualShort} isAnimationActive={seriesAnimating} fill={chartColors.actualRevenue} radius={[4, 4, 0, 0]}>
                   {roomForBarLabels && (
                     <LabelList dataKey="actualRevenue" position="top" formatter={manLabel} fontSize={10} fill={chartColors.actualRevenue} fontWeight="bold" />
                   )}
@@ -679,6 +682,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
                   filename={`cumulative_revenue_${currentYear}`}
                   data={accumulatedStats}
                   csvColumns={cumulativeCsvColumns}
+                  onBeforeCapture={settleSeries}
                 />
               </>
             }
@@ -705,6 +709,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
                   fill="url(#dashboardAccActual)"
                   fillOpacity={1}
                   strokeWidth={2}
+                  isAnimationActive={seriesAnimating}
                 >
                   <LabelList
                     dataKey="accActualRevenue"
@@ -719,6 +724,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
                   stroke={chartColors.accPlan}
                   strokeWidth={2}
                   dot={false}
+                  isAnimationActive={seriesAnimating}
                 >
                   <LabelList
                     dataKey="accPlannedRevenue"
