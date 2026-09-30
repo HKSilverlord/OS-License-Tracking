@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   LineChart,
   Monitor,
+  Presentation,
   Table,
   TrendingUp,
   Wrench,
@@ -37,6 +38,7 @@ const PeriodManagement = lazy(() => import('./components/PeriodManagement').then
 const LongTermPlanView = lazy(() => import('./components/LongTermPlanView').then(m => ({ default: m.LongTermPlanView })));
 const MonthlyPlanActualView = lazy(() => import('./components/MonthlyPlanActualView').then(m => ({ default: m.MonthlyPlanActualView })));
 const CatiaLicenseView = lazy(() => import('./components/CatiaLicenseView').then(m => ({ default: m.CatiaLicenseView })));
+const BusinessReportView = lazy(() => import('./components/BusinessReportView').then(m => ({ default: m.BusinessReportView })));
 const DatabaseDiagnostic = lazy(() => import('./components/DatabaseDiagnostic').then(m => ({ default: m.DatabaseDiagnostic })));
 
 /** Shown while the saved session is read back, so a signed-in user never sees the sign-in form flash. */
@@ -77,6 +79,7 @@ function App() {
           { to: '/monthly-plan-actual', icon: LineChart, label: t('nav.monthlyPlanActual', 'Monthly plan vs actual') },
           { to: '/yearly-data', icon: Table, label: t('nav.yearlyData', 'Annual data') },
           { to: '/long-term-plan', icon: TrendingUp, label: t('nav.longTermPlan', 'Long-term plan') },
+          { to: '/report', icon: Presentation, label: t('nav.report', 'Business report') },
         ],
       },
       {
@@ -174,6 +177,7 @@ const MainRoutes: React.FC<{ currentYear: number }> = ({ currentYear }) => {
       <Route path="/long-term-plan" element={<PageWrapper><LongTermPlanView /></PageWrapper>} />
       <Route path="/monthly-plan-actual" element={<PageWrapper><MonthlyPlanActualView currentYear={currentYear} /></PageWrapper>} />
       <Route path="/period-management" element={<PageWrapper><PeriodManagement /></PageWrapper>} />
+      <Route path="/report" element={<PageWrapper><BusinessReportView currentYear={currentYear} /></PageWrapper>} />
       {/* Kept as a route so a bookmarked URL redirects instead of dead-ending. */}
       <Route
         path="/diagnostic"

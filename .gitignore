@@ -23,8 +23,11 @@ dist-ssr
 *.csv
 *.docx
 *.doc
+# Report decks: downloads, and samples that can hold credentials
+*.pptx
 *.png
 !public/apple-touch-icon.png
+!public/report/esutech-logo.png
 *.jpg
 
 # Editor directories and files

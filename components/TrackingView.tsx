@@ -1269,6 +1269,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
                 isLoading={isSaving}
                 title={`${t('common.save', 'Save')} (${SAVE_SHORTCUT})`}
                 className="ml-1"
+                aria-keyshortcuts="Control+S"
               >
                 {isSaving ? t('common.saving', 'Saving…') : t('common.save', 'Save')}
                 <Kbd className="hidden sm:inline-flex">{SAVE_SHORTCUT}</Kbd>
