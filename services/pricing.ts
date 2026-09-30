@@ -114,3 +114,35 @@ export function lookupPrices(index: PriceIndex, periodLabel: string, projectId: 
     index.byProject.get(projectId),
   );
 }
+
+/** The fields of a `monthly_records` row that pricing reads. */
+export interface PriceableRecord {
+  period_label: string;
+  project_id: string;
+  planned_hours: number | null;
+  actual_hours: number | null;
+}
+
+export interface PricedRecord {
+  plannedHours: number;
+  actualHours: number;
+  plannedRevenue: number;
+  actualRevenue: number;
+}
+
+/**
+ * One record's hours and revenue: hours × the price of that project in that
+ * period, by the frozen rule above. The Dashboard and the business report both
+ * price through this, so their totals cannot drift apart.
+ */
+export function priceRecord(record: PriceableRecord, index: PriceIndex): PricedRecord {
+  const plannedHours = Number(record.planned_hours) || 0;
+  const actualHours = Number(record.actual_hours) || 0;
+  const prices = lookupPrices(index, record.period_label, record.project_id);
+  return {
+    plannedHours,
+    actualHours,
+    plannedRevenue: plannedHours * prices.plan,
+    actualRevenue: actualHours * prices.actual,
+  };
+}

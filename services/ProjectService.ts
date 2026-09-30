@@ -166,9 +166,12 @@ export class ProjectService extends BaseService {
      * of those periods (with per-period prices merged in) and a `PriceIndex` that resolves a
      * price for any (period_label, project_id) pair. Costs at most two Supabase requests and
      * replaces the getPeriods() + getProjects(p)-per-period N+1 storm (A5).
+     *
+     * `knownLabels`: every period label, when the caller already has them (the
+     * business report loads three years and fetches the periods once for all).
      */
-    async getYearProjectPrices(year: number): Promise<YearProjectPrices> {
-        const allLabels: string[] = await periodService.getPeriods();
+    async getYearProjectPrices(year: number, knownLabels?: readonly string[]): Promise<YearProjectPrices> {
+        const allLabels: readonly string[] = knownLabels ?? await periodService.getPeriods();
         const periodLabels = allLabels
             .filter((label) => typeof label === 'string' && label.startsWith(`${year}-`))
             .sort((a, b) => a.localeCompare(b));

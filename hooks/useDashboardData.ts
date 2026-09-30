@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { dbService } from '../services/dbService';
-import { buildPriceIndex, lookupPrices } from '../services/pricing';
+import { buildPriceIndex } from '../services/pricing';
+import { monthlyBuckets } from '../utils/reportFigures';
 import type { PriceIndex } from '../services/pricing';
 import { useLanguage } from '../contexts/LanguageContext';
 import { toast } from '../contexts/ToastContext';
@@ -12,15 +13,10 @@ const log = createLogger('Dashboard');
 
 const EMPTY_PRICE_INDEX: PriceIndex = buildPriceIndex([], []);
 
-interface PricedRecord {
-  plannedHours: number;
-  actualHours: number;
-  plannedRevenue: number;
-  actualRevenue: number;
-}
-
-/**
- * THE single pricing code path for the dashboard.
+/*
+ * THE single pricing code path for the dashboard: `priceRecord` in
+ * services/pricing.ts, which the business report (utils/reportFigures.ts)
+ * shares, so the two show the same totals.
  *
  * A2: the price is resolved per (period_label, project_id) — a project whose H1
  * price differs from its H2 price is priced correctly in each half — using the
@@ -33,17 +29,6 @@ interface PricedRecord {
  * `Σ monthly actualRevenue === grossRevenueActual` hold by construction — they
  * are literally the same additions.
  */
-const priceRecord = (record: DashboardRecord, index: PriceIndex): PricedRecord => {
-  const plannedHours = Number(record.planned_hours) || 0;
-  const actualHours = Number(record.actual_hours) || 0;
-  const prices = lookupPrices(index, record.period_label, record.project_id);
-  return {
-    plannedHours,
-    actualHours,
-    plannedRevenue: plannedHours * prices.plan,
-    actualRevenue: actualHours * prices.actual,
-  };
-};
 
 export interface DashboardData {
   loading: boolean;
@@ -152,28 +137,15 @@ export function useDashboardData(currentYear: number): DashboardData {
     };
   }, [loadDashboard]);
 
+  // The buckets are the business report's own (utils/reportFigures.ts), so the
+  // two pages add up the same rows the same way.
   const stats = useMemo<MonthlyStats[]>(() => {
     const locale = language === 'ja' ? 'ja-JP' : language === 'vn' ? 'vi-VN' : 'en-US';
-    const monthly: MonthlyStats[] = Array.from({ length: 12 }, (_, i) => ({
+    return monthlyBuckets(rawRecords, priceIndex).map((bucket, i) => ({
       month: i + 1,
       name: new Date(currentYear, i).toLocaleString(locale, { month: 'short' }),
-      plannedHours: 0,
-      actualHours: 0,
-      plannedRevenue: 0,
-      actualRevenue: 0,
+      ...bucket,
     }));
-
-    for (const record of rawRecords) {
-      if (record.month < 1 || record.month > 12) continue;
-      const priced = priceRecord(record, priceIndex);
-      const target = monthly[record.month - 1];
-      target.plannedHours += priced.plannedHours;
-      target.actualHours += priced.actualHours;
-      target.plannedRevenue += priced.plannedRevenue;
-      target.actualRevenue += priced.actualRevenue;
-    }
-
-    return monthly;
   }, [rawRecords, priceIndex, language, currentYear]);
 
   const accumulatedStats = useMemo<AccumulatedStats[]>(() => {

@@ -21,6 +21,7 @@ revenue, achievement rate, capacity utilisation and — after subtracting CATIA 
 | `/tracking` | Project tracking | The editable grid: planned and actual hours per project per month |
 | `/catia-license` | CATIA licenses | Monthly cost and yearly revenue per licence; saves as you type |
 | `/period-management` | Periods | Create half-year periods and choose the projects tracked in each |
+| `/report` | Business report | The monthly status report (事業状況報告): figures computed like the Dashboard's, written parts admins keep per month, and a PowerPoint download. See [`docs/business-report.md`](docs/business-report.md) |
 | `/diagnostic` | Database repair (admins) | Counts what the database holds; links projects missing from their period |
 
 Access is role based: every signed-in user can read everything, only users with the
@@ -107,7 +108,14 @@ settings (label = 'default', exchange_rate, license_computers,
           license_per_computer, unit_price)          -- single row
 user_roles (user_id, role)  +  RPC public.get_my_role()
 catia_license_data (id = 'default', license_costs, license_revenues)
+business_reports (id 'YYYY-MM', year, month, content jsonb,
+                  updated_at, updated_by)           -- one row per report month
 ```
+
+`business_reports` holds only what admins write for the business report (status notes,
+focus projects, people, actions); every figure in the report is computed from the tables
+above. It is created by `db/migration_business_reports.sql`; until that has been run the
+report page still shows its figures and tells admins what to run.
 
 **The price lives on the junction, not on the project.** `period_projects.plan_price` /
 `actual_price` are the authoritative hourly prices for a project *in a given period*, so
