@@ -43,6 +43,11 @@ The mock harness files and `harness-tests/` are **not in the repo**. They exist 
     | `fail=N` | The first N loads fail |
     | `delay=ms` | Loads are delayed by this long |
     | `empty=1` | No records |
+    | `report=missing` | The `business_reports` table does not exist (PGRST205) |
+    | `reportFail=1` | Report saves fail; `reportFail=load` makes loading saved reports fail |
+    | `orphan=1` | Projects p6 and p7 have hours but no period link |
+
+  - The harness seeds a saved `2026-08` report, so `/report` for September shows the carry-over. `getDashboardStats` spreads each month's hours unevenly over p1–p5, with the same monthly totals, so the report has several customers. `window.harnessCalls`, `harnessRequests` and `harnessTables` expose what the page asked for.
 
   - Files, all in the repo root:
     - `chart-harness.html`: a copy of `index.html` that loads `chart-harness.tsx`.
@@ -80,8 +85,29 @@ Like the harness, this kit is not in the repo (see the top of this file). The ki
   - `q-colors.mjs`: Monthly with stored series styles.
   - `q-exp.mjs`: exports in ja and vn.
   - `q-slowfont.mjs`: `slowfont` for other languages and cards.
+- `t-report.mjs` covers `/report`:
+  - Figures against the Dashboard, carry-over, editing and saving, guards, roles, a missing table and failed saves.
+  - Layout at 360–1440 in every language and theme.
+  - `ONLY_FIXES=1` runs only the checks added for the QA fixes. `SKIP_MATRIX=1` skips the language, theme and width screenshots.
+  - Screenshots go to `report-shots/`.
+- `report-pptx/` builds decks from fixture reports without the app, and checks them in the real PowerPoint:
+  - `fixtures.ts` holds six fixtures:
+    - `sample`: the sample deck's text;
+    - `empty`;
+    - `stress`: long text and many rows;
+    - `partial`;
+    - `controls`: control characters in every field;
+    - `harness`: the harness data.
+  - `build.ts` bundles `utils/reportPptx.ts` with esbuild and writes the decks.
+  - `render.ps1` opens each deck in PowerPoint over COM and exports PNGs. It flags text that overflows its box or that PowerPoint had to shrink.
+  - `run.sh [names]` runs all three steps.
+  - Output goes to `out/<name>/`, with a contact sheet per deck in `out/<name>_sheet.png`.
+- `qa-report/` holds the QA agent's checks for the report, with output in `qa-report/out/`.
 
-Expected results at PR #5:
+Expected results at PR #6. The counts assume the clock is in September 2026:
+- From 1 October, September counts as a finished month. Monthly then gets one more figure: `t-overlap` 41, `t-growin` 49.
+- `t-report` fails 4 checks that assume September.
+- `qa-report/t-report-sep.mjs`, `t-overlap-sep.mjs` and `t-growin-sep.mjs` pin the clock to 2026-09-30 and still give the figures below.
 
 | Test | Expected |
 |---|---|
@@ -99,6 +125,8 @@ Expected results at PR #5:
 | `perf/ptime` | About 2–4 s per PNG export at 1440, light and dark alike, on a loaded machine |
 | `font/slowfont` | `DELAY=1500`: Inter, no warning. `DELAY=6000`: system font, words spaced, one warning |
 | `qa/q-crafted` | 0 covered at 1440 and for `d4`, `d5` and `lvl3`. At 390, `lvl4` covers 0.3–0.8 px each side and `lvl5` 1.2–3.6 px (see Known limitations) |
+| `t-report` | 114 passed, 0 failed. For 2026 the report equals the Dashboard: 10,120 h, ¥32,384,000, plans 17,400 h and ¥52,200,000 |
+| `report-pptx/run.sh` | Six decks, each 5 slides; every one opens in PowerPoint, with 0 overflows, 0 shrunk boxes, and `validate.py` passing |
 
 ## Where the chart and export code lives
 
@@ -119,6 +147,16 @@ Expected results at PR #5:
 - `components/TotalView.tsx`: the Cumulative hours chart. `OutlinedLabel` does the lifting.
 - `utils/textWidth.ts`: measures a figure's width on a canvas, for both charts.
 - `components/Dashboard.tsx`: `lastRealMonth` counts the current month only once it has actual revenue.
+- The business report, `/report`. The spec and its decisions are in `docs/business-report.md`.
+  - `utils/reportModel.ts`: the types shared by the page and the deck, plus `sanitizeReportText`.
+  - `utils/reportFigures.ts`: the figures, built with the Dashboard's `priceRecord` (`services/pricing.ts`) and `monthlyBuckets`, so the two cannot disagree.
+  - `services/ReportService.ts`: the `business_reports` table.
+    - It treats PostgREST `42P01` and `PGRST205` as "table missing", not as errors.
+    - `normalizeReportContent` repairs partial JSON, strips control characters and caps actions at three.
+  - `hooks/useBusinessReport.ts`: loads the figures and content. It reads periods once, caches the past years, and has a race guard.
+  - `components/BusinessReportView.tsx` and `components/report/*`: the page and its editor.
+  - `utils/reportPptx.ts`: the PowerPoint deck. Always load it with `import()`; pptxgenjs and jszip make a 412 kB chunk.
+  - `db/migration_business_reports.sql`: the table, its RLS and its stamp trigger.
 - `utils/logger.ts`: create loggers with `createLogger(scope)`. `debug` and `info` log only in development; `warn` and `error` always log.
 
 ## Hard-won knowledge
@@ -141,13 +179,20 @@ Expected results at PR #5:
   - The canvas draws with the page's fonts, but the words are laid out in the clone. Words laid out in the fallback font and drawn in Inter ran together ("Salesplan"), so both sides must use the same font.
 - The canvas has no tabular figures and handles letter-spacing badly; `settleTextForCanvas` adjusts the clone for both.
 
+**pptxgenjs 4.0.1 and PowerPoint**
+- pptxgenjs writes one paragraph-settings element per run where the format allows one per paragraph. `utils/reportPptx.ts` unzips its output with jszip and keeps the first.
+- pptxgenjs escapes only `& < > " '`. A control character, such as U+000B from a Shift+Enter pasted out of Word or PowerPoint, makes the slide XML invalid, and PowerPoint then refuses the file. Every string goes through `sanitize()` in the deck and `sanitizeReportText` in the page.
+- Meiryo UI, the template's font, has no Vietnamese letters (ơ, ư, ạ). Vietnamese runs use Segoe UI, and the deck splits text into runs by script.
+- PowerPoint does not refit text when it opens a file. The deck therefore sizes text itself, from font width tables, and cuts it with "…" as a last resort.
+- To look at a deck, open it through COM (`New-Object -ComObject PowerPoint.Application`) and call `Slide.Export(png, 'PNG', 1920, 1080)`. Put `Close()` and `Quit()` in `finally`, or POWERPNT.EXE stays running.
+
 **Windows and Git Bash**
 - Set `MSYS_NO_PATHCONV=1` when passing `/routes` through environment variables.
 - An empty `.git/index.lock` was left behind several times by git processes that were killed. If no `git.exe` is running, delete it.
 - Worktrees: unlink the `node_modules` junction before `git worktree remove` (see memory).
 - Other Claude sessions on this machine run heavy jobs. If Vite takes 30 s or more to start, the disk is saturated; the app is not at fault.
 
-## State (2026-09-29)
+## State (2026-09-30)
 
 - PRs:
   - #1 Redesign, every screen, for desktop, tablet and phone.
@@ -155,7 +200,10 @@ Expected results at PR #5:
   - #3 A console warning when the web font takes longer than the wait.
   - #4 This file.
   - #5 The four limitations left after #3: slow image exports, a late font running words together, figures lost on a plate or halo of their own lightness, and the sales figure's halo nicking the planned hours.
-- The branches merged through #1–#4 are deleted. The older branches (`chore/cleanup`, `feat/ux-pass`, `feature/redesign`, `fix/export-input-and-race-bugs`, `fix/ux-and-architecture-repair`) predate this work; ask before touching them.
+  - #6 The business report page `/report` and its PowerPoint deck in the team's template.
+- **`db/migration_business_reports.sql` has to be run by hand** in the production Supabase SQL editor. Until then `/report` shows its figures, but nothing written can be saved. Admins see a note that says so.
+- The sample deck `OS設計チーム_事業状況報告_2026年9月28日.pptx` in the repo root is the template. It is untracked, and `*.pptx` is ignored. Its last slide holds a login, so never commit it, copy it or quote it.
+- The branches merged through #1–#5 are deleted. The older branches (`chore/cleanup`, `feat/ux-pass`, `feature/redesign`, `fix/export-input-and-race-bugs`, `fix/ux-and-architecture-repair`) predate this work; ask before touching them.
 
 ## Known limitations and possible next steps
 
@@ -168,3 +216,8 @@ Expected results at PR #5:
 - The contrast check covers `ValueLabel` on Monthly only.
   - Cumulative hours' outlined figures and Monthly's "0" plate still use the theme's colours whatever the figure's colour. In dark mode, a dark figure there would disappear.
   - The axis titles take the bar's colour, so a pale bar gives a pale title.
+- The report deck does not recreate the template's picture slides (screenshots of the work, the Dashboard). They are added in PowerPoint.
+- The report counts every project as a customer. In the sample deck, "GLW/FALTEC" was one line and six customers were counted; the page shows whatever the projects are called.
+- The report's written text is sized to fit in the deck. Very long text gets small, then cut with "…"; the editor only warns in general terms.
+- Text boxes grow with their text through `field-sizing: content`, which only Chromium supports. Other browsers fall back to a row count.
+- Carrying a December report into January keeps last year's staffing changes under the new year's heading until someone edits them.
