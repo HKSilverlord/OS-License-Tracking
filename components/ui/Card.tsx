@@ -47,6 +47,8 @@ interface CardHeaderProps {
   className?: string;
   /** Heading level, so a card inside a section can sit one level lower. */
   as?: 'h2' | 'h3';
+  /** `lg` heads a long reading page's sections. */
+  size?: 'md' | 'lg';
 }
 
 export const CardHeader: React.FC<CardHeaderProps> = ({
@@ -55,12 +57,25 @@ export const CardHeader: React.FC<CardHeaderProps> = ({
   actions,
   className = '',
   as: Heading = 'h2',
+  size = 'md',
 }) => (
   <div className={`flex flex-wrap items-start justify-between gap-x-4 gap-y-3 ${className}`}>
     <div className="min-w-0">
-      <Heading className="text-[15px] font-semibold leading-6 text-slate-900 dark:text-white">{title}</Heading>
+      <Heading
+        className={`font-semibold text-slate-900 dark:text-white ${
+          size === 'lg' ? 'text-xl leading-7 sm:text-[22px] sm:leading-8' : 'text-[15px] leading-6'
+        }`}
+      >
+        {title}
+      </Heading>
       {description && (
-        <p className="mt-0.5 text-[13px] leading-5 text-slate-500 dark:text-slate-400">{description}</p>
+        <p
+          className={`text-slate-500 dark:text-slate-400 ${
+            size === 'lg' ? 'mt-1 text-[15px] leading-6' : 'mt-0.5 text-[13px] leading-5'
+          }`}
+        >
+          {description}
+        </p>
       )}
     </div>
     {/* Not shrink-0: on a phone the controls wrap inside the card rather than past its edge. */}

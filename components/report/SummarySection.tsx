@@ -1,15 +1,18 @@
 import React from 'react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { Card } from '../ui/Card';
-import { Bilingual, BilingualInput, TextInput } from './ReportParts';
+import { Bilingual, BilingualInput, labelText, TextInput } from './ReportParts';
 import type { ReportSectionProps } from './types';
 import { useReportFormat } from './useReportFormat';
 
+/** The cover's three figures are the largest on the page, as they are on the deck's cover. */
 const SummaryFigure: React.FC<{ label: string; value: React.ReactNode; note: React.ReactNode }> = ({ label, value, note }) => (
   <div className="min-w-0">
-    <dt className="text-[13px] leading-5 text-slate-500 dark:text-slate-400">{label}</dt>
-    <dd className="mt-0.5 text-[17px] font-semibold leading-7 tabular-nums text-slate-900 dark:text-white">{value}</dd>
-    <dd className="text-xs leading-5 tabular-nums text-slate-500 dark:text-slate-400">{note}</dd>
+    <dt className={`font-medium ${labelText}`}>{label}</dt>
+    <dd className="mt-1 text-[30px] font-semibold leading-9 tracking-tight tabular-nums text-slate-900 @4xl:text-4xl @4xl:leading-[44px] dark:text-white">
+      {value}
+    </dd>
+    <dd className="mt-0.5 text-sm leading-6 tabular-nums text-slate-500 dark:text-slate-400">{note}</dd>
   </div>
 );
 
@@ -23,9 +26,9 @@ export const SummarySection: React.FC<ReportSectionProps> = ({ figures, content,
   const rate = figures.achievementRate;
 
   return (
-    <Card id="report-summary" padding="lg" className="animate-fade-up">
+    <Card id="report-summary" padding="lg" className="@container animate-fade-up">
       {onEdit ? (
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_13rem]">
+        <div className="grid gap-4 @2xl:grid-cols-[minmax(0,1fr)_14rem]">
           <BilingualInput
             label={t('report.summary.focus', 'Focus')}
             value={content.focus}
@@ -40,19 +43,20 @@ export const SummarySection: React.FC<ReportSectionProps> = ({ figures, content,
         </div>
       ) : written && (
         <>
-          <h2 className="text-[13px] font-medium leading-5 text-slate-500 dark:text-slate-400">
+          <h2 className={`font-medium ${labelText}`}>
             {t('report.summary.focus', 'Focus')}
           </h2>
           <Bilingual
             text={content.focus}
             className="mt-1"
-            mainClassName="text-lg font-semibold leading-7 text-slate-900 sm:text-xl dark:text-white"
-            subClassName="text-sm leading-6 text-slate-500 dark:text-slate-400"
+            mainClassName="text-xl font-semibold leading-8 text-slate-900 @2xl:text-2xl @2xl:leading-9 dark:text-white"
+            subClassName="text-base leading-7 text-slate-500 dark:text-slate-400"
           />
         </>
       )}
 
-      <dl className={`grid gap-x-8 gap-y-4 min-[480px]:grid-cols-3 ${onEdit || written ? 'mt-5 border-t border-slate-100 pt-4 dark:border-slate-800' : ''}`}>
+      {/* Side by side only where each figure has room for its full width. */}
+      <dl className={`grid gap-x-8 gap-y-5 @[37rem]:grid-cols-3 ${onEdit || written ? 'mt-6 border-t border-slate-100 pt-5 dark:border-slate-800' : ''}`}>
         <SummaryFigure
           label={t('report.summary.hours', 'Design hours to date')}
           value={f.hours(figures.hoursActual)}

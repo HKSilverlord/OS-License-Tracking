@@ -54,6 +54,11 @@ is on the report page and in section 1.
   (`db/migration_business_reports.sql`). Viewers see the report read-only.
 - **The table may be missing.** Until the migration is run, the page still shows every
   figure. Admins see what to run; viewers see only the figures.
+- **Readable from across the room.** The report is shown on a shared screen in meetings, so
+  its text runs a size above the rest of the app: body 16 px, translations 15 px, labels
+  14 px, section titles 20–22 px, and the large figures 28–36 px. The sizes are named once in
+  `components/report/ReportParts.tsx`. The section grids follow the card's width (container
+  queries), not the window's, because the sidebar narrows the cards from 768 px.
 - **Bilingual free text.** The first line of a text field is the main text, and any
   further lines are its translation, drawn smaller. The page says so beside the fields.
 - **The export is PowerPoint** (`pptxgenjs`, loaded only when exporting). Its headings

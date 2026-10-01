@@ -16,6 +16,28 @@ import { useReportFormat } from './useReportFormat';
  */
 export const wrapAnywhere = '[overflow-wrap:anywhere]';
 
+/*
+ * The report's type scale. The report is read in meetings, on a shared screen
+ * as often as at a desk, so its text and figures run a size above the rest of
+ * the app: body text 16 px, translations 15 px, labels 14 px, figures 24 px and
+ * up. The sections take their sizes from here.
+ */
+
+/** A label over a figure or a block of text. */
+export const labelText = 'text-sm leading-5 text-slate-500 dark:text-slate-400';
+/** The main line of written text. */
+export const mainText = 'text-base leading-7 text-slate-800 dark:text-slate-100';
+/** The translation under it: smaller and quieter, as the template draws it. */
+export const subText = 'text-[15px] leading-6 text-slate-500 dark:text-slate-400';
+/** A line that stands out from the text around it: the policy, the issues, the priority. */
+export const keyText = 'text-[17px] font-semibold leading-7 text-slate-900 dark:text-white';
+/** The title of an item: a focus project, a training programme, a theme. */
+export const itemTitle = 'text-lg font-semibold leading-7 text-slate-900 dark:text-white';
+/** Small print: the months covered, hints, the customers without hours. */
+export const noteText = 'text-sm leading-6 text-slate-500 dark:text-slate-400';
+/** The dot before a point, level with the middle of a main line's first row. */
+export const pointDot = 'mt-[11px] h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400 dark:bg-slate-500';
+
 /* ------------------------------------------------------------------ *
  * Reading
  * ------------------------------------------------------------------ */
@@ -23,7 +45,7 @@ export const wrapAnywhere = '[overflow-wrap:anywhere]';
 /** What an unwritten part shows: quiet, so an empty report does not shout. */
 export const NotWritten: React.FC<{ className?: string }> = ({ className = '' }) => {
   const { t } = useLanguage();
-  return <p className={`text-sm text-slate-500 dark:text-slate-400 ${className}`}>{t('report.notWritten', 'Not written yet')}</p>;
+  return <p className={`text-[15px] leading-6 text-slate-500 dark:text-slate-400 ${className}`}>{t('report.notWritten', 'Not written yet')}</p>;
 };
 
 /**
@@ -39,8 +61,8 @@ export const Bilingual: React.FC<{
   empty?: React.ReactNode;
 }> = ({
   text,
-  mainClassName = 'text-sm leading-6 text-slate-800 dark:text-slate-100',
-  subClassName = 'text-[13px] leading-5 text-slate-500 dark:text-slate-400',
+  mainClassName = mainText,
+  subClassName = subText,
   className = '',
   empty,
 }) => {
@@ -66,6 +88,7 @@ export const ReportSection: React.FC<{
 }> = ({ id, number, title, description, actions, children, className = '' }) => (
   <Card id={id} padding="lg" className={`animate-fade-up ${className}`}>
     <CardHeader
+      size="lg"
       title={
         <>
           {number !== undefined && (
@@ -77,7 +100,9 @@ export const ReportSection: React.FC<{
       description={description}
       actions={actions}
     />
-    <div className="mt-5">{children}</div>
+    {/* A container: the section's grids follow the card's width, which the
+        sidebar takes from, rather than the window's. */}
+    <div className="@container mt-6">{children}</div>
   </Card>
 );
 
@@ -88,8 +113,8 @@ export const SubHeading: React.FC<{ children: React.ReactNode; aside?: React.Rea
   className = '',
 }) => (
   <div className={`mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 ${className}`}>
-    <h3 className="text-[13px] font-semibold text-slate-900 dark:text-white">{children}</h3>
-    {aside && <span className="text-xs text-slate-500 dark:text-slate-400">{aside}</span>}
+    <h3 className="text-base font-semibold leading-6 text-slate-900 dark:text-white">{children}</h3>
+    {aside && <span className={noteText}>{aside}</span>}
   </div>
 );
 
@@ -105,6 +130,9 @@ const rowsFor = (value: string, min: number) => Math.min(8, Math.max(min, value.
  */
 export const growClasses = 'min-h-0 max-h-80 [field-sizing:content]';
 
+/** Text in the report's text areas, a size up from the app's other forms. */
+export const fieldText = 'text-[15px] leading-7';
+
 /** A text area for bilingual text; its placeholder says how the lines are read. */
 export const BilingualInput: React.FC<{
   label: React.ReactNode;
@@ -118,7 +146,7 @@ export const BilingualInput: React.FC<{
 }> = ({ label, value, onChange, minRows = 2, className = '', hint, ariaLabel }) => {
   const { t } = useLanguage();
   return (
-    <Field label={label} hint={hint} className={className}>
+    <Field size="lg" label={label} hint={hint} className={className}>
       {id => (
         <Textarea
           id={id}
@@ -127,7 +155,7 @@ export const BilingualInput: React.FC<{
           aria-label={ariaLabel}
           onChange={event => onChange(cleanInput(event))}
           placeholder={t('report.edit.placeholder', 'Main text\nTranslation (optional)')}
-          className={growClasses}
+          className={`${growClasses} ${fieldText}`}
         />
       )}
     </Field>
@@ -144,11 +172,12 @@ export const TextInput: React.FC<{
   type?: 'text' | 'date';
   ariaLabel?: string;
 }> = ({ label, value, onChange, className = '', placeholder, type = 'text', ariaLabel }) => (
-  <Field label={label} className={className}>
+  <Field size="lg" label={label} className={className}>
     {id => (
       <Input
         id={id}
         type={type}
+        controlSize="lg"
         value={value}
         placeholder={placeholder}
         aria-label={ariaLabel}
@@ -183,8 +212,8 @@ export const CountField: React.FC<{
   max: number;
   /** For a field without a visible label of its own. */
   ariaLabel?: string;
-  controlSize?: 'sm' | 'md';
-}> = ({ id, value, onChange, max, ariaLabel, controlSize = 'md' }) => {
+  controlSize?: 'md' | 'lg';
+}> = ({ id, value, onChange, max, ariaLabel, controlSize = 'lg' }) => {
   const { t } = useLanguage();
   const f = useReportFormat();
   const errorId = useId();
@@ -213,7 +242,7 @@ export const CountField: React.FC<{
         className={`text-right tabular-nums ${invalid ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-500/15 dark:border-rose-500/70' : ''}`}
       />
       {invalid && (
-        <p id={errorId} className="mt-1 text-xs leading-4 text-rose-600 dark:text-rose-400">
+        <p id={errorId} className="mt-1 text-[13px] leading-5 text-rose-600 dark:text-rose-400">
           {t('report.edit.countRange', 'Whole number, 0 to {max}').replace('{max}', f.count(max))}
         </p>
       )}
@@ -230,7 +259,7 @@ export const CountInput: React.FC<{
   className?: string;
   ariaLabel?: string;
 }> = ({ label, value, onChange, max, className = '', ariaLabel }) => (
-  <Field label={label} className={className}>
+  <Field size="lg" label={label} className={className}>
     {id => <CountField id={id} value={value} onChange={onChange} max={max} ariaLabel={ariaLabel} />}
   </Field>
 );
@@ -305,13 +334,13 @@ export const PointsEditor: React.FC<{
     t('report.edit.pointOf', '{context}, point {n}').replace('{context}', context).replace('{n}', String(i + 1));
   return (
     <fieldset className="min-w-0">
-      <legend className="mb-1.5 text-[13px] font-medium text-slate-700 dark:text-slate-300">{label}</legend>
+      <legend className="mb-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">{label}</legend>
       {/* The controls sit beside the text only where the list is wide enough
           for both; in a narrow column they go under it, so the text keeps the width. */}
       <ol className="@container space-y-2">
         {points.map((point, i) => (
           <li key={keys[i]} className="flex items-start gap-2">
-            <span className="mt-2 w-5 shrink-0 text-right text-[13px] tabular-nums text-slate-500 dark:text-slate-400" aria-hidden="true">{i + 1}</span>
+            <span className="mt-3 w-5 shrink-0 text-right text-sm tabular-nums text-slate-500 dark:text-slate-400" aria-hidden="true">{i + 1}</span>
             <div className="flex min-w-0 flex-1 flex-col gap-1 @md:flex-row @md:items-start @md:gap-2">
               <Textarea
                 value={point}
@@ -319,7 +348,7 @@ export const PointsEditor: React.FC<{
                 aria-label={pointLabel(i)}
                 placeholder={t('report.edit.placeholder', 'Main text\nTranslation (optional)')}
                 onChange={event => onChange(replaceAt(points, i, cleanInput(event)))}
-                className={`${growClasses} @md:flex-1`}
+                className={`${growClasses} ${fieldText} @md:flex-1`}
               />
               <div className="flex justify-end @md:mt-1">
                 <ItemControls
