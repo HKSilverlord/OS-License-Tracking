@@ -74,12 +74,12 @@ function App() {
         id: 'analytics',
         label: t('nav.analytics', 'Analytics'),
         items: [
-          { to: '/', icon: LayoutDashboard, label: t('nav.dashboard', 'Dashboard') },
+          { to: '/report', icon: Presentation, label: t('nav.report', 'Business report') },
+          { to: '/dashboard', icon: LayoutDashboard, label: t('nav.dashboard', 'Dashboard') },
           { to: '/total', icon: BarChart3, label: t('nav.totalView', 'Cumulative hours') },
           { to: '/monthly-plan-actual', icon: LineChart, label: t('nav.monthlyPlanActual', 'Monthly plan vs actual') },
           { to: '/yearly-data', icon: Table, label: t('nav.yearlyData', 'Annual data') },
           { to: '/long-term-plan', icon: TrendingUp, label: t('nav.longTermPlan', 'Long-term plan') },
-          { to: '/report', icon: Presentation, label: t('nav.report', 'Business report') },
         ],
       },
       {
@@ -160,6 +160,9 @@ const PageWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   </motion.div>
 );
 
+/** The page the app opens on, and where an unknown address lands. */
+const HOME = '/report';
+
 const MainRoutes: React.FC<{ currentYear: number }> = ({ currentYear }) => {
   const location = useLocation();
   const { isAdmin } = useUserRole();
@@ -169,7 +172,9 @@ const MainRoutes: React.FC<{ currentYear: number }> = ({ currentYear }) => {
     // made the next page wait for it, and two moves in quick succession (Back,
     // then Back again) could leave the old page on screen under the new address.
     <Routes location={location} key={location.pathname}>
-      <Route path="/" element={<PageWrapper><Dashboard currentYear={currentYear} /></PageWrapper>} />
+      {/* The business report is where the app opens. */}
+      <Route path="/" element={<Navigate to={HOME} replace />} />
+      <Route path="/dashboard" element={<PageWrapper><Dashboard currentYear={currentYear} /></PageWrapper>} />
       <Route path="/tracking" element={<PageWrapper><TrackingView currentYear={currentYear} /></PageWrapper>} />
       <Route path="/catia-license" element={<PageWrapper><CatiaLicenseView currentYear={currentYear} /></PageWrapper>} />
       <Route path="/total" element={<PageWrapper><TotalView currentYear={currentYear} /></PageWrapper>} />
@@ -181,9 +186,9 @@ const MainRoutes: React.FC<{ currentYear: number }> = ({ currentYear }) => {
       {/* Kept as a route so a bookmarked URL redirects instead of dead-ending. */}
       <Route
         path="/diagnostic"
-        element={isAdmin ? <PageWrapper><DatabaseDiagnostic /></PageWrapper> : <Navigate to="/" replace />}
+        element={isAdmin ? <PageWrapper><DatabaseDiagnostic /></PageWrapper> : <Navigate to={HOME} replace />}
       />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to={HOME} replace />} />
     </Routes>
   );
 };
