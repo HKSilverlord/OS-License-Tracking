@@ -33,7 +33,7 @@ export const ColorInput: React.FC<{
       onChange={event => onChange(event.target.value)}
       spellCheck={false}
       aria-label={`${label} (hex)`}
-      className="h-7 w-[5.5rem] rounded-md border border-slate-200 bg-white px-2 font-mono text-xs text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+      className="h-7 w-[5.5rem] rounded-md border border-slate-200 bg-white px-2 font-mono text-[13px] text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
     />
   </div>
 );
@@ -82,11 +82,11 @@ export const ChartColorButton: React.FC<{
 
       <Popover open={open} onClose={() => setOpen(false)} anchorRef={buttonRef} label={title}>
         <div className="w-[17rem] p-3">
-          <p className="px-1 pb-2 text-[13px] font-semibold text-slate-900 dark:text-white">{title}</p>
+          <p className="px-1 pb-2 text-sm font-bold text-slate-900 dark:text-white">{title}</p>
           <ul className="space-y-0.5">
             {rows.map(row => (
               <li key={row.label} className="flex items-center gap-3 rounded-lg px-1 py-1.5">
-                <span className="min-w-0 flex-1 truncate text-sm text-slate-700 dark:text-slate-200">{row.label}</span>
+                <span className="min-w-0 flex-1 truncate text-[15px] text-slate-700 dark:text-slate-200">{row.label}</span>
                 <ColorInput label={row.label} value={row.value} onChange={row.onChange} />
               </li>
             ))}

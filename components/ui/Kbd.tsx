@@ -6,7 +6,7 @@ export const Kbd: React.FC<{ children: React.ReactNode; className?: string }> = 
   // through aria-keyshortcuts, and "SaveCtrl S" is no name.
   <kbd
     aria-hidden="true"
-    className={`inline-flex h-5 min-w-5 items-center justify-center rounded border border-current/20 px-1 font-sans text-[11px] font-medium leading-none opacity-70 ${className}`}
+    className={`inline-flex h-5 min-w-5 items-center justify-center rounded border border-current/20 px-1 font-sans text-xs font-medium leading-none opacity-70 ${className}`}
   >
     {children}
   </kbd>

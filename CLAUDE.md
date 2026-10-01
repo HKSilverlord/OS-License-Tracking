@@ -60,6 +60,9 @@ The mock harness files and `harness-tests/` are **not in the repo**. They exist 
     2. `npx vite preview --config vite.harness-bundle.config.ts` serves it on port 4190.
 
     Pages then load in about 3 s. A bundle does not pick up code changes: build again after each edit. If the config is missing, it is the harness config merged with those two settings.
+  - `t-dashgrow` and `t-growin` wait only about 8 s for a chart, and fail with "Cannot read properties of null" on a slow dev server. To run them beside a running dev harness:
+    - serve the bundle on another port, with `npx vite preview --config vite.harness-bundle.config.ts --port 4191 --strictPort`;
+    - set `HARNESS=http://127.0.0.1:4191/chart-harness.html` (`cdp.mjs` reads it).
 
 ## Browser test kit (`harness-tests/`)
 
@@ -120,7 +123,7 @@ Expected results at PR #6. The counts assume the clock is in September 2026:
 | `t-dashgrow` | Cumulative: `exported: 2, curves: 2` (the monthly chart shows bar figures only from 1920 px) |
 | `t-zorder` | Label order unchanged after toggling capacity figures |
 | `t-back`, `guard`, `t-note` | Unsaved-changes dialog appears; Stay and Leave both work; the note is saved; no console logs |
-| `t-tableexp` | `yearly-data-table` 1492×551, `catia-license-table` 3176×820 |
+| `t-tableexp` | `yearly-data-table` 1492×562, `catia-license-table` 3176×834 (taller since the larger text of #8; 1492×551 and 3176×820 before) |
 | `t-pngexport` | Every card exports; charts that scroll sideways export at full width |
 | `perf/ptime` | About 2–4 s per PNG export at 1440, light and dark alike, on a loaded machine |
 | `font/slowfont` | `DELAY=1500`: Inter, no warning. `DELAY=6000`: system font, words spaced, one warning |
@@ -162,6 +165,28 @@ Expected results at PR #6. The counts assume the clock is in September 2026:
   - `db/migration_business_reports.sql`: the table, its RLS and its stamp trigger.
 - `utils/logger.ts`: create loggers with `createLogger(scope)`. `debug` and `info` log only in development; `warn` and `error` always log.
 
+## Type scale
+
+In October 2026 every page's text was raised one step, so the screen reads from further away, and titles were made bold.
+
+- Text sizes:
+  - Body text is 15px (`text-[15px]`).
+  - Secondary text is 14px (`text-sm`), small print 13px (`text-[13px]`), and the smallest labels 12px (`text-xs`).
+- Titles are bold (700); body text stays regular.
+  - Page titles are 24px on a phone and 28px from `sm`.
+  - Card titles are 18px. Modal titles are 19px, confirm and empty-state titles 18px.
+- Shared components:
+  - `Metric`: md is 28px; lg is 28px, and 32px from `sm`.
+  - Buttons: sm 14px, md 15px, lg 16px.
+  - Fields: sm 14px, md 15px, lg 16px. The sizes live in `HEIGHT` and `TEXTAREA_SIZE` in `components/ui/Field.tsx` (see Tailwind v4 below).
+- `/report` runs a size above all this (see the report above).
+- Charts: axis ticks and value labels are SVG sizes and did not change. The Dashboard's legends are 13px and its tooltip 14px, like the other cards.
+- Page header (`components/ui/Page.tsx`): the description asks for at most 24rem, through an invisible copy of itself. A long description wraps to two lines instead of pushing the page's controls onto a line of their own.
+- Grids inside cards switch on the card's width (`@container`), not the window's. The sidebar takes 248 px from `md`, so a 768 px window leaves a card about 470 px wide. This applies to the CATIA figures and the Dashboard's plan-vs-actual table.
+- Vietnamese is the longest language.
+  - Narrow columns with short labels are `whitespace-nowrap`: "Kế hoạch" in Tracking and Yearly, and the month headers.
+  - The vn CATIA nav label is "Bản quyền CATIA", so it fits the sidebar.
+
 ## Hard-won knowledge
 
 **Recharts 3.5**
@@ -189,13 +214,18 @@ Expected results at PR #6. The counts assume the clock is in September 2026:
 - PowerPoint does not refit text when it opens a file. The deck therefore sizes text itself, from font width tables, and cuts it with "…" as a last resort.
 - To look at a deck, open it through COM (`New-Object -ComObject PowerPoint.Application`) and call `Slide.Export(png, 'PNG', 1920, 1080)`. Put `Close()` and `Quit()` in `finally`, or POWERPNT.EXE stays running.
 
+**Tailwind v4**
+- Arbitrary sizes such as `text-[15px]` come after `text-sm` and `text-base` in the built CSS. On one element the arbitrary size wins, whatever the order of the classes.
+- So a size in a component's shared base classes overrides every size variant. This happened in `Field.tsx`: every control rendered at 15px.
+- Keep sizes in the variant maps only.
+
 **Windows and Git Bash**
 - Set `MSYS_NO_PATHCONV=1` when passing `/routes` through environment variables.
 - An empty `.git/index.lock` was left behind several times by git processes that were killed. If no `git.exe` is running, delete it.
 - Worktrees: unlink the `node_modules` junction before `git worktree remove` (see memory).
 - Other Claude sessions on this machine run heavy jobs. If Vite takes 30 s or more to start, the disk is saturated; the app is not at fault.
 
-## State (2026-09-30)
+## State (2026-10-01)
 
 - PRs:
   - #1 Redesign, every screen, for desktop, tablet and phone.
@@ -204,9 +234,11 @@ Expected results at PR #6. The counts assume the clock is in September 2026:
   - #4 This file.
   - #5 The four limitations left after #3: slow image exports, a late font running words together, figures lost on a plate or halo of their own lightness, and the sales figure's halo nicking the planned hours.
   - #6 The business report page `/report` and its PowerPoint deck in the team's template.
+  - #7 `/report` in larger text, headings and figures, for reading on a shared screen.
+  - #8 Every other page one step larger, with bold titles (see Type scale).
 - `db/migration_business_reports.sql` was run on the production Supabase on 2026-10-01. A read-only check confirmed the table, RLS, its 4 policies, the stamp trigger and both constraints.
 - The sample deck `OS設計チーム_事業状況報告_2026年9月28日.pptx` in the repo root is the template. It is untracked, and `*.pptx` is ignored. Its last slide holds a login, so never commit it, copy it or quote it.
-- The branches merged through #1–#5 are deleted. The older branches (`chore/cleanup`, `feat/ux-pass`, `feature/redesign`, `fix/export-input-and-race-bugs`, `fix/ux-and-architecture-repair`) predate this work; ask before touching them.
+- The branches merged through #1–#7 are deleted. The older branches (`chore/cleanup`, `feat/ux-pass`, `feature/redesign`, `fix/export-input-and-race-bugs`, `fix/ux-and-architecture-repair`) predate this work; ask before touching them.
 
 ## Known limitations and possible next steps
 
@@ -224,3 +256,7 @@ Expected results at PR #6. The counts assume the clock is in September 2026:
 - The report's written text is sized to fit in the deck. Very long text gets small, then cut with "…"; the editor only warns in general terms.
 - Text boxes grow with their text through `field-sizing: content`, which only Chromium supports. Other browsers fall back to a row count.
 - Carrying a December report into January keeps last year's staffing changes under the new year's heading until someone edits them.
+- Since the larger text:
+  - In Vietnamese, the current month's header in Tracking and Yearly widens its column by a few px for October to December ("Tháng 10" and the dot need about 83 px of 76).
+  - At 768 px and narrower, most pages' controls sit below their title. Tracking and the report also do so at 1024 px.
+  - The collapsed sidebar's tooltips are cut off by the sidebar's `overflow-hidden`. This was there before.

@@ -25,9 +25,9 @@ export interface SeriesStyleEntry {
 const Row: React.FC<{ label: string; htmlFor?: string; children: React.ReactNode }> = ({ label, htmlFor, children }) => (
   <div className="grid grid-cols-[5.25rem_minmax(0,1fr)] items-center gap-3 py-1">
     {htmlFor ? (
-      <label htmlFor={htmlFor} className="truncate text-[13px] text-slate-500 dark:text-slate-400">{label}</label>
+      <label htmlFor={htmlFor} className="truncate text-sm text-slate-500 dark:text-slate-400">{label}</label>
     ) : (
-      <span className="truncate text-[13px] text-slate-500 dark:text-slate-400">{label}</span>
+      <span className="truncate text-sm text-slate-500 dark:text-slate-400">{label}</span>
     )}
     {children}
   </div>
@@ -53,7 +53,7 @@ const Slider: React.FC<{
       onChange={event => onChange(Number(event.target.value))}
       className="h-1.5 min-w-0 flex-1 cursor-pointer accent-blue-600"
     />
-    <span className="w-9 shrink-0 text-right text-xs tabular-nums text-slate-500 dark:text-slate-400">{readout}</span>
+    <span className="w-9 shrink-0 text-right text-[13px] tabular-nums text-slate-500 dark:text-slate-400">{readout}</span>
   </div>
 );
 
@@ -67,7 +67,7 @@ const Toggle: React.FC<{ pressed: boolean; onToggle: () => void; className?: str
     type="button"
     aria-pressed={pressed}
     onClick={onToggle}
-    className={`inline-flex h-7 items-center rounded-md border border-slate-200 px-2.5 text-xs text-slate-600 transition-colors hover:bg-slate-50 aria-pressed:border-blue-500/40 aria-pressed:bg-blue-50 aria-pressed:text-blue-700 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:aria-pressed:border-blue-400/40 dark:aria-pressed:bg-blue-500/15 dark:aria-pressed:text-blue-300 ${className}`}
+    className={`inline-flex h-7 items-center rounded-md border border-slate-200 px-2.5 text-[13px] text-slate-600 transition-colors hover:bg-slate-50 aria-pressed:border-blue-500/40 aria-pressed:bg-blue-50 aria-pressed:text-blue-700 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:aria-pressed:border-blue-400/40 dark:aria-pressed:bg-blue-500/15 dark:aria-pressed:text-blue-300 ${className}`}
   >
     {children}
   </button>
@@ -122,7 +122,7 @@ export const SeriesStyleButton: React.FC<{
 
       <Popover open={open} onClose={() => setOpen(false)} anchorRef={buttonRef} label={title}>
         <div className="w-[19.5rem] max-w-[calc(100vw-2rem)] p-3">
-          <p className="px-1 pb-2.5 text-[13px] font-semibold text-slate-900 dark:text-white">{title}</p>
+          <p className="px-1 pb-2.5 text-sm font-bold text-slate-900 dark:text-white">{title}</p>
 
           <div
             ref={pickerRef}
@@ -141,7 +141,7 @@ export const SeriesStyleButton: React.FC<{
                   aria-checked={checked}
                   tabIndex={checked ? 0 : -1}
                   onClick={() => setActiveKey(entry.key)}
-                  className="inline-flex h-7 max-w-full items-center gap-1.5 rounded-full border border-slate-200 px-2.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 aria-checked:border-slate-900 aria-checked:bg-slate-900 aria-checked:text-white dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:aria-checked:border-white dark:aria-checked:bg-white dark:aria-checked:text-slate-900"
+                  className="inline-flex h-7 max-w-full items-center gap-1.5 rounded-full border border-slate-200 px-2.5 text-[13px] font-medium text-slate-600 transition-colors hover:bg-slate-50 aria-checked:border-slate-900 aria-checked:bg-slate-900 aria-checked:text-white dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:aria-checked:border-white dark:aria-checked:bg-white dark:aria-checked:text-slate-900"
                 >
                   <span
                     aria-hidden="true"
@@ -183,7 +183,7 @@ export const SeriesStyleButton: React.FC<{
               </Row>
             )}
 
-            <p className="pb-1 pt-3 text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            <p className="pb-1 pt-3 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
               {t('chart.valueLabels', 'Value labels')}
             </p>
             <Row label={t('chart.field.color', 'Color')}>
@@ -235,7 +235,7 @@ export const SeriesStyleCheck: React.FC<{
   onChange: (checked: boolean) => void;
   children: React.ReactNode;
 }> = ({ checked, onChange, children }) => (
-  <label className="flex cursor-pointer items-center gap-2.5 rounded-lg py-1.5 text-[13px] text-slate-700 dark:text-slate-200">
+  <label className="flex cursor-pointer items-center gap-2.5 rounded-lg py-1.5 text-sm text-slate-700 dark:text-slate-200">
     <input
       type="checkbox"
       checked={checked}

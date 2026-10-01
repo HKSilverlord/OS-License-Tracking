@@ -113,7 +113,7 @@ export const SubHeading: React.FC<{ children: React.ReactNode; aside?: React.Rea
   className = '',
 }) => (
   <div className={`mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 ${className}`}>
-    <h3 className="text-base font-semibold leading-6 text-slate-900 dark:text-white">{children}</h3>
+    <h3 className="text-base font-bold leading-6 text-slate-900 dark:text-white">{children}</h3>
     {aside && <span className={noteText}>{aside}</span>}
   </div>
 );
@@ -130,8 +130,8 @@ const rowsFor = (value: string, min: number) => Math.min(8, Math.max(min, value.
  */
 export const growClasses = 'min-h-0 max-h-80 [field-sizing:content]';
 
-/** Text in the report's text areas, a size up from the app's other forms. */
-export const fieldText = 'text-[15px] leading-7';
+/** Line height of the report's text areas. Their size is `controlSize="lg"`, a size up from the app's other forms. */
+export const fieldText = 'leading-7';
 
 /** A text area for bilingual text; its placeholder says how the lines are read. */
 export const BilingualInput: React.FC<{
@@ -155,6 +155,7 @@ export const BilingualInput: React.FC<{
           aria-label={ariaLabel}
           onChange={event => onChange(cleanInput(event))}
           placeholder={t('report.edit.placeholder', 'Main text\nTranslation (optional)')}
+          controlSize="lg"
           className={`${growClasses} ${fieldText}`}
         />
       )}
@@ -348,6 +349,7 @@ export const PointsEditor: React.FC<{
                 aria-label={pointLabel(i)}
                 placeholder={t('report.edit.placeholder', 'Main text\nTranslation (optional)')}
                 onChange={event => onChange(replaceAt(points, i, cleanInput(event)))}
+                controlSize="lg"
                 className={`${growClasses} ${fieldText} @md:flex-1`}
               />
               <div className="flex justify-end @md:mt-1">

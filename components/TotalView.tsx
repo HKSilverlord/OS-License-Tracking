@@ -220,7 +220,7 @@ const AccumulatedSummary = ({ row, t, language, nf, nfPct, unit }: {
 }) => {
   const { timeGap, percentGap } = accumulatedGap(row);
   return (
-    <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[13px] text-slate-500 dark:text-slate-400">
+    <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm text-slate-500 dark:text-slate-400">
       <span className="font-medium text-slate-700 dark:text-slate-200">
         {t('totalView.summary.through', 'Through {month}').replace('{month}', row.fullName)}
       </span>
@@ -274,7 +274,7 @@ const MonthDetailCard = ({ data, chartColors, t, language, nf, nfPct, unit, onUn
   const { timeGap, percentGap } = accumulatedGap(data);
 
   return (
-    <div className="min-w-[232px] rounded-xl bg-white p-3 text-[13px] shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/10 dark:bg-slate-900 dark:shadow-black/40 dark:ring-white/10">
+    <div className="min-w-[232px] rounded-xl bg-white p-3 text-sm shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/10 dark:bg-slate-900 dark:shadow-black/40 dark:ring-white/10">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="font-semibold text-slate-900 dark:text-white">{data.fullName}</span>
         <span className="flex items-center gap-1">
@@ -377,7 +377,7 @@ const SeriesLegend = ({ chartColors, hidden, onToggle, labels, hint }: {
           onClick={() => onToggle(key)}
           title={hint}
           aria-pressed={shown}
-          className={`inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors ${
+          className={`inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[13px] font-medium transition-colors ${
             shown
               ? 'bg-slate-100 text-slate-700 hover:bg-slate-200/70 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
               : 'text-slate-400 line-through ring-1 ring-inset ring-slate-200 hover:text-slate-600 dark:text-slate-500 dark:ring-slate-700 dark:hover:text-slate-300'

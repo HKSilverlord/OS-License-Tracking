@@ -60,6 +60,7 @@ const CustomerTable: React.FC<{
       aria-label={`${t('report.customers.status', 'Status')}: ${c.name}`}
       placeholder={t('report.edit.placeholder', 'Main text\nTranslation (optional)')}
       onChange={event => setNote(c.projectId, { status: cleanInput(event) })}
+      controlSize="lg"
       className={`${growClasses} ${fieldText}`}
     />
   );

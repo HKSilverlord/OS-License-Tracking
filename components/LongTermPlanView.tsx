@@ -182,7 +182,7 @@ const HoverCard = ({ active, payload, chartColors, labels, units, nf }: Partial<
   const hasRates = data.hourlyRatePlan !== undefined || data.hourlyRateActual !== undefined;
 
   return (
-    <div className="min-w-[240px] rounded-xl bg-white p-3 text-[13px] shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/10 dark:bg-slate-900 dark:shadow-black/40 dark:ring-white/10">
+    <div className="min-w-[240px] rounded-xl bg-white p-3 text-sm shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/10 dark:bg-slate-900 dark:shadow-black/40 dark:ring-white/10">
       <p className="mb-2 font-semibold tabular-nums text-slate-900 dark:text-white">{data.year}</p>
       <div className="space-y-1">
         {row('salesPlan')}
@@ -397,7 +397,7 @@ export const LongTermPlanView: React.FC = () => {
         {loading && <RefreshBar className="mt-4" />}
 
         <div className={`transition-opacity duration-200 ${loading ? 'opacity-40' : ''}`}>
-          <ul className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-600 dark:text-slate-300">
+          <ul className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] text-slate-600 dark:text-slate-300">
             {SERIES_KEYS.map(key => (
               <li key={key} className="flex items-center gap-2">
                 <Swatch color={chartColors[key]} shape={SERIES_SHAPE[key]} />

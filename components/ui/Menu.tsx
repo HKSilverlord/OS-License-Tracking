@@ -106,7 +106,7 @@ export const Menu: React.FC<MenuProps> = ({
         onKeyDown={onKeyDown}
         data-html2canvas-ignore="true"
         style={anchoredStyle(position, minWidth)}
-        className={`fixed z-[1100] max-h-[min(420px,calc(100dvh-16px))] overflow-y-auto rounded-xl bg-white p-1 text-sm shadow-xl shadow-slate-900/10 ring-1 ring-slate-900/[0.08] outline-none custom-scrollbar dark:bg-slate-800 dark:shadow-black/40 dark:ring-white/10 ${
+        className={`fixed z-[1100] max-h-[min(420px,calc(100dvh-16px))] overflow-y-auto rounded-xl bg-white p-1 text-[15px] shadow-xl shadow-slate-900/10 ring-1 ring-slate-900/[0.08] outline-none custom-scrollbar dark:bg-slate-800 dark:shadow-black/40 dark:ring-white/10 ${
           position ? 'animate-scale-in' : ''
         } ${className}`}
       >
@@ -118,7 +118,7 @@ export const Menu: React.FC<MenuProps> = ({
 };
 
 const ITEM_BASE =
-  'flex w-full select-none items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] leading-5 outline-none ' +
+  'flex w-full select-none items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[15px] leading-5 outline-none ' +
   'transition-colors duration-100 aria-disabled:cursor-not-allowed aria-disabled:opacity-45';
 
 // Keyboard focus is shown as the hover highlight, not the ring: in a list of
@@ -183,7 +183,7 @@ export const MenuItem: React.FC<MenuItemProps> = ({
         </span>
       )}
       <span className="min-w-0 flex-1 truncate">{children}</span>
-      {trailing && <span className="ml-3 shrink-0 text-xs text-slate-500 dark:text-slate-400">{trailing}</span>}
+      {trailing && <span className="ml-3 shrink-0 text-[13px] text-slate-500 dark:text-slate-400">{trailing}</span>}
     </button>
   );
 };
@@ -229,7 +229,7 @@ export const MenuCheckItem: React.FC<MenuCheckItemProps> = ({
 
 /** A small heading over a group of items. */
 export const MenuLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="px-2.5 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+  <div className="px-2.5 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
     {children}
   </div>
 );

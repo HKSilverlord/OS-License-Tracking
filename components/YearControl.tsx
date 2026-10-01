@@ -59,7 +59,7 @@ export const YearControl: React.FC<{ className?: string }> = ({ className = '' }
           void requestYear(picked);
         }}
         aria-label={t('year.select', 'Select year')}
-        className="appearance-none border-x border-slate-200 bg-transparent px-3 text-center text-sm font-semibold tabular-nums text-slate-900 outline-none transition-colors hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 dark:border-slate-700 dark:text-white dark:hover:bg-slate-800 dark:focus-visible:bg-slate-800"
+        className="appearance-none border-x border-slate-200 bg-transparent px-3 text-center text-[15px] font-semibold tabular-nums text-slate-900 outline-none transition-colors hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 dark:border-slate-700 dark:text-white dark:hover:bg-slate-800 dark:focus-visible:bg-slate-800"
       >
         {options.map(option => (
           <option key={option} value={option}>{option}</option>

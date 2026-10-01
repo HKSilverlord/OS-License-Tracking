@@ -35,18 +35,28 @@ const PageHeading: React.FC<Pick<PageProps, 'title' | 'description' | 'actions' 
   titleSize = 'md',
 }) => (
   <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-    <div className="min-w-0">
+    <div className="min-w-0 flex-auto">
       <h1
-        className={`font-semibold leading-tight tracking-tight text-slate-900 dark:text-white ${
-          titleSize === 'lg' ? 'text-[26px] sm:text-[30px]' : 'text-[22px] sm:text-2xl'
+        className={`font-bold leading-tight tracking-tight text-slate-900 dark:text-white ${
+          titleSize === 'lg' ? 'text-[26px] sm:text-[30px]' : 'text-[24px] sm:text-[28px]'
         }`}
       >
         {title}
       </h1>
       {description && (
-        <p className={`mt-1 text-slate-500 dark:text-slate-400 ${titleSize === 'lg' ? 'text-[15px] leading-6' : 'text-sm leading-6'}`}>
-          {description}
-        </p>
+        <>
+          {/* w-0 min-w-full: the description fills whatever room the line leaves and
+              asks for none of its own, so it wraps instead of pushing the controls
+              onto a line of their own. */}
+          <p className="mt-1 w-0 min-w-full text-[15px] leading-6 text-slate-500 dark:text-slate-400">
+            {description}
+          </p>
+          {/* What it does ask for: its own width, up to 24rem. A short description
+              keeps its one line; a long one gives way to the controls and takes two. */}
+          <p aria-hidden="true" className="invisible h-0 max-w-[24rem] overflow-hidden text-[15px]">
+            {description}
+          </p>
+        </>
       )}
     </div>
     {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

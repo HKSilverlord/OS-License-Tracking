@@ -154,7 +154,7 @@ export const vn: Record<string, string> = {
   'monthlyPlanActual.legend.workingActual': 'Giờ làm việc thực tế',
   'monthlyPlanActual.legend.salesPlan': 'Kế hoạch doanh thu',
   'monthlyPlanActual.legend.salesActual': 'Doanh thu thực tế',
-  'nav.catiaLicense': 'Quản lý bản quyền CATIA',
+  'nav.catiaLicense': 'Bản quyền CATIA',
   'toast.saveFailed': 'Lưu thất bại',
   'toast.loadFailed': 'Không tải được dữ liệu',
   'toast.deleted': 'Đã xóa',

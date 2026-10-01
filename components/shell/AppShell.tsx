@@ -126,7 +126,7 @@ export const AppShell: React.FC<{
             <MenuIcon className="h-5 w-5" aria-hidden="true" />
           </button>
           <AppIcon size={26} />
-          <span className="truncate text-[15px] font-semibold text-slate-900 dark:text-white">
+          <span className="truncate text-[17px] font-bold text-slate-900 dark:text-white">
             {t('app.title', 'OS Manager')}
           </span>
         </header>

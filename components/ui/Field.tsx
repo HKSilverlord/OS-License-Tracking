@@ -7,7 +7,7 @@ import { ChevronDown } from 'lucide-react';
  * is where the caret is, and the halo says so without shouting.
  */
 const controlClasses =
-  'block w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 ' +
+  'block w-full rounded-lg border border-slate-200 bg-white px-3 text-slate-900 ' +
   'shadow-sm shadow-slate-900/[0.03] placeholder:text-slate-400 ' +
   'transition-[border-color,box-shadow] duration-150 ' +
   'focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/15 ' +
@@ -26,10 +26,18 @@ export const inputClasses =
 
 type ControlSize = 'sm' | 'md' | 'lg';
 
+/* The text size lives here, not in the shared look: Tailwind emits arbitrary
+   sizes such as text-[15px] after text-sm and text-base, so a size in the
+   shared look would win over every one of these. */
 const HEIGHT: Record<ControlSize, string> = {
-  sm: 'h-8 text-[13px]',
-  md: 'h-10',
-  lg: 'h-11 text-[15px]',
+  sm: 'h-8 text-sm',
+  md: 'h-10 text-[15px]',
+  lg: 'h-11 text-base',
+};
+
+const TEXTAREA_SIZE: Record<'md' | 'lg', string> = {
+  md: 'text-[15px]',
+  lg: 'text-base',
 };
 
 export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
@@ -43,9 +51,18 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
 );
 Input.displayName = 'Input';
 
-export const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(
-  ({ className = '', ...props }, ref) => (
-    <textarea ref={ref} className={`${inputClasses} min-h-[84px] resize-y py-2 leading-6 custom-scrollbar ${className}`} {...props} />
+export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+  /** `lg` for a reading page's larger text, such as the report. */
+  controlSize?: 'md' | 'lg';
+}
+
+export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
+  ({ className = '', controlSize = 'md', ...props }, ref) => (
+    <textarea
+      ref={ref}
+      className={`${inputClasses} ${TEXTAREA_SIZE[controlSize]} min-h-[84px] resize-y py-2 leading-6 custom-scrollbar ${className}`}
+      {...props}
+    />
   ),
 );
 Textarea.displayName = 'Textarea';
@@ -90,11 +107,11 @@ interface FieldProps {
 /** Label, control, and one line of help — stacked the same way in every form. */
 export const Field: React.FC<FieldProps> = ({ label, hint, error, aside, className = '', size = 'md', children }) => {
   const id = useId();
-  const small = size === 'lg' ? 'text-[13px]' : 'text-xs';
+  const small = size === 'lg' ? 'text-sm' : 'text-[13px]';
   return (
     <div className={className}>
       <div className="mb-1.5 flex items-baseline justify-between gap-2">
-        <label htmlFor={id} className={`${size === 'lg' ? 'text-sm' : 'text-[13px]'} font-medium text-slate-700 dark:text-slate-300`}>
+        <label htmlFor={id} className={`${size === 'lg' ? 'text-[15px]' : 'text-sm'} font-medium text-slate-700 dark:text-slate-300`}>
           {label}
         </label>
         {aside && <span className={`${small} text-slate-500 dark:text-slate-400`}>{aside}</span>}

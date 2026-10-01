@@ -36,9 +36,9 @@ const VARIANTS: Record<ButtonVariant, string> = {
 };
 
 const SIZES: Record<ButtonSize, string> = {
-  sm: 'h-8 rounded-lg px-3 text-[13px]',
-  md: 'h-9 rounded-lg px-3.5 text-sm',
-  lg: 'h-11 rounded-xl px-5 text-[15px]',
+  sm: 'h-8 rounded-lg px-3 text-sm',
+  md: 'h-9 rounded-lg px-3.5 text-[15px]',
+  lg: 'h-11 rounded-xl px-5 text-base',
   icon: 'h-9 w-9 rounded-lg',
   'icon-sm': 'h-8 w-8 rounded-lg',
 };
