@@ -27,7 +27,7 @@ The mock harness files and `harness-tests/` are **not in the repo**. They exist 
 
 - `npm run verify` runs, in order: typecheck, lint, `check:locales` (ja/en/vn must hold the same keys), and build. The build's warning about a chunk over 500 kB was there before this work.
 - **Mock harness:** `npx vite --config vite.harness.config.ts`, then open `http://127.0.0.1:4190/chart-harness.html?lang=en&theme=light#/monthly-plan-actual`.
-  - It runs the real app on fixture data.
+  - It runs the real app on fixture data. `#/` opens the business report, like the app; the Dashboard is `#/dashboard`.
     - `harness-db.ts`: planned and actual hours, with actuals for Jan–Aug and none for Sep–Dec.
     - `harness-supabase.ts`: 5 projects, periods 2024-H1 to 2026-H2, signed in as admin.
   - Query switches:
@@ -106,6 +106,8 @@ Like the harness, this kit is not in the repo (see the top of this file). The ki
   - `run.sh [names]` runs all three steps.
   - Output goes to `out/<name>/`, with a contact sheet per deck in `out/<name>_sheet.png`.
 - `qa-report/` holds the QA agent's checks for the report, with output in `qa-report/out/`.
+  - `t-home.mjs` checks that the app opens on the report. It covers `#/`, unknown addresses, the sidebar and drawer order in each language, a viewer, signing in, and Back.
+  - Every test that meant the Dashboard by `#/` now uses `#/dashboard`.
 
 Expected results at PR #6. The counts assume the clock is in September 2026:
 - From 1 October, September counts as a finished month. Monthly then gets one more figure: `t-overlap` 41, `t-growin` 49.
@@ -129,6 +131,7 @@ Expected results at PR #6. The counts assume the clock is in September 2026:
 | `font/slowfont` | `DELAY=1500`: Inter, no warning. `DELAY=6000`: system font, words spaced, one warning |
 | `qa/q-crafted` | 0 covered at 1440 and for `d4`, `d5` and `lvl3`. At 390, `lvl4` covers 0.3–0.8 px each side and `lvl5` 1.2–3.6 px (see Known limitations) |
 | `t-report` | 114 passed, 0 failed. For 2026 the report equals the Dashboard: 10,120 h, ¥32,384,000, plans 17,400 h and ¥52,200,000 |
+| `qa-report/t-home` | 27 passed, 0 failed |
 | `report-pptx/run.sh` | Six decks, each 5 slides; every one opens in PowerPoint, with 0 overflows, 0 shrunk boxes, and `validate.py` passing |
 
 ## Where the chart and export code lives
@@ -236,9 +239,10 @@ In October 2026 every page's text was raised one step, so the screen reads from 
   - #6 The business report page `/report` and its PowerPoint deck in the team's template.
   - #7 `/report` in larger text, headings and figures, for reading on a shared screen.
   - #8 Every other page one step larger, with bold titles (see Type scale).
+  - #9 The app opens on the business report, first in the sidebar. The Dashboard moved to `/dashboard`.
 - `db/migration_business_reports.sql` was run on the production Supabase on 2026-10-01. A read-only check confirmed the table, RLS, its 4 policies, the stamp trigger and both constraints.
 - The sample deck `OS設計チーム_事業状況報告_2026年9月28日.pptx` in the repo root is the template. It is untracked, and `*.pptx` is ignored. Its last slide holds a login, so never commit it, copy it or quote it.
-- The branches merged through #1–#7 are deleted. The older branches (`chore/cleanup`, `feat/ux-pass`, `feature/redesign`, `fix/export-input-and-race-bugs`, `fix/ux-and-architecture-repair`) predate this work; ask before touching them.
+- The branches merged through #1–#8 are deleted. The older branches (`chore/cleanup`, `feat/ux-pass`, `feature/redesign`, `fix/export-input-and-race-bugs`, `fix/ux-and-architecture-repair`) predate this work; ask before touching them.
 
 ## Known limitations and possible next steps
 

@@ -59,6 +59,9 @@ is on the report page and in section 1.
   14 px, section titles 20–22 px, and the large figures 28–36 px. The sizes are named once in
   `components/report/ReportParts.tsx`. The section grids follow the card's width (container
   queries), not the window's, because the sidebar narrows the cards from 768 px.
+- **The app opens on the report.** It is the first item in the sidebar, and `/` and
+  unknown addresses lead to `/report`. The Dashboard lives at `/dashboard`. The team asked
+  for this in October 2026: the report is the page they open first.
 - **Bilingual free text.** The first line of a text field is the main text, and any
   further lines are its translation, drawn smaller. The page says so beside the fields.
 - **The export is PowerPoint** (`pptxgenjs`, loaded only when exporting). Its headings

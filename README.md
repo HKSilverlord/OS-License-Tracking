@@ -13,7 +13,8 @@ revenue, achievement rate, capacity utilisation and — after subtracting CATIA 
 
 | Route | View | What it does |
 |---|---|---|
-| `/` | Dashboard | The year's revenue, licence cost and net revenue, plan vs actual, monthly charts |
+| `/report` | Business report | Where the app opens (`/` and unknown addresses lead here). The monthly status report (事業状況報告): figures computed like the Dashboard's, written parts admins keep per month, and a PowerPoint download. See [`docs/business-report.md`](docs/business-report.md) |
+| `/dashboard` | Dashboard | The year's revenue, licence cost and net revenue, plan vs actual, monthly charts |
 | `/total` | Cumulative hours | Running plan and actual hours for the year; months still to come shown as forecast |
 | `/monthly-plan-actual` | Monthly plan vs actual | Sales and working hours per month against plan and capacity |
 | `/yearly-data` | Annual data | Every project's hours month by month, with year totals |
@@ -21,7 +22,6 @@ revenue, achievement rate, capacity utilisation and — after subtracting CATIA 
 | `/tracking` | Project tracking | The editable grid: planned and actual hours per project per month |
 | `/catia-license` | CATIA licenses | Monthly cost and yearly revenue per licence; saves as you type |
 | `/period-management` | Periods | Create half-year periods and choose the projects tracked in each |
-| `/report` | Business report | The monthly status report (事業状況報告): figures computed like the Dashboard's, written parts admins keep per month, and a PowerPoint download. See [`docs/business-report.md`](docs/business-report.md) |
 | `/diagnostic` | Database repair (admins) | Counts what the database holds; links projects missing from their period |
 
 Access is role based: every signed-in user can read everything, only users with the
