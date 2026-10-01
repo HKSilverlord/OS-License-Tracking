@@ -25,7 +25,7 @@ export const Badge: React.FC<BadgeProps> = ({ tone = 'neutral', children, classN
   <span
     title={title}
     className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full font-medium ${
-      size === 'md' ? 'px-2.5 py-0.5 text-[13px] leading-5' : 'px-2 py-0.5 text-[11px] leading-4'
+      size === 'md' ? 'px-2.5 py-0.5 text-[13px] leading-5' : 'px-2 py-0.5 text-xs leading-4'
     } ${TONES[tone]} ${className}`}
   >
     {children}

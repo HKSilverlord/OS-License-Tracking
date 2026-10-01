@@ -39,7 +39,7 @@ interface ExportButtonProps {
 }
 
 const SEGMENT =
-  'inline-flex h-8 items-center gap-1.5 text-[13px] font-medium transition-colors duration-150 ' +
+  'inline-flex h-8 items-center gap-1.5 text-sm font-medium transition-colors duration-150 ' +
   'disabled:pointer-events-none disabled:opacity-50';
 
 /**

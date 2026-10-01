@@ -244,8 +244,8 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             onClick={() => dismiss(item.id)}
             className="pointer-events-auto flex w-full max-w-[26rem] cursor-pointer items-start gap-3 rounded-xl bg-white/95 py-3 pl-3.5 pr-2 shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/[0.07] backdrop-blur-xl animate-fade-up dark:bg-slate-800/95 dark:shadow-black/40 dark:ring-white/10"
           >
-            <Icon className={`mt-px h-[18px] w-[18px] shrink-0 ${KIND_ACCENT[item.kind]}`} />
-            <span className="flex-1 break-words text-sm leading-5 text-slate-800 dark:text-slate-100">
+            <Icon className={`mt-[3px] h-[18px] w-[18px] shrink-0 ${KIND_ACCENT[item.kind]}`} />
+            <span className="flex-1 break-words text-[15px] leading-6 text-slate-800 dark:text-slate-100">
               {item.message}
             </span>
             <button
@@ -284,12 +284,12 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           onKeyDown={handleDialogKeyDown}
           className="w-full rounded-t-2xl bg-white p-5 shadow-2xl shadow-slate-950/20 ring-1 ring-slate-900/5 animate-slide-in-up sm:max-w-sm sm:rounded-2xl sm:p-6 sm:animate-scale-in dark:bg-slate-900 dark:ring-white/10"
         >
-          <h2 id="toast-confirm-title" className="text-[17px] font-semibold leading-6 text-slate-900 dark:text-white">
+          <h2 id="toast-confirm-title" className="text-lg font-bold leading-7 text-slate-900 dark:text-white">
             {confirmOpts.title}
           </h2>
           <p
             id="toast-confirm-message"
-            className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600 dark:text-slate-300"
+            className="mt-2 whitespace-pre-line text-[15px] leading-6 text-slate-600 dark:text-slate-300"
           >
             {confirmOpts.message}
           </p>

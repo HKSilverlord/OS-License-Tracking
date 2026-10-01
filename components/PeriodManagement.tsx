@@ -98,7 +98,7 @@ const ProjectPicker: React.FC<ProjectPickerProps> = ({ projects, selected, onCha
 
   if (projects.length === 0 && !loading) {
     return (
-      <p className="rounded-xl bg-slate-50 px-4 py-5 text-center text-sm leading-6 text-slate-500 dark:bg-slate-800/50 dark:text-slate-400">
+      <p className="rounded-xl bg-slate-50 px-4 py-5 text-center text-[15px] leading-6 text-slate-500 dark:bg-slate-800/50 dark:text-slate-400">
         {t('periodManagement.noProjects', 'No projects yet. After creating this period, add them in Project Tracking.')}
       </p>
     );
@@ -124,7 +124,7 @@ const ProjectPicker: React.FC<ProjectPickerProps> = ({ projects, selected, onCha
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <p className="text-[13px] text-slate-500 tabular-nums dark:text-slate-400" aria-live="polite">
+        <p className="text-sm text-slate-500 tabular-nums dark:text-slate-400" aria-live="polite">
           {t('periodManagement.selectedCount', '{count} of {total} selected')
             .replace('{count}', String(selected.length))
             .replace('{total}', String(projects.length))}
@@ -151,7 +151,7 @@ const ProjectPicker: React.FC<ProjectPickerProps> = ({ projects, selected, onCha
             ))}
           </div>
         ) : visible.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+          <p className="px-4 py-8 text-center text-[15px] text-slate-500 dark:text-slate-400">
             {t('periodManagement.noMatch', 'No projects match “{query}”.').replace('{query}', query.trim())}
           </p>
         ) : (
@@ -171,11 +171,11 @@ const ProjectPicker: React.FC<ProjectPickerProps> = ({ projects, selected, onCha
                     />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-baseline gap-2">
-                        <span className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{project.name}</span>
-                        <span className="shrink-0 font-mono text-[11px] text-slate-500 dark:text-slate-400">{project.code}</span>
+                        <span className="truncate text-[15px] font-medium text-slate-900 dark:text-slate-100">{project.name}</span>
+                        <span className="shrink-0 font-mono text-xs text-slate-500 dark:text-slate-400">{project.code}</span>
                       </span>
                       {detail && (
-                        <span className="block truncate text-xs leading-5 text-slate-500 dark:text-slate-400">{detail}</span>
+                        <span className="block truncate text-[13px] leading-5 text-slate-500 dark:text-slate-400">{detail}</span>
                       )}
                     </span>
                   </label>
@@ -309,7 +309,7 @@ const PeriodEditor: React.FC<PeriodEditorProps> = ({
                 )}
               </Field>
               <div>
-                <p className="mb-1.5 text-[13px] font-medium text-slate-700 dark:text-slate-300">{t('half', 'Half')}</p>
+                <p className="mb-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">{t('half', 'Half')}</p>
                 <SegmentedControl<Half>
                   size="lg"
                   fullWidth
@@ -331,7 +331,7 @@ const PeriodEditor: React.FC<PeriodEditorProps> = ({
               </div>
             </div>
             {(!yearValid || alreadyExists) && (
-              <p className="mt-2 text-xs text-rose-600 dark:text-rose-400" role="alert">
+              <p className="mt-2 text-[13px] text-rose-600 dark:text-rose-400" role="alert">
                 {!yearValid
                   ? t('periodManagement.yearRange', 'Enter a year from {min} to {max}.')
                       .replace('{min}', String(MIN_YEAR))
@@ -357,7 +357,7 @@ const PeriodEditor: React.FC<PeriodEditorProps> = ({
         />
 
         {removedCount > 0 && (
-          <p className="text-[13px] leading-5 text-amber-700 dark:text-amber-400">
+          <p className="text-sm leading-5 text-amber-700 dark:text-amber-400">
             {plural(t, 'periodManagement.willRemove', removedCount, '{count} projects will be removed from this period, with the prices set for it.')}
           </p>
         )}
@@ -382,8 +382,8 @@ const HalfRow: React.FC<HalfRowProps> = ({ year, half, period, isAdmin, onEdit, 
 
   const name = (
     <span className="min-w-0 flex-1">
-      <span className="block text-sm font-semibold text-slate-900 dark:text-white">{half}</span>
-      <span className="block text-[13px] text-slate-500 dark:text-slate-400">{halfMonths(half, t)}</span>
+      <span className="block text-[15px] font-semibold text-slate-900 dark:text-white">{half}</span>
+      <span className="block text-sm text-slate-500 dark:text-slate-400">{halfMonths(half, t)}</span>
     </span>
   );
 
@@ -391,7 +391,7 @@ const HalfRow: React.FC<HalfRowProps> = ({ year, half, period, isAdmin, onEdit, 
     return (
       <li className="flex min-h-[64px] items-center gap-3 px-4 py-3 sm:px-5">
         {name}
-        <span className="text-[13px] text-slate-500 dark:text-slate-400">
+        <span className="text-sm text-slate-500 dark:text-slate-400">
           {t('periodManagement.notCreated', 'Not set up')}
         </span>
         {isAdmin && (
@@ -404,7 +404,7 @@ const HalfRow: React.FC<HalfRowProps> = ({ year, half, period, isAdmin, onEdit, 
   }
 
   const count = (
-    <span className="text-[13px] text-slate-600 tabular-nums dark:text-slate-300">
+    <span className="text-sm text-slate-600 tabular-nums dark:text-slate-300">
       {plural(t, 'periodManagement.projectCount', period.project_count, '{count} projects')}
     </span>
   );
@@ -638,7 +638,7 @@ export const PeriodManagement: React.FC = () => {
       <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
         {years.map(([year, halves]) => (
           <Card key={year} padding="none" className="overflow-hidden">
-            <h2 className="px-4 pb-2 pt-4 text-[15px] font-semibold tabular-nums text-slate-900 sm:px-5 dark:text-white">
+            <h2 className="px-4 pb-2 pt-4 text-lg font-bold tabular-nums text-slate-900 sm:px-5 dark:text-white">
               {year}
             </h2>
             <ul className="divide-y divide-slate-100 dark:divide-slate-800">

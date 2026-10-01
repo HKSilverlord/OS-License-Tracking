@@ -104,10 +104,10 @@ export const Auth: React.FC = () => {
         <div className="w-full max-w-[380px] animate-fade-up">
           <div className="mb-8 text-center">
             <AppIcon size={56} className="mx-auto mb-5 drop-shadow-[0_10px_24px_rgb(37_99_235/0.35)]" />
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
+            <h1 className="text-[28px] font-bold leading-9 tracking-tight text-slate-900 dark:text-white">
               {t('app.title', 'OS Manager')}
             </h1>
-            <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
+            <p className="mt-1.5 text-[15px] text-slate-500 dark:text-slate-400">
               {t('auth.welcome', 'Sign in to continue')}
             </p>
           </div>
@@ -117,9 +117,9 @@ export const Auth: React.FC = () => {
               {error && (
                 <div
                   role="alert"
-                  className="flex gap-2.5 rounded-xl bg-rose-50 px-3.5 py-3 text-sm leading-5 text-rose-700 animate-fade-in dark:bg-rose-500/10 dark:text-rose-300"
+                  className="flex gap-2.5 rounded-xl bg-rose-50 px-3.5 py-3 text-[15px] leading-6 text-rose-700 animate-fade-in dark:bg-rose-500/10 dark:text-rose-300"
                 >
-                  <AlertCircle className="mt-px h-4 w-4 shrink-0" aria-hidden="true" />
+                  <AlertCircle className="mt-1 h-4 w-4 shrink-0" aria-hidden="true" />
                   <p>{t(SIGN_IN_ERRORS[error][0], SIGN_IN_ERRORS[error][1])}</p>
                 </div>
               )}
@@ -195,13 +195,13 @@ export const Auth: React.FC = () => {
             </form>
           </div>
 
-          <p className="mx-auto mt-6 max-w-[320px] text-center text-[13px] leading-5 text-slate-500 dark:text-slate-400">
+          <p className="mx-auto mt-6 max-w-[320px] text-center text-sm leading-5 text-slate-500 dark:text-slate-400">
             {t('auth.adminHint', 'Accounts are created by an administrator. If you need access, ask yours.')}
           </p>
         </div>
       </main>
 
-      <p className="absolute inset-x-0 bottom-0 pb-6 text-center text-xs text-slate-500 dark:text-slate-400">
+      <p className="absolute inset-x-0 bottom-0 pb-6 text-center text-[13px] text-slate-500 dark:text-slate-400">
         {t('app.subtitle', 'Esuhai Group')}
       </p>
     </div>

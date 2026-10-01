@@ -57,7 +57,7 @@ export function SegmentedControl<T extends string>({
   };
 
   // lg sits level with a 40px text field in a form row.
-  const height = size === 'sm' ? 'h-7 text-xs' : size === 'lg' ? 'h-9 text-sm' : 'h-8 text-[13px]';
+  const height = size === 'sm' ? 'h-7 text-[13px]' : size === 'lg' ? 'h-9 text-[15px]' : 'h-8 text-sm';
 
   return (
     <div

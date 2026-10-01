@@ -62,8 +62,8 @@ export const CardHeader: React.FC<CardHeaderProps> = ({
   <div className={`flex flex-wrap items-start justify-between gap-x-4 gap-y-3 ${className}`}>
     <div className="min-w-0">
       <Heading
-        className={`font-semibold text-slate-900 dark:text-white ${
-          size === 'lg' ? 'text-xl leading-7 sm:text-[22px] sm:leading-8' : 'text-[15px] leading-6'
+        className={`font-bold text-slate-900 dark:text-white ${
+          size === 'lg' ? 'text-xl leading-7 sm:text-[22px] sm:leading-8' : 'text-lg leading-7'
         }`}
       >
         {title}
@@ -71,7 +71,7 @@ export const CardHeader: React.FC<CardHeaderProps> = ({
       {description && (
         <p
           className={`text-slate-500 dark:text-slate-400 ${
-            size === 'lg' ? 'mt-1 text-[15px] leading-6' : 'mt-0.5 text-[13px] leading-5'
+            size === 'lg' ? 'mt-1 text-[15px] leading-6' : 'mt-0.5 text-sm leading-5'
           }`}
         >
           {description}

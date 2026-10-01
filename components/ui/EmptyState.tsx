@@ -44,9 +44,9 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
         <div className={`mx-auto mb-4 grid h-12 w-12 place-items-center rounded-2xl ${iconTone}`}>
           <Icon className="h-6 w-6" aria-hidden="true" />
         </div>
-        <p className="text-[15px] font-semibold text-slate-900 dark:text-white">{title}</p>
+        <p className="text-lg font-bold leading-7 text-slate-900 dark:text-white">{title}</p>
         {description && (
-          <p className="mt-1.5 text-sm leading-6 text-slate-500 dark:text-slate-400">{description}</p>
+          <p className="mt-1.5 text-[15px] leading-6 text-slate-500 dark:text-slate-400">{description}</p>
         )}
         {actions && <div className="mt-5 flex flex-wrap items-center justify-center gap-2">{actions}</div>}
       </div>

@@ -51,7 +51,7 @@ const ICON_BUTTON =
 const RailTooltip: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <span
     aria-hidden="true"
-    className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 whitespace-nowrap rounded-md bg-slate-800 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-lg ring-1 ring-white/10 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+    className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 whitespace-nowrap rounded-md bg-slate-800 px-2 py-1 text-[13px] font-medium text-white opacity-0 shadow-lg ring-1 ring-white/10 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
   >
     {children}
   </span>
@@ -92,7 +92,7 @@ const NavItem: React.FC<{ item: NavItemDef; collapsed: boolean; onNavigate?: () 
           onNavigate?.();
         });
       }}
-      className={`group relative flex items-center rounded-lg text-sm font-medium transition-colors duration-150 ${
+      className={`group relative flex items-center rounded-lg text-[15px] font-medium transition-colors duration-150 ${
         collapsed ? 'mx-auto h-10 w-10 justify-center' : 'h-9 gap-3 px-2.5'
       } ${
         active
@@ -116,7 +116,7 @@ const Avatar: React.FC<{ email: string; size?: 'sm' | 'md' }> = ({ email, size =
   <span
     aria-hidden="true"
     className={`grid shrink-0 place-items-center rounded-full bg-gradient-to-b from-slate-400 to-slate-600 font-semibold text-white ${
-      size === 'md' ? 'h-10 w-10 text-base' : 'h-8 w-8 text-[13px]'
+      size === 'md' ? 'h-10 w-10 text-base' : 'h-8 w-8 text-sm'
     }`}
   >
     {email.charAt(0).toUpperCase() || '?'}
@@ -132,7 +132,7 @@ const AccountPanel: React.FC<{ account: AccountInfo; onDone: () => void }> = ({ 
       <div className="flex items-center gap-3 p-4">
         <Avatar email={account.email} size="md" />
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-slate-900 dark:text-white" title={account.email}>
+          <p className="truncate text-[15px] font-medium text-slate-900 dark:text-white" title={account.email}>
             {account.email}
           </p>
           <Badge tone={account.isAdmin ? 'blue' : 'neutral'} className="mt-1">
@@ -143,7 +143,7 @@ const AccountPanel: React.FC<{ account: AccountInfo; onDone: () => void }> = ({ 
 
       <div className="space-y-4 border-t border-slate-100 px-4 py-4 dark:border-slate-800">
         <div>
-          <p className="mb-2 text-xs font-medium text-slate-500 dark:text-slate-400">{t('theme.label', 'Appearance')}</p>
+          <p className="mb-2 text-[13px] font-medium text-slate-500 dark:text-slate-400">{t('theme.label', 'Appearance')}</p>
           <SegmentedControl<ThemePreference>
             fullWidth
             size="sm"
@@ -158,7 +158,7 @@ const AccountPanel: React.FC<{ account: AccountInfo; onDone: () => void }> = ({ 
           />
         </div>
         <div>
-          <p className="mb-2 text-xs font-medium text-slate-500 dark:text-slate-400">{t('language.label', 'Language')}</p>
+          <p className="mb-2 text-[13px] font-medium text-slate-500 dark:text-slate-400">{t('language.label', 'Language')}</p>
           <SegmentedControl<SupportedLanguage>
             fullWidth
             size="sm"
@@ -177,7 +177,7 @@ const AccountPanel: React.FC<{ account: AccountInfo; onDone: () => void }> = ({ 
             onDone();
             account.onSignOut();
           }}
-          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] text-slate-700 transition-colors hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[15px] text-slate-700 transition-colors hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
         >
           <LogOut className="h-4 w-4 text-slate-400" aria-hidden="true" />
           {t('nav.signOut', 'Sign out')}
@@ -231,8 +231,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex h-16 shrink-0 items-center gap-2.5 pl-4 pr-3">
           <AppIcon size={30} />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold leading-5 tracking-tight text-white">{t('app.title', 'OS Manager')}</p>
-            <p className="truncate text-xs leading-4 text-slate-400">{t('app.subtitle', 'Esuhai Group')}</p>
+            <p className="truncate text-sm font-bold leading-5 tracking-tight text-white">{t('app.title', 'OS Manager')}</p>
+            <p className="truncate text-[13px] leading-4 text-slate-400">{t('app.subtitle', 'Esuhai Group')}</p>
           </div>
           {variant === 'rail' ? (
             <button
@@ -267,7 +267,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {collapsed ? (
               index > 0 && <div className="mx-auto mb-4 h-px w-6 bg-white/10" aria-hidden="true" />
             ) : (
-              <p className="mb-1 px-2.5 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+              <p className="mb-1 px-2.5 text-xs font-medium uppercase tracking-wider text-slate-400">
                 {group.label}
               </p>
             )}

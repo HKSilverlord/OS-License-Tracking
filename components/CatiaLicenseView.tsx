@@ -74,15 +74,15 @@ const KIND_WIDTH =
 /* Where a year's label waits while its months scroll by: just past the frozen columns. */
 const YEAR_LABEL = 'sticky left-[180px] inline-block px-2 sm:left-[264px]';
 
-const HEAD = 'border-b border-slate-200 px-2 text-[12px] font-medium text-slate-500 dark:border-slate-800 dark:text-slate-400';
+const HEAD = 'border-b border-slate-200 px-2 text-[13px] font-medium text-slate-500 dark:border-slate-800 dark:text-slate-400';
 const OPAQUE_HEAD = 'bg-white dark:bg-slate-900';
 const ROW_END = 'border-b border-slate-100 dark:border-slate-800';
 const KIND_EDGE = 'border-r border-r-slate-200 dark:border-r-slate-800';
 const YEAR_EDGE = 'border-l border-l-slate-200 dark:border-l-slate-800';
-const NUM = 'h-9 px-2 text-[13px] tabular-nums';
+const NUM = 'h-9 px-2 text-sm tabular-nums';
 
 const CELL_INPUT =
-  'block h-8 w-full rounded-md border-0 bg-transparent px-2 text-[13px] tabular-nums text-slate-700 outline-none ' +
+  'block h-8 w-full rounded-md border-0 bg-transparent px-2 text-sm tabular-nums text-slate-700 outline-none ' +
   'transition-[background-color,box-shadow] duration-100 placeholder:text-slate-300 ' +
   'hover:bg-slate-100/70 focus:bg-white focus:ring-2 focus:ring-blue-500/50 ' +
   'aria-invalid:ring-2 aria-invalid:ring-rose-500/60! ' +
@@ -159,7 +159,7 @@ const FigureCell: React.FC<FigureCellProps> = ({
 
   if (!editable) {
     return (
-      <span title={title} className={`block px-2 text-[13px] leading-8 tabular-nums text-slate-700 dark:text-slate-200 ${alignClass}`}>
+      <span title={title} className={`block px-2 text-sm leading-8 tabular-nums text-slate-700 dark:text-slate-200 ${alignClass}`}>
         {shown ?? <Dash />}
       </span>
     );
@@ -220,7 +220,7 @@ const SyncState: React.FC<{
 
   if (status === 'loading' || status === 'saving') {
     return (
-      <span className="flex items-center gap-1.5 whitespace-nowrap text-[13px] text-slate-500 dark:text-slate-400">
+      <span className="flex items-center gap-1.5 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
         <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
         {status === 'loading' ? t('catia.syncing', 'Getting the latest figures…') : t('catia.saving', 'Saving…')}
       </span>
@@ -228,7 +228,7 @@ const SyncState: React.FC<{
   }
   if (status === 'error') {
     return (
-      <span className="flex items-center gap-1.5 text-[13px] font-medium text-amber-700 dark:text-amber-300">
+      <span className="flex items-center gap-1.5 text-sm font-medium text-amber-700 dark:text-amber-300">
         <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         <span title={error ?? undefined}>{t('catia.syncError', 'Not synced — showing the copy on this device')}</span>
         <Button variant="ghost" size="sm" onClick={onRetry}>
@@ -247,7 +247,7 @@ const SyncState: React.FC<{
   }
   if (justSaved) {
     return (
-      <span className="flex items-center gap-1 whitespace-nowrap text-[13px] font-medium text-emerald-600 animate-fade-in dark:text-emerald-400">
+      <span className="flex items-center gap-1 whitespace-nowrap text-sm font-medium text-emerald-600 animate-fade-in dark:text-emerald-400">
         <Check className="h-3.5 w-3.5" aria-hidden="true" />
         {t('tracker.autosaved', 'Saved')}
       </span>
@@ -452,10 +452,12 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
       actions={<YearControl />}
       maxWidth="full"
     >
-      {/* The year in three figures: what the licenses cost, what they earned, and the difference. */}
-      <Card padding="lg" className="animate-fade-up">
+      {/* The year in three figures: what the licenses cost, what they earned, and the difference.
+          The columns follow the card's width, not the window's: with the sidebar open, a
+          768 px window leaves the card too narrow for three yen figures side by side. */}
+      <Card padding="lg" className="@container animate-fade-up">
         {covered ? (
-          <div className="grid grid-cols-1 gap-x-8 gap-y-6 min-[560px]:grid-cols-3">
+          <div className="grid grid-cols-1 gap-x-8 gap-y-6 @[38rem]:grid-cols-3">
             <Metric
               size="lg"
               label={t('catia.metric.cost', 'Cost in {year}').replace('{year}', String(currentYear))}
@@ -479,7 +481,7 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
             />
           </div>
         ) : (
-          <p className="text-sm leading-6 text-slate-500 dark:text-slate-400">
+          <p className="text-[15px] leading-6 text-slate-500 dark:text-slate-400">
             {t(
               'catia.outOfRange',
               'The license sheet runs from September 2023 to December 2027, so it has nothing for {year}.',
@@ -493,7 +495,7 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
         className={`${cardClasses} overflow-hidden animate-fade-up [animation-delay:40ms]`}
       >
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-slate-100 px-4 py-3 dark:border-slate-800">
-          <p className="text-[13px] text-slate-500 dark:text-slate-400">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             {t('catia.unitNote', 'Figures in 10,000 JPY')}
             {isAdmin && (
               <span className="hidden sm:inline">
@@ -502,7 +504,7 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
               </span>
             )}
           </p>
-          <div className="ml-auto flex items-center gap-1.5">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
             <div aria-live="polite" className="flex items-center">
               <SyncState
                 status={syncStatus}
@@ -532,7 +534,7 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
         <div ref={scrollerRef} className="relative isolate scroll-pl-[180px] overflow-x-auto custom-scrollbar sm:scroll-pl-[264px]">
           <table id="catia-license-table" className="w-full min-w-max border-separate border-spacing-0">
             {/* On screen the page says what this is; an exported image has no page around it. */}
-            <caption hidden data-export-only className="caption-top px-3 pb-3 pt-1 text-left text-[15px] font-semibold text-slate-900 dark:text-white">
+            <caption hidden data-export-only className="caption-top px-3 pb-3 pt-1 text-left text-lg font-bold text-slate-900 dark:text-white">
               {t('nav.catiaLicense', 'CATIA licenses')}{' '}
               <span className="font-normal tabular-nums text-slate-500 dark:text-slate-400">
                 {SHEET[0].year}–{SHEET[SHEET.length - 1].year} · {t('catia.unitNote', 'Figures in 10,000 JPY')}
@@ -559,7 +561,7 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
                       scope="colgroup"
                       colSpan={y.months.length}
                       data-year-head={y.year}
-                      className={`h-9 px-0 text-left text-[13px] tabular-nums ${i > 0 ? YEAR_EDGE : ''} ${
+                      className={`h-9 px-0 text-left text-sm tabular-nums ${i > 0 ? YEAR_EDGE : ''} ${
                         selected
                           ? 'bg-blue-50/60 font-semibold text-blue-700 dark:bg-[color-mix(in_oklab,var(--color-slate-900),var(--color-blue-500)_7%)] dark:text-blue-300'
                           : 'font-medium text-slate-700 dark:text-slate-300'
@@ -604,14 +606,14 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
                       <th
                         scope="rowgroup"
                         rowSpan={totalRows.length}
-                        className={`${TOTALS} ${STICKY_LICENSE} ${LICENSE_WIDTH} border-b border-slate-200 px-3 py-2 text-left align-top text-[13px] font-semibold text-slate-900 dark:border-slate-700 dark:text-white`}
+                        className={`${TOTALS} ${STICKY_LICENSE} ${LICENSE_WIDTH} border-b border-slate-200 px-3 py-2 text-left align-top text-sm font-semibold text-slate-900 dark:border-slate-700 dark:text-white`}
                       >
                         {t('catia.allLicenses', 'All licenses')}
                       </th>
                     )}
                     <th
                       scope="row"
-                      className={`${TOTALS} ${STICKY_KIND} ${KIND_WIDTH} ${KIND_EDGE} ${edge} text-left text-[11px] sm:text-[12px] font-medium text-slate-500 dark:text-slate-400`}
+                      className={`${TOTALS} ${STICKY_KIND} ${KIND_WIDTH} ${KIND_EDGE} ${edge} text-left text-xs sm:text-[13px] font-medium text-slate-500 dark:text-slate-400`}
                     >
                       {row.label}
                     </th>
@@ -627,7 +629,7 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
                   <tr>
                     <th
                       colSpan={2 + SLOTS.length}
-                      className="border-b border-slate-200 px-0 pb-2 pt-5 text-left text-[12px] font-semibold text-slate-900 dark:border-slate-800 dark:text-white"
+                      className="border-b border-slate-200 px-0 pb-2 pt-5 text-left text-[15px] font-bold text-slate-900 dark:border-slate-800 dark:text-white"
                     >
                       <span className="sticky left-0 inline-block px-3">{groupLabel(group.key)}</span>
                     </th>
@@ -642,13 +644,13 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
                         <th
                           scope="rowgroup"
                           rowSpan={2}
-                          className={`${SURFACE} ${STICKY_LICENSE} ${LICENSE_WIDTH} ${ROW_END} px-3 py-2 text-left align-top text-[13px] font-medium text-slate-900 dark:text-white`}
+                          className={`${SURFACE} ${STICKY_LICENSE} ${LICENSE_WIDTH} ${ROW_END} px-3 py-2 text-left align-top text-sm font-medium text-slate-900 dark:text-white`}
                         >
                           {name}
                         </th>
                         <th
                           scope="row"
-                          className={`${SURFACE} ${STICKY_KIND} ${KIND_WIDTH} ${KIND_EDGE} text-left text-[11px] sm:text-[12px] font-normal text-slate-500 dark:text-slate-400`}
+                          className={`${SURFACE} ${STICKY_KIND} ${KIND_WIDTH} ${KIND_EDGE} text-left text-xs sm:text-[13px] font-normal text-slate-500 dark:text-slate-400`}
                         >
                           {costMonthLabel}
                         </th>
@@ -672,7 +674,7 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
                       <tr>
                         <th
                           scope="row"
-                          className={`${SURFACE} ${STICKY_KIND} ${KIND_WIDTH} ${KIND_EDGE} ${ROW_END} text-left text-[11px] sm:text-[12px] font-normal text-slate-500 dark:text-slate-400`}
+                          className={`${SURFACE} ${STICKY_KIND} ${KIND_WIDTH} ${KIND_EDGE} ${ROW_END} text-left text-xs sm:text-[13px] font-normal text-slate-500 dark:text-slate-400`}
                         >
                           {revenueYearLabel}
                         </th>

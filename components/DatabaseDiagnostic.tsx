@@ -47,15 +47,15 @@ const Finding: React.FC<{
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-4">
-          <span className="text-sm font-medium text-slate-900 dark:text-white">
+          <span className="text-[15px] font-medium text-slate-900 dark:text-white">
             {label}
             <span className="sr-only">: {ok ? t('diagnostic.ok', 'OK') : t('diagnostic.attention', 'Needs attention')}</span>
           </span>
           {value !== undefined && (
-            <span className="text-sm font-semibold tabular-nums text-slate-900 dark:text-white">{value}</span>
+            <span className="text-[15px] font-semibold tabular-nums text-slate-900 dark:text-white">{value}</span>
           )}
         </div>
-        {children && <div className="mt-0.5 text-[13px] leading-5 text-slate-500 dark:text-slate-400">{children}</div>}
+        {children && <div className="mt-0.5 text-sm leading-5 text-slate-500 dark:text-slate-400">{children}</div>}
       </div>
     </li>
   );
@@ -64,11 +64,11 @@ const Finding: React.FC<{
 /** Error text as the database wrote it, so it can be searched for or passed on. */
 const ErrorList: React.FC<{ title: string; errors: readonly string[] }> = ({ title, errors }) => (
   <div role="alert" className="rounded-xl bg-rose-50 px-4 py-3 dark:bg-rose-500/10">
-    <p className="flex items-center gap-1.5 text-[13px] font-medium text-rose-700 dark:text-rose-300">
+    <p className="flex items-center gap-1.5 text-sm font-medium text-rose-700 dark:text-rose-300">
       <XCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
       {title}
     </p>
-    <ul className="mt-1.5 space-y-1 break-words pl-[22px] font-mono text-xs leading-5 text-rose-600 dark:text-rose-400">
+    <ul className="mt-1.5 space-y-1 break-words pl-[22px] font-mono text-[13px] leading-5 text-rose-600 dark:text-rose-400">
       {errors.map((error, i) => (
         <li key={i}>{error}</li>
       ))}
@@ -276,7 +276,7 @@ export const DatabaseDiagnostic: React.FC = () => {
     if (!repair) return null;
     if (repair.totalPeriods === 0 && repair.errors.length === 0) {
       return (
-        <p className="text-[13px] text-amber-700 dark:text-amber-300">
+        <p className="text-sm text-amber-700 dark:text-amber-300">
           {t('diagnostic.repair.noPeriods', 'There is no period to link to. Create one under Periods first.')}
           {openPeriods()}
         </p>
@@ -287,14 +287,14 @@ export const DatabaseDiagnostic: React.FC = () => {
     }
     if (repair.linksCreated > 0) {
       return (
-        <p className="flex items-center gap-1.5 text-[13px] font-medium text-emerald-700 dark:text-emerald-400">
+        <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-400">
           <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
           {count('diagnostic.repair.created', repair.linksCreated, 'Linked {count} projects to their periods.')}
         </p>
       );
     }
     return (
-      <p className="flex items-center gap-1.5 text-[13px] text-slate-600 dark:text-slate-300">
+      <p className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
         <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500 dark:text-emerald-400" aria-hidden="true" />
         {t('diagnostic.repair.nothing', 'Nothing to repair: every project is linked to at least one period.')}
       </p>
@@ -355,7 +355,7 @@ export const DatabaseDiagnostic: React.FC = () => {
             )}
           />
           {health && periodLabels.length === 0 ? (
-            <p className="mt-4 text-[13px] text-slate-500 dark:text-slate-400">
+            <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
               {t('diagnostic.query.needPeriods', 'There is nothing to query until a period exists.')}
             </p>
           ) : (
@@ -395,7 +395,7 @@ export const DatabaseDiagnostic: React.FC = () => {
                     {queryTest.tracking.success ? (
                       count('diagnostic.query.projects', queryTest.tracking.data?.length ?? 0, '{count} projects')
                     ) : (
-                      <span className="font-mono text-xs text-rose-600 dark:text-rose-400">{queryTest.tracking.error}</span>
+                      <span className="font-mono text-[13px] text-rose-600 dark:text-rose-400">{queryTest.tracking.error}</span>
                     )}
                   </Finding>
                   <Finding ok={queryTest.yearly.success} label={`${t('nav.yearlyData', 'Annual data')} · ${queryTest.year}`}>
@@ -406,7 +406,7 @@ export const DatabaseDiagnostic: React.FC = () => {
                         count('diagnostic.query.records', queryTest.yearly.records?.length ?? 0, '{count} monthly records'),
                       ].join(' · ')
                     ) : (
-                      <span className="font-mono text-xs text-rose-600 dark:text-rose-400">{queryTest.yearly.error}</span>
+                      <span className="font-mono text-[13px] text-rose-600 dark:text-rose-400">{queryTest.yearly.error}</span>
                     )}
                   </Finding>
                 </ul>

@@ -123,7 +123,7 @@ const TOOLTIP_STYLE = {
     borderRadius: '10px',
     border: 'none',
     boxShadow: '0 8px 24px rgba(15, 23, 42, 0.18)',
-    fontSize: '12px',
+    fontSize: '14px',
   },
   itemStyle: { color: '#fff' },
   labelStyle: { color: '#fff', fontWeight: 600 },
@@ -163,11 +163,11 @@ const Assumption: React.FC<{
   onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
 }> = ({ label, hint, value, display, prefix, suffix, editable, onChange }) => (
   <div className="min-w-0">
-    <dt className="text-[13px] leading-5 text-slate-500 dark:text-slate-400">{label}</dt>
+    <dt className="text-sm leading-5 text-slate-500 dark:text-slate-400">{label}</dt>
     <dd className="mt-1.5">
       {editable ? (
         <div className="flex items-center gap-2">
-          {prefix && <span className="shrink-0 text-[13px] text-slate-500 dark:text-slate-400">{prefix}</span>}
+          {prefix && <span className="shrink-0 text-sm text-slate-500 dark:text-slate-400">{prefix}</span>}
           <Input
             type="number"
             inputMode="decimal"
@@ -178,16 +178,16 @@ const Assumption: React.FC<{
             aria-label={label}
             className="min-w-0 text-right tabular-nums no-spinner"
           />
-          {suffix && <span className="shrink-0 text-[13px] text-slate-500 dark:text-slate-400">{suffix}</span>}
+          {suffix && <span className="shrink-0 text-sm text-slate-500 dark:text-slate-400">{suffix}</span>}
         </div>
       ) : (
-        <p className="flex h-8 items-center gap-1.5 text-[15px] font-semibold tabular-nums text-slate-900 dark:text-white">
-          {prefix && <span className="text-[13px] font-normal text-slate-500 dark:text-slate-400">{prefix}</span>}
+        <p className="flex h-8 items-center gap-1.5 text-[17px] font-semibold tabular-nums text-slate-900 dark:text-white">
+          {prefix && <span className="text-sm font-normal text-slate-500 dark:text-slate-400">{prefix}</span>}
           {display}
-          {suffix && <span className="text-[13px] font-normal text-slate-500 dark:text-slate-400">{suffix}</span>}
+          {suffix && <span className="text-sm font-normal text-slate-500 dark:text-slate-400">{suffix}</span>}
         </p>
       )}
-      {hint && <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{hint}</p>}
+      {hint && <p className="mt-1 text-[13px] leading-5 text-slate-500 dark:text-slate-400">{hint}</p>}
     </dd>
   </div>
 );
@@ -520,7 +520,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
       </Card>
 
       {/* Plan against actual for the three measures that matter. */}
-      <Card id="section-kpi-summary" padding="lg" className="animate-fade-up [animation-delay:40ms]">
+      <Card id="section-kpi-summary" padding="lg" className="@container animate-fade-up [animation-delay:40ms]">
         <CardHeader
           title={<WithYear year={currentYear}>{t('dashboard.planActual.title', 'Plan vs actual')}</WithYear>}
           description={t('dashboard.planActual.desc', 'Where the year stands against its plan')}
@@ -535,10 +535,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
           }
         />
 
-        {/* Desktop: a table, read across. */}
-        <table className="mt-5 hidden w-full text-sm sm:table">
+        {/* Wide card: a table, read across. It needs about 490 px, so it follows the
+            card's width; with the sidebar open, a 768 px window is too narrow for it. */}
+        <table className="mt-5 hidden w-full text-[15px] @[40rem]:table">
           <thead>
-            <tr className="border-b border-slate-200 text-left text-[12px] font-medium text-slate-500 dark:border-slate-800 dark:text-slate-400">
+            <tr className="border-b border-slate-200 text-left text-[13px] font-medium text-slate-500 dark:border-slate-800 dark:text-slate-400">
               <th scope="col" className="w-[22%] py-2.5 pr-4 font-medium"><span className="sr-only">{t('dashboard.planActual.measure', 'Measure')}</span></th>
               <th scope="col" className="py-2.5 pr-4 text-right font-medium">{planShort}</th>
               <th scope="col" className="py-2.5 pr-4 text-right font-medium">{actualShort}</th>
@@ -551,15 +552,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
               <tr key={row.key}>
                 <th scope="row" className="py-3.5 pr-4 text-left align-top font-medium text-slate-900 dark:text-white">
                   {row.label}
-                  {row.hint && <span className="block text-xs font-normal text-slate-500 dark:text-slate-400">{row.hint}</span>}
+                  {row.hint && <span className="block text-[13px] font-normal text-slate-500 dark:text-slate-400">{row.hint}</span>}
                 </th>
                 <td className="py-3.5 pr-4 text-right align-top tabular-nums text-slate-600 dark:text-slate-300">
                   {row.format(row.plan)}
-                  {row.man && <span className="block text-xs text-slate-500 dark:text-slate-400">{toMan(row.plan)}</span>}
+                  {row.man && <span className="block text-[13px] text-slate-500 dark:text-slate-400">{toMan(row.plan)}</span>}
                 </td>
                 <td className="py-3.5 pr-4 text-right align-top font-semibold tabular-nums text-slate-900 dark:text-white">
                   {row.format(row.actual)}
-                  {row.man && <span className="block text-xs font-normal text-slate-500 dark:text-slate-400">{toMan(row.actual)}</span>}
+                  {row.man && <span className="block text-[13px] font-normal text-slate-500 dark:text-slate-400">{toMan(row.actual)}</span>}
                 </td>
                 <td className={`py-3.5 pr-4 text-right align-top font-medium tabular-nums ${varianceTone(row.delta)}`}>
                   {row.variance.arrow && <span className="mr-0.5" title={arrowHint}>{row.variance.arrow}</span>}
@@ -582,38 +583,38 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
           </tbody>
         </table>
 
-        {/* Phone: one block per measure, read down. */}
-        <div className="mt-4 divide-y divide-slate-100 sm:hidden dark:divide-slate-800">
+        {/* Narrow card: one block per measure, read down. */}
+        <div className="mt-4 divide-y divide-slate-100 @[40rem]:hidden dark:divide-slate-800">
           {comparison.map(row => (
             <div key={row.key} className="py-4 first:pt-1 last:pb-0">
               <div className="flex items-baseline justify-between gap-3">
                 <p className="font-medium text-slate-900 dark:text-white">{row.label}</p>
-                <p className={`text-sm font-medium tabular-nums ${varianceTone(row.delta)}`}>
+                <p className={`text-[15px] font-medium tabular-nums ${varianceTone(row.delta)}`}>
                   {row.variance.arrow && <span className="mr-0.5" title={arrowHint}>{row.variance.arrow}</span>}
                   {row.variance.text}
                 </p>
               </div>
-              <dl className="mt-2 grid grid-cols-2 gap-3 text-sm">
+              <dl className="mt-2 grid grid-cols-2 gap-3 text-[15px]">
                 <div>
-                  <dt className="text-xs text-slate-500 dark:text-slate-400">{planShort}</dt>
+                  <dt className="text-[13px] text-slate-500 dark:text-slate-400">{planShort}</dt>
                   <dd className="tabular-nums text-slate-600 dark:text-slate-300">{row.format(row.plan)}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-slate-500 dark:text-slate-400">{actualShort}</dt>
+                  <dt className="text-[13px] text-slate-500 dark:text-slate-400">{actualShort}</dt>
                   <dd className="font-semibold tabular-nums text-slate-900 dark:text-white">{row.format(row.actual)}</dd>
                 </div>
               </dl>
               {row.achievement !== null && (
                 <div className="mt-3 flex items-center gap-3">
                   <Meter value={row.achievement} label={t('dashboard.kpi.achievementLabel', 'Achievement')} className="flex-1" />
-                  <span className="text-sm font-medium tabular-nums text-slate-900 dark:text-white">{fmtPercent(row.achievement)}</span>
+                  <span className="text-[15px] font-medium tabular-nums text-slate-900 dark:text-white">{fmtPercent(row.achievement)}</span>
                 </div>
               )}
             </div>
           ))}
         </div>
 
-        {showsArrow && <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">{arrowHint}</p>}
+        {showsArrow && <p className="mt-4 text-[13px] text-slate-500 dark:text-slate-400">{arrowHint}</p>}
       </Card>
 
       {/* Charts. Each card is its own export, title and year included. */}
@@ -648,7 +649,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={AXIS_TICK} />
                 <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} tickFormatter={(val: number) => `${nf(Math.round(val / 10000))}${manYen}`} />
                 <Tooltip formatter={val => (typeof val === 'number' ? fmt(val) : '–')} cursor={{ fill: 'rgba(148,163,184,0.12)' }} {...TOOLTIP_STYLE} />
-                <Legend iconType="circle" iconSize={8} itemSorter={seriesRank} formatter={legendText} wrapperStyle={{ fontSize: '12px', color: CHART_PALETTE.labelNeutral }} />
+                <Legend iconType="circle" iconSize={8} itemSorter={seriesRank} formatter={legendText} wrapperStyle={{ fontSize: '13px', color: CHART_PALETTE.labelNeutral }} />
                 <Bar dataKey="plannedRevenue" name={planShort} isAnimationActive={seriesAnimating} fill={chartColors.planRevenue} radius={[4, 4, 0, 0]}>
                   {roomForBarLabels && (
                     <LabelList dataKey="plannedRevenue" position="top" formatter={manLabel} fontSize={10} fill={chartColors.planRevenue} />
@@ -700,7 +701,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={AXIS_TICK} />
                 <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} tickFormatter={(val: number) => `${nf(Math.round(val / 10000))}${manYen}`} />
                 <Tooltip formatter={val => (typeof val === 'number' ? fmt(val) : '–')} {...TOOLTIP_STYLE} />
-                <Legend iconType="circle" iconSize={8} itemSorter={seriesRank} formatter={legendText} wrapperStyle={{ fontSize: '12px', color: CHART_PALETTE.labelNeutral }} />
+                <Legend iconType="circle" iconSize={8} itemSorter={seriesRank} formatter={legendText} wrapperStyle={{ fontSize: '13px', color: CHART_PALETTE.labelNeutral }} />
                 <Area
                   type="monotone"
                   dataKey="accActualRevenue"
@@ -776,10 +777,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
         </div>
 
         <div className="mt-7 border-t border-slate-100 pt-5 dark:border-slate-800">
-          <h3 className="text-[13px] font-semibold text-slate-900 dark:text-white">
+          <h3 className="text-[15px] font-bold text-slate-900 dark:text-white">
             {t('dashboard.assumptions.title', 'Settings')}
           </h3>
-          <p className="mt-0.5 text-xs leading-5 text-slate-500 dark:text-slate-400">
+          <p className="mt-0.5 text-[13px] leading-5 text-slate-500 dark:text-slate-400">
             {isAdmin
               ? t('dashboard.assumptions.descAdmin', 'Shared with everyone. Changes save as you type.')
               : t('dashboard.assumptions.descViewer', 'Set by an administrator.')}

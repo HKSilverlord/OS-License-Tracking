@@ -70,7 +70,7 @@ const MonthControl: React.FC<{
       className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white pl-3 shadow-sm shadow-slate-900/[0.04] focus-within:ring-2 focus-within:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:shadow-none"
       title={label}
     >
-      <span className="text-[13px] text-slate-500 dark:text-slate-400">{t('report.monthShort', 'Month')}</span>
+      <span className="text-sm text-slate-500 dark:text-slate-400">{t('report.monthShort', 'Month')}</span>
       <select
         value={month}
         disabled={disabled}
@@ -79,7 +79,7 @@ const MonthControl: React.FC<{
           const next = Number.parseInt(event.target.value, 10);
           if (!Number.isNaN(next)) onChange(next);
         }}
-        className="h-full appearance-none rounded-r-lg bg-transparent pr-3 text-sm font-semibold tabular-nums text-slate-900 outline-none disabled:opacity-50 dark:text-white"
+        className="h-full appearance-none rounded-r-lg bg-transparent pr-3 text-[15px] font-semibold tabular-nums text-slate-900 outline-none disabled:opacity-50 dark:text-white"
       >
         {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
           <option key={m} value={m}>{f.monthName(m)}</option>
@@ -470,7 +470,7 @@ export const BusinessReportView: React.FC<BusinessReportViewProps> = ({ currentY
         <p>
           {t('report.missing.body', 'The business_reports table does not exist. Run {file} in the Supabase SQL editor, then reload this page. Every figure below is already live.')
             .split('{file}')
-            .flatMap((part, i) => (i === 0 ? [part] : [<code key={i} className="rounded bg-amber-100 px-1 py-0.5 text-[13px] dark:bg-amber-500/20">{REPORT_MIGRATION_FILE}</code>, part]))}
+            .flatMap((part, i) => (i === 0 ? [part] : [<code key={i} className="rounded bg-amber-100 px-1 py-0.5 text-sm dark:bg-amber-500/20">{REPORT_MIGRATION_FILE}</code>, part]))}
         </p>
       </Notice>,
     );

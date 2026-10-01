@@ -61,8 +61,8 @@ interface MetricProps {
 }
 
 const SIZE = {
-  md: { label: 'text-[13px] leading-5', value: 'text-[22px] leading-8', sub: 'text-[13px] leading-5', footnote: 'text-xs leading-5' },
-  lg: { label: 'text-[13px] leading-5', value: 'text-[26px] leading-8 sm:text-[30px] sm:leading-9', sub: 'text-[13px] leading-5', footnote: 'text-xs leading-5' },
+  md: { label: 'text-sm leading-5', value: 'text-[28px] leading-9', sub: 'text-sm leading-5', footnote: 'text-[13px] leading-5' },
+  lg: { label: 'text-sm leading-5', value: 'text-[28px] leading-9 sm:text-[32px] sm:leading-10', sub: 'text-sm leading-5', footnote: 'text-[13px] leading-5' },
   xl: { label: 'text-sm leading-5', value: 'text-[30px] leading-9', sub: 'text-sm leading-6', footnote: 'text-[13px] leading-5' },
 } as const;
 
