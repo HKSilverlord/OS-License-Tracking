@@ -13,7 +13,11 @@ import {
   BilingualInput,
   CountField,
   CountInput,
+  fieldText,
   ItemControls,
+  itemTitle,
+  keyText,
+  labelText,
   PointsEditor,
   ReportSection,
   growClasses,
@@ -56,12 +60,11 @@ const CustomerTable: React.FC<{
       aria-label={`${t('report.customers.status', 'Status')}: ${c.name}`}
       placeholder={t('report.edit.placeholder', 'Main text\nTranslation (optional)')}
       onChange={event => setNote(c.projectId, { status: cleanInput(event) })}
-      className={growClasses}
+      className={`${growClasses} ${fieldText}`}
     />
   );
   const partsField = (c: ReportCustomerFigures, note: ReportCustomerNote) => (
     <CountField
-      controlSize="sm"
       value={note.parts}
       max={REPORT_COUNT_MAX.parts}
       ariaLabel={`${t('report.customers.parts', 'Parts')}: ${c.name}`}
@@ -69,20 +72,20 @@ const CustomerTable: React.FC<{
     />
   );
 
-  // Read, the table fits from a small tablet up. Edited, each row also holds a
-  // status field, which needs the room of a wide card: until then, the list.
+  // Read, the table fits once the section is 42rem wide. Edited, each row also
+  // holds a status field, which needs the room of a wide card: until then, the list.
   return (
     <div className="@container">
       {/* Desktop: a table, read across. */}
-      <div className={onEdit ? 'hidden @3xl:block' : 'hidden sm:block'}>
-        <table className="w-full text-sm" data-report="customers">
+      <div className={onEdit ? 'hidden @3xl:block' : 'hidden @2xl:block'}>
+        <table className="w-full text-base" data-report="customers">
           <thead>
-            <tr className="border-b border-slate-200 text-left text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+            <tr className="border-b border-slate-200 text-left text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
               <th scope="col" className="w-[24%] py-2 pr-4 font-medium">{t('report.customers.customer', 'Customer')}</th>
-              <th scope="col" className="py-2 pr-4 text-right font-medium">{t('report.customers.rate', 'Hourly rate')}</th>
-              <th scope="col" className="py-2 pr-4 text-right font-medium">{t('report.results.hours', 'Hours')}</th>
+              <th scope="col" className="whitespace-nowrap py-2 pr-4 text-right font-medium">{t('report.customers.rate', 'Hourly rate')}</th>
+              <th scope="col" className="whitespace-nowrap py-2 pr-4 text-right font-medium">{t('report.results.hours', 'Hours')}</th>
               {written && <th scope="col" className="py-2 pr-4 font-medium">{t('report.customers.status', 'Status')}</th>}
-              {written && <th scope="col" className="w-24 py-2 text-right font-medium">{t('report.customers.parts', 'Parts')}</th>}
+              {written && <th scope="col" className={`${onEdit ? 'w-28' : 'w-24'} whitespace-nowrap py-2 text-right font-medium`}>{t('report.customers.parts', 'Parts')}</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -117,27 +120,27 @@ const CustomerTable: React.FC<{
       </div>
 
       {/* Phone: one block per customer, read down. */}
-      <ul className={`divide-y divide-slate-100 dark:divide-slate-800 ${onEdit ? '@3xl:hidden' : 'sm:hidden'}`}>
+      <ul className={`divide-y divide-slate-100 dark:divide-slate-800 ${onEdit ? '@3xl:hidden' : '@2xl:hidden'}`}>
         {customers.map(c => {
           const note = notes[c.projectId] ?? EMPTY_NOTE;
           return (
             <li key={c.projectId} className="py-3 first:pt-0" data-project={c.projectId}>
               <div className="flex items-baseline justify-between gap-3">
-                <p className={`min-w-0 font-medium text-slate-900 dark:text-white ${wrapAnywhere}`}>{c.name}</p>
-                <p className="shrink-0 text-sm tabular-nums text-slate-700 dark:text-slate-200">{rate(c)}</p>
+                <p className={`min-w-0 text-base font-medium text-slate-900 dark:text-white ${wrapAnywhere}`}>{c.name}</p>
+                <p className="shrink-0 text-base tabular-nums text-slate-700 dark:text-slate-200">{rate(c)}</p>
               </div>
-              <p className="mt-0.5 text-xs tabular-nums text-slate-500 dark:text-slate-400">
+              <p className="mt-0.5 text-sm tabular-nums text-slate-500 dark:text-slate-400">
                 {c.hoursActual > 0 ? f.hours(c.hoursActual) : '—'}
                 {written && !onEdit && note.parts !== null && <> · {parts(note.parts)}</>}
               </p>
               {onEdit ? (
-                <div className="mt-2 grid grid-cols-[minmax(0,1fr)_5.5rem] gap-2">
+                <div className="mt-2 grid grid-cols-[minmax(0,1fr)_6rem] gap-2">
                   <div className="min-w-0">
-                    <p className="mb-1 text-xs text-slate-500 dark:text-slate-400" aria-hidden="true">{t('report.customers.status', 'Status')}</p>
+                    <p className="mb-1 text-sm text-slate-500 dark:text-slate-400" aria-hidden="true">{t('report.customers.status', 'Status')}</p>
                     {statusField(c, note)}
                   </div>
                   <div>
-                    <p className="mb-1 text-xs text-slate-500 dark:text-slate-400" aria-hidden="true">{t('report.customers.parts', 'Parts')}</p>
+                    <p className="mb-1 text-sm text-slate-500 dark:text-slate-400" aria-hidden="true">{t('report.customers.parts', 'Parts')}</p>
                     {partsField(c, note)}
                   </div>
                 </div>
@@ -157,32 +160,32 @@ const FocusProjectCard: React.FC<{ project: ReportFocusProject; index: number }>
   const { t } = useLanguage();
   const f = useReportFormat();
   return (
-    <div className={`${insetClasses} min-w-0 p-4`}>
+    <div className={`${insetClasses} min-w-0 p-5`}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <p className={`min-w-0 text-[15px] font-semibold text-slate-900 dark:text-white ${wrapAnywhere}`}>
+        <p className={`min-w-0 ${itemTitle} ${wrapAnywhere}`}>
           <span className="mr-1.5 tabular-nums text-slate-500 dark:text-slate-400">{index + 1}.</span>
           {project.name || t('report.customers.unnamed', 'Untitled project')}
         </p>
-        {project.isNew && <Badge tone="neutral">{t('report.customers.newCustomer', 'New customer')}</Badge>}
+        {project.isNew && <Badge size="md" tone="neutral">{t('report.customers.newCustomer', 'New customer')}</Badge>}
         {project.stage && (
-          <Badge tone="neutral" className="max-w-full" title={project.stage}>
+          <Badge size="md" tone="neutral" className="max-w-full" title={project.stage}>
             <span className="min-w-0 truncate">{project.stage}</span>
           </Badge>
         )}
       </div>
       {project.parts !== null && (
-        <p className="mt-2 text-[13px] text-slate-500 dark:text-slate-400">
+        <p className="mt-2 text-[15px] text-slate-500 dark:text-slate-400">
           {t('report.customers.scope', 'Current scope')}{' '}
-          <span className="text-[15px] font-semibold tabular-nums text-slate-900 dark:text-white">
+          <span className="text-xl font-semibold tabular-nums text-slate-900 dark:text-white">
             {t('report.customers.partsCount', '{count} parts').replace('{count}', f.count(project.parts))}
           </span>
         </p>
       )}
       {project.points.length > 0 && (
-        <ol className="mt-3 space-y-2">
+        <ol className="mt-3 space-y-2.5">
           {project.points.map((point, i) => (
             <li key={i} className="flex gap-2">
-              <span className="mt-px shrink-0 text-sm text-slate-500 dark:text-slate-400" aria-hidden="true">{circled(i)}</span>
+              <span className="shrink-0 text-base leading-7 text-slate-500 dark:text-slate-400" aria-hidden="true">{circled(i)}</span>
               <Bilingual text={point} empty={null} />
             </li>
           ))}
@@ -216,17 +219,17 @@ const FocusProjectEditor: React.FC<{
   return (
     <div className={`${insetClasses} space-y-4 p-4`}>
       <div className="flex items-center justify-between gap-2">
-        <p className="min-w-0 truncate text-[13px] font-semibold text-slate-900 dark:text-white" title={name || undefined}>
+        <p className="min-w-0 truncate text-[15px] font-semibold text-slate-900 dark:text-white" title={name || undefined}>
           <span className="mr-1.5 tabular-nums text-slate-500 dark:text-slate-400">{index + 1}.</span>
           {name || item}
         </p>
         <ItemControls index={index} length={length} itemLabel={label} onMove={onMove} onRemove={onRemove} />
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 @lg:grid-cols-2">
         <TextInput label={nameLabel} ariaLabel={fieldName(item, nameLabel)} value={project.name} onChange={next => onChange({ ...project, name: next })} />
         <TextInput label={stageLabel} ariaLabel={fieldName(item, stageLabel)} value={project.stage} placeholder={t('report.customers.stageHint', 'e.g. In progress')} onChange={stage => onChange({ ...project, stage })} />
         <CountInput label={partsLabel} ariaLabel={fieldName(item, partsLabel)} value={project.parts} max={REPORT_COUNT_MAX.parts} onChange={parts => onChange({ ...project, parts })} />
-        <label className="flex items-center gap-2 self-end pb-2 text-sm text-slate-700 dark:text-slate-300">
+        <label className="flex items-center gap-2 self-end pb-2.5 text-[15px] text-slate-700 dark:text-slate-300">
           <input
             type="checkbox"
             checked={project.isNew}
@@ -267,7 +270,7 @@ export const CustomersSection: React.FC<ReportSectionProps> = ({ figures, conten
     >
       <SubHeading>{t('report.customers.ratesTitle', 'Customers and rates')}</SubHeading>
       {customers.length === 0 ? (
-        <p className="text-sm text-slate-500 dark:text-slate-400">{t('report.results.noCustomerHours', 'No customer has actual hours in these months.')}</p>
+        <p className="text-[15px] text-slate-500 dark:text-slate-400">{t('report.results.noCustomerHours', 'No customer has actual hours in these months.')}</p>
       ) : (
         <CustomerTable customers={customers} notes={content.customers} onEdit={onEdit} written={written || Boolean(onEdit)} />
       )}
@@ -313,7 +316,7 @@ export const CustomersSection: React.FC<ReportSectionProps> = ({ figures, conten
         ) : content.focusProjects.length === 0 ? (
           <Bilingual text="" />
         ) : (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 @xl:grid-cols-2">
             {content.focusProjects.map((project, i) => (
               <FocusProjectCard key={i} project={project} index={i} />
             ))}
@@ -329,9 +332,9 @@ export const CustomersSection: React.FC<ReportSectionProps> = ({ figures, conten
             onChange={policy => onEdit(c => ({ ...c, policy }))}
           />
         ) : (
-          <div className="border-l-2 border-slate-300 pl-4 dark:border-slate-600">
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{t('report.customers.policy', 'Policy')}</p>
-            <Bilingual text={content.policy} className="mt-0.5" mainClassName="text-sm font-medium leading-6 text-slate-900 dark:text-white" />
+          <div className="border-l-[3px] border-slate-300 pl-4 dark:border-slate-600">
+            <p className={`font-medium ${labelText}`}>{t('report.customers.policy', 'Policy')}</p>
+            <Bilingual text={content.policy} className="mt-1" mainClassName={keyText} />
           </div>
         )}
       </div>

@@ -101,7 +101,7 @@ const Notice: React.FC<{
     <div
       role={tone === 'warning' ? 'alert' : 'status'}
       data-notice={testId}
-      className={`flex flex-wrap items-start gap-x-3 gap-y-2 rounded-xl border px-4 py-3 text-sm leading-6 animate-fade-up ${
+      className={`flex flex-wrap items-start gap-x-3 gap-y-2 rounded-xl border px-4 py-3 text-[15px] leading-6 animate-fade-up ${
         tone === 'warning'
           ? 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100'
           : 'border-slate-200 bg-white text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200'
@@ -126,7 +126,7 @@ const ReportSkeleton: React.FC = () => (
         {[0, 1, 2].map(i => (
           <div key={i} className="space-y-2">
             <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-6 w-28" />
+            <Skeleton className="h-9 w-36" />
           </div>
         ))}
       </div>
@@ -137,7 +137,7 @@ const ReportSkeleton: React.FC = () => (
         {[0, 1, 2, 3].map(i => (
           <div key={i} className="space-y-2">
             <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-8 w-32" />
+            <Skeleton className="h-9 w-36" />
           </div>
         ))}
       </div>
@@ -340,6 +340,8 @@ export const BusinessReportView: React.FC<BusinessReportViewProps> = ({ currentY
 
   const header = {
     title: t('nav.report', 'Business report'),
+    // The report is read on a shared screen: its sections have large headings, and the title stays above them.
+    titleSize: 'lg' as const,
     description: (
       <>
         {t('report.header.desc', 'The monthly business report: results, customers, people and next actions')}

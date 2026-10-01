@@ -155,6 +155,9 @@ Expected results at PR #6. The counts assume the clock is in September 2026:
     - `normalizeReportContent` repairs partial JSON, strips control characters and caps actions at three.
   - `hooks/useBusinessReport.ts`: loads the figures and content. It reads periods once, caches the past years, and has a race guard.
   - `components/BusinessReportView.tsx` and `components/report/*`: the page and its editor.
+    - The page runs a size above the rest of the app, for reading on a shared screen. Its type scale (`labelText`, `mainText`, `subText`, `keyText`, `itemTitle`, `noteText`) is in `components/report/ReportParts.tsx`.
+    - The shared components it uses have opt-in sizes: `Metric size="xl"`, `CardHeader size="lg"`, `Badge size="md"`, `Field size="lg"` and `Page titleSize="lg"`. Their defaults are what every other page uses.
+    - Each section body is an `@container`, and its grids switch on the card's width, not the window's.
   - `utils/reportPptx.ts`: the PowerPoint deck. Always load it with `import()`; pptxgenjs and jszip make a 412 kB chunk.
   - `db/migration_business_reports.sql`: the table, its RLS and its stamp trigger.
 - `utils/logger.ts`: create loggers with `createLogger(scope)`. `debug` and `info` log only in development; `warn` and `error` always log.
@@ -201,7 +204,7 @@ Expected results at PR #6. The counts assume the clock is in September 2026:
   - #4 This file.
   - #5 The four limitations left after #3: slow image exports, a late font running words together, figures lost on a plate or halo of their own lightness, and the sales figure's halo nicking the planned hours.
   - #6 The business report page `/report` and its PowerPoint deck in the team's template.
-- **`db/migration_business_reports.sql` has to be run by hand** in the production Supabase SQL editor. Until then `/report` shows its figures, but nothing written can be saved. Admins see a note that says so.
+- `db/migration_business_reports.sql` was run on the production Supabase on 2026-10-01. A read-only check confirmed the table, RLS, its 4 policies, the stamp trigger and both constraints.
 - The sample deck `OS設計チーム_事業状況報告_2026年9月28日.pptx` in the repo root is the template. It is untracked, and `*.pptx` is ignored. Its last slide holds a login, so never commit it, copy it or quote it.
 - The branches merged through #1–#5 are deleted. The older branches (`chore/cleanup`, `feat/ux-pass`, `feature/redesign`, `fix/export-input-and-race-bugs`, `fix/ux-and-architecture-repair`) predate this work; ask before touching them.
 

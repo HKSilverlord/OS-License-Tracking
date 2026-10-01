@@ -17,6 +17,8 @@ interface PageProps {
   children: React.ReactNode;
   /** Extra classes for the content column. */
   className?: string;
+  /** `lg` for a page whose sections already carry large headings, so the title stays above them. */
+  titleSize?: 'md' | 'lg';
 }
 
 const GUTTER = 'px-4 sm:px-6 lg:px-8';
@@ -26,18 +28,25 @@ const WIDTH = {
   full: 'w-full',
 } as const;
 
-const PageHeading: React.FC<Pick<PageProps, 'title' | 'description' | 'actions'>> = ({
+const PageHeading: React.FC<Pick<PageProps, 'title' | 'description' | 'actions' | 'titleSize'>> = ({
   title,
   description,
   actions,
+  titleSize = 'md',
 }) => (
   <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
     <div className="min-w-0">
-      <h1 className="text-[22px] font-semibold leading-tight tracking-tight text-slate-900 sm:text-2xl dark:text-white">
+      <h1
+        className={`font-semibold leading-tight tracking-tight text-slate-900 dark:text-white ${
+          titleSize === 'lg' ? 'text-[26px] sm:text-[30px]' : 'text-[22px] sm:text-2xl'
+        }`}
+      >
         {title}
       </h1>
       {description && (
-        <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">{description}</p>
+        <p className={`mt-1 text-slate-500 dark:text-slate-400 ${titleSize === 'lg' ? 'text-[15px] leading-6' : 'text-sm leading-6'}`}>
+          {description}
+        </p>
       )}
     </div>
     {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
@@ -61,6 +70,7 @@ export const Page: React.FC<PageProps> = ({
   maxWidth = 'default',
   children,
   className = '',
+  titleSize = 'md',
 }) => {
   const [scrolled, setScrolled] = useState(false);
 
@@ -74,7 +84,7 @@ export const Page: React.FC<PageProps> = ({
       <div className="flex h-full min-h-0 flex-col">
         <header className={`shrink-0 pb-4 pt-5 sm:pt-6 ${GUTTER}`}>
           <div className={WIDTH[maxWidth]}>
-            <PageHeading title={title} description={description} actions={actions} />
+            <PageHeading title={title} description={description} actions={actions} titleSize={titleSize} />
           </div>
         </header>
         <div className={`flex min-h-0 flex-1 flex-col pb-4 sm:pb-6 ${GUTTER}`}>
@@ -94,7 +104,7 @@ export const Page: React.FC<PageProps> = ({
         }`}
       >
         <div className={WIDTH[maxWidth]}>
-          <PageHeading title={title} description={description} actions={actions} />
+          <PageHeading title={title} description={description} actions={actions} titleSize={titleSize} />
         </div>
       </header>
       <div className={`pb-10 pt-1 ${GUTTER}`}>

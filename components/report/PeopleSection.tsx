@@ -13,6 +13,11 @@ import {
   BilingualInput,
   CountInput,
   ItemControls,
+  itemTitle,
+  keyText,
+  labelText,
+  noteText,
+  pointDot,
   PointsEditor,
   ReportSection,
   SubHeading,
@@ -22,12 +27,15 @@ import {
 import type { ReportEdit, ReportSectionProps } from './types';
 import { useReportFormat } from './useReportFormat';
 
+/** A count in the training box: trainees, seats. */
+const countText = 'mt-0.5 text-[28px] font-semibold leading-9 tracking-tight tabular-nums text-slate-900 dark:text-white';
+
 /** A bulleted list of bilingual points. */
 const Points: React.FC<{ points: string[] }> = ({ points }) => (
-  <ul className="space-y-2">
+  <ul className="space-y-2.5">
     {points.map((point, i) => (
       <li key={i} className="flex gap-2.5">
-        <span className="mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400 dark:bg-slate-500" aria-hidden="true" />
+        <span className={pointDot} aria-hidden="true" />
         <Bilingual text={point} empty={null} />
       </li>
     ))}
@@ -69,24 +77,24 @@ const Training: React.FC<{ content: ReportContent; onEdit?: ReportEdit }> = ({ c
       <Bilingual
         text={training.title}
         empty={null}
-        mainClassName="text-[15px] font-semibold leading-6 text-slate-900 dark:text-white"
+        mainClassName={itemTitle}
       />
       {training.points.length > 0 && <div className="mt-3"><Points points={training.points} /></div>}
-      <dl className={`${insetClasses} mt-4 grid grid-cols-2 gap-x-4 gap-y-3 p-4 sm:grid-cols-3`}>
+      <dl className={`${insetClasses} mt-5 grid grid-cols-2 gap-x-4 gap-y-4 p-5`}>
         <div>
-          <dt className="text-xs text-slate-500 dark:text-slate-400">{t('report.people.trainees', 'Trainees')}</dt>
-          <dd className="text-[17px] font-semibold tabular-nums text-slate-900 dark:text-white">
+          <dt className={labelText}>{t('report.people.trainees', 'Trainees')}</dt>
+          <dd className={countText}>
             {training.trainees === null ? '—' : f.count(training.trainees)}
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-slate-500 dark:text-slate-400">{t('report.people.seats', 'Seats')}</dt>
-          <dd className="text-[17px] font-semibold tabular-nums text-slate-900 dark:text-white">
+          <dt className={labelText}>{t('report.people.seats', 'Seats')}</dt>
+          <dd className={countText}>
             {training.seats === null ? '—' : f.count(training.seats)}
           </dd>
         </div>
-        <div className="col-span-2 sm:col-span-1">
-          <dt className="text-xs text-slate-500 dark:text-slate-400">{t('report.people.progress', 'Progress')}</dt>
+        <div className="col-span-2">
+          <dt className={labelText}>{t('report.people.progress', 'Progress')}</dt>
           <dd><Bilingual text={training.progress} empty={<span className="text-slate-400">—</span>} /></dd>
         </div>
       </dl>
@@ -116,13 +124,13 @@ const Staffing: React.FC<{ content: ReportContent; onEdit?: ReportEdit }> = ({ c
     </div>
   ) : (
     <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
-      <p className="flex items-center gap-2 text-[26px] font-semibold leading-8 tracking-tight tabular-nums text-slate-900 dark:text-white">
+      <p className="flex items-baseline gap-2.5 text-4xl font-semibold leading-[44px] tracking-tight tabular-nums text-slate-900 dark:text-white">
         <span title={t('report.people.planned', 'Planned')}>{people(staffing.planned)}</span>
-        <ArrowRight className="h-5 w-5 text-slate-400" aria-label={t('report.people.to', 'to')} />
+        <ArrowRight className="h-6 w-6 self-center text-slate-400" aria-label={t('report.people.to', 'to')} />
         <span title={t('report.people.current', 'Current')}>{people(staffing.current)}</span>
-        <span className="text-[13px] font-normal text-slate-500 dark:text-slate-400">{t('report.people.unit', 'people')}</span>
+        <span className="text-base font-normal tracking-normal text-slate-500 dark:text-slate-400">{t('report.people.unit', 'people')}</span>
       </p>
-      <p className="text-[13px] text-slate-500 dark:text-slate-400">
+      <p className={labelText}>
         {t('report.people.plannedToCurrent', 'Planned → current')}
       </p>
     </div>
@@ -131,19 +139,19 @@ const Staffing: React.FC<{ content: ReportContent; onEdit?: ReportEdit }> = ({ c
   return (
     <div>
       {headcount}
-      <div className="mt-4">
-        <div className="flex items-baseline justify-between gap-3 text-[13px]">
+      <div className="mt-5">
+        <div className="flex items-baseline justify-between gap-3 text-[15px]">
           <span className="text-slate-500 dark:text-slate-400">{t('report.people.fillRate', 'Fill rate')}</span>
           <span className="tabular-nums text-slate-500 dark:text-slate-400">
-            <span className="mr-2 font-semibold text-slate-900 dark:text-white" data-figure="fillRate">{fill === null ? '—' : f.percent(fill)}</span>
+            <span className="mr-2 text-lg font-semibold text-slate-900 dark:text-white" data-figure="fillRate">{fill === null ? '—' : f.percent(fill)}</span>
             {people(staffing.current)} / {people(staffing.planned)}
           </span>
         </div>
-        <Meter value={fill ?? 0} label={t('report.people.fillRate', 'Fill rate')} className="mt-2 h-2" />
-        {onEdit && <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">{t('report.people.fillHint', 'Worked out from the two numbers above.')}</p>}
+        <Meter value={fill ?? 0} label={t('report.people.fillRate', 'Fill rate')} className="mt-2 h-2.5" />
+        {onEdit && <p className={`mt-1.5 ${noteText}`}>{t('report.people.fillHint', 'Worked out from the two numbers above.')}</p>}
       </div>
 
-      <div className="mt-6">
+      <div className="mt-8">
         <SubHeading>{t('report.people.changes', 'Staffing changes this year')}</SubHeading>
         {onEdit ? (
           <div className="space-y-3">
@@ -159,7 +167,7 @@ const Staffing: React.FC<{ content: ReportContent; onEdit?: ReportEdit }> = ({ c
                 // The fields sit side by side only where the card is wide enough for both.
                 <div key={changeKeys.keys[i]} className={`${insetClasses} @container p-3`}>
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="min-w-0 truncate text-[13px] font-semibold text-slate-700 dark:text-slate-200">{item}</p>
+                    <p className="min-w-0 truncate text-[15px] font-semibold text-slate-700 dark:text-slate-200">{item}</p>
                     <ItemControls
                       index={i}
                       length={all.length}
@@ -199,12 +207,12 @@ const Staffing: React.FC<{ content: ReportContent; onEdit?: ReportEdit }> = ({ c
         ) : staffing.changes.length === 0 ? (
           <Bilingual text="" />
         ) : (
-          <ol className="relative space-y-3 border-l-2 border-slate-200 pl-4 dark:border-slate-700">
+          <ol className="relative space-y-4 border-l-2 border-slate-200 pl-4 dark:border-slate-700">
             {staffing.changes.map((change, i) => (
               <li key={i} className="relative">
-                <span className="absolute -left-[23px] top-1.5 h-3 w-3 rounded-full border-2 border-white bg-slate-400 dark:border-slate-900 dark:bg-slate-500" aria-hidden="true" />
-                <div className="flex flex-wrap gap-x-3 gap-y-0.5 sm:flex-nowrap">
-                  <p className={`w-20 shrink-0 text-[13px] font-semibold leading-6 text-slate-700 dark:text-slate-200 ${wrapAnywhere}`}>{change.when || '—'}</p>
+                <span className="absolute -left-[23px] top-2 h-3 w-3 rounded-full border-2 border-white bg-slate-400 dark:border-slate-900 dark:bg-slate-500" aria-hidden="true" />
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 @sm:flex-nowrap">
+                  <p className={`w-24 shrink-0 text-[15px] font-semibold leading-7 text-slate-700 dark:text-slate-200 ${wrapAnywhere}`}>{change.when || '—'}</p>
                   <Bilingual text={change.text} empty={null} className="min-w-0 flex-1" />
                 </div>
               </li>
@@ -213,13 +221,13 @@ const Staffing: React.FC<{ content: ReportContent; onEdit?: ReportEdit }> = ({ c
         )}
       </div>
 
-      <div className="mt-6">
+      <div className="mt-8">
         {onEdit ? (
           <BilingualInput label={t('report.people.issues', 'Issues')} value={staffing.issues} onChange={issues => setStaffing({ issues })} />
         ) : (
-          <div className="border-l-2 border-slate-300 pl-4 dark:border-slate-600">
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{t('report.people.issues', 'Issues')}</p>
-            <Bilingual text={staffing.issues} className="mt-0.5" mainClassName="text-sm font-medium leading-6 text-slate-900 dark:text-white" />
+          <div className="border-l-[3px] border-slate-300 pl-4 dark:border-slate-600">
+            <p className={`font-medium ${labelText}`}>{t('report.people.issues', 'Issues')}</p>
+            <Bilingual text={staffing.issues} className="mt-1" mainClassName={keyText} />
           </div>
         )}
       </div>
@@ -237,12 +245,12 @@ export const PeopleSection: React.FC<Omit<ReportSectionProps, 'figures'>> = ({ c
       title={t('report.people.title', 'Training and staffing')}
       description={t('report.people.desc', 'How the team is training new designers, and how many people it has')}
     >
-      <div className="grid grid-cols-1 gap-x-10 gap-y-8 lg:grid-cols-2">
-        <div className="min-w-0">
+      <div className="grid grid-cols-1 gap-x-10 gap-y-8 @3xl:grid-cols-2">
+        <div className="@container min-w-0">
           <SubHeading>{t('report.people.training', 'Training')}</SubHeading>
           <Training content={content} onEdit={onEdit} />
         </div>
-        <div className="min-w-0 border-t border-slate-100 pt-6 lg:border-l lg:border-t-0 lg:pl-10 lg:pt-0 dark:border-slate-800">
+        <div className="@container min-w-0 border-t border-slate-100 pt-6 @3xl:border-l @3xl:border-t-0 @3xl:pl-10 @3xl:pt-0 dark:border-slate-800">
           <SubHeading>{t('report.people.headcount', 'Headcount')}</SubHeading>
           <Staffing content={content} onEdit={onEdit} />
         </div>

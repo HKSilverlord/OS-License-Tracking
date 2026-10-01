@@ -55,9 +55,16 @@ interface MetricProps {
   meterLabel?: string;
   /** Small print: where the number comes from, what it assumes. */
   footnote?: React.ReactNode;
-  size?: 'md' | 'lg';
+  /** `xl` is for pages read from across a room: its label and small print grow with the figure. */
+  size?: 'md' | 'lg' | 'xl';
   className?: string;
 }
+
+const SIZE = {
+  md: { label: 'text-[13px] leading-5', value: 'text-[22px] leading-8', sub: 'text-[13px] leading-5', footnote: 'text-xs leading-5' },
+  lg: { label: 'text-[13px] leading-5', value: 'text-[26px] leading-8 sm:text-[30px] sm:leading-9', sub: 'text-[13px] leading-5', footnote: 'text-xs leading-5' },
+  xl: { label: 'text-sm leading-5', value: 'text-[30px] leading-9', sub: 'text-sm leading-6', footnote: 'text-[13px] leading-5' },
+} as const;
 
 /**
  * One number, said plainly: what it is, the figure, and one line of context.
@@ -75,16 +82,12 @@ export const Metric: React.FC<MetricProps> = ({
   className = '',
 }) => (
   <div className={`min-w-0 ${className}`}>
-    <p className="text-[13px] font-medium leading-5 text-slate-500 dark:text-slate-400">{label}</p>
-    <p
-      className={`mt-1 font-semibold tracking-tight tabular-nums ${
-        size === 'lg' ? 'text-[26px] leading-8 sm:text-[30px] sm:leading-9' : 'text-[22px] leading-8'
-      } ${VALUE_TONE[tone]}`}
-    >
+    <p className={`${SIZE[size].label} font-medium text-slate-500 dark:text-slate-400`}>{label}</p>
+    <p className={`mt-1 font-semibold tracking-tight tabular-nums ${SIZE[size].value} ${VALUE_TONE[tone]}`}>
       {value}
     </p>
-    {sub && <p className="mt-0.5 text-[13px] leading-5 text-slate-500 tabular-nums dark:text-slate-400">{sub}</p>}
+    {sub && <p className={`mt-0.5 ${SIZE[size].sub} text-slate-500 tabular-nums dark:text-slate-400`}>{sub}</p>}
     {meter !== undefined && <Meter value={meter} label={meterLabel} className="mt-3" />}
-    {footnote && <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">{footnote}</p>}
+    {footnote && <p className={`mt-2 ${SIZE[size].footnote} text-slate-500 dark:text-slate-400`}>{footnote}</p>}
   </div>
 );

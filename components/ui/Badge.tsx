@@ -16,13 +16,17 @@ interface BadgeProps {
   children: React.ReactNode;
   className?: string;
   title?: string;
+  /** `md` sits beside larger text, as on the report. */
+  size?: 'sm' | 'md';
 }
 
 /** A short status word: a role, a period's state, "This month". */
-export const Badge: React.FC<BadgeProps> = ({ tone = 'neutral', children, className = '', title }) => (
+export const Badge: React.FC<BadgeProps> = ({ tone = 'neutral', children, className = '', title, size = 'sm' }) => (
   <span
     title={title}
-    className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium leading-4 ${TONES[tone]} ${className}`}
+    className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full font-medium ${
+      size === 'md' ? 'px-2.5 py-0.5 text-[13px] leading-5' : 'px-2 py-0.5 text-[11px] leading-4'
+    } ${TONES[tone]} ${className}`}
   >
     {children}
   </span>

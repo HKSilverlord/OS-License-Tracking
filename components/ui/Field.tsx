@@ -81,26 +81,29 @@ interface FieldProps {
   /** Short note on the label's line, e.g. "Optional" or a unit. */
   aside?: React.ReactNode;
   className?: string;
+  /** `lg` labels the larger controls of a reading page, such as the report. */
+  size?: 'md' | 'lg';
   /** Receives the id to put on the control, so the label points at it. */
   children: (id: string) => React.ReactNode;
 }
 
 /** Label, control, and one line of help — stacked the same way in every form. */
-export const Field: React.FC<FieldProps> = ({ label, hint, error, aside, className = '', children }) => {
+export const Field: React.FC<FieldProps> = ({ label, hint, error, aside, className = '', size = 'md', children }) => {
   const id = useId();
+  const small = size === 'lg' ? 'text-[13px]' : 'text-xs';
   return (
     <div className={className}>
       <div className="mb-1.5 flex items-baseline justify-between gap-2">
-        <label htmlFor={id} className="text-[13px] font-medium text-slate-700 dark:text-slate-300">
+        <label htmlFor={id} className={`${size === 'lg' ? 'text-sm' : 'text-[13px]'} font-medium text-slate-700 dark:text-slate-300`}>
           {label}
         </label>
-        {aside && <span className="text-xs text-slate-500 dark:text-slate-400">{aside}</span>}
+        {aside && <span className={`${small} text-slate-500 dark:text-slate-400`}>{aside}</span>}
       </div>
       {children(id)}
       {error ? (
-        <p className="mt-1.5 text-xs text-rose-600 dark:text-rose-400">{error}</p>
+        <p className={`mt-1.5 ${small} text-rose-600 dark:text-rose-400`}>{error}</p>
       ) : hint ? (
-        <p className="mt-1.5 text-xs leading-5 text-slate-500 dark:text-slate-400">{hint}</p>
+        <p className={`mt-1.5 ${small} leading-5 text-slate-500 dark:text-slate-400`}>{hint}</p>
       ) : null}
     </div>
   );
