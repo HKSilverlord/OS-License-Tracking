@@ -91,6 +91,20 @@ export function useChartPref<T>(
   return [value, set, reset];
 }
 
+/**
+ * Chart figures grew in October 2026. A style saved before then holds the old
+ * default size, which `upgradeLabelSize` moves to the new one; a size someone
+ * picked is kept. A preference saved since carries this mark, so a later pick
+ * of an old default size sticks. Loading alone saves nothing: an unmarked
+ * style is upgraded again on each load until the first change saves it.
+ */
+export const LABEL_SIZES = 2;
+
+export function upgradeLabelSize<S extends { fontSize: number }>(style: S, stored: unknown, previous: number, current: number): S {
+  const marked = stored !== null && typeof stored === 'object' && (stored as { labelSizes?: unknown }).labelSizes === LABEL_SIZES;
+  return !marked && style.fontSize === previous ? { ...style, fontSize: current } : style;
+}
+
 /** Mid-tone colours legible on both bg-white and bg-slate-900. */
 export const CHART_PALETTE = {
   plan: '#3b82f6',

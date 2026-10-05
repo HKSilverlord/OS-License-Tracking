@@ -74,15 +74,15 @@ const KIND_WIDTH =
 /* Where a year's label waits while its months scroll by: just past the frozen columns. */
 const YEAR_LABEL = 'sticky left-[180px] inline-block px-2 sm:left-[264px]';
 
-const HEAD = 'border-b border-slate-200 px-2 text-[13px] font-medium text-slate-500 dark:border-slate-800 dark:text-slate-400';
+const HEAD = 'border-b border-slate-200 px-2 text-sm font-medium text-slate-500 dark:border-slate-800 dark:text-slate-400';
 const OPAQUE_HEAD = 'bg-white dark:bg-slate-900';
 const ROW_END = 'border-b border-slate-100 dark:border-slate-800';
 const KIND_EDGE = 'border-r border-r-slate-200 dark:border-r-slate-800';
 const YEAR_EDGE = 'border-l border-l-slate-200 dark:border-l-slate-800';
-const NUM = 'h-9 px-2 text-sm tabular-nums';
+const NUM = 'h-9 px-2 text-[15px] tabular-nums';
 
 const CELL_INPUT =
-  'block h-8 w-full rounded-md border-0 bg-transparent px-2 text-sm tabular-nums text-slate-700 outline-none ' +
+  'block h-8 w-full rounded-md border-0 bg-transparent px-2 text-[15px] tabular-nums text-slate-700 outline-none ' +
   'transition-[background-color,box-shadow] duration-100 placeholder:text-slate-300 ' +
   'hover:bg-slate-100/70 focus:bg-white focus:ring-2 focus:ring-blue-500/50 ' +
   'aria-invalid:ring-2 aria-invalid:ring-rose-500/60! ' +
@@ -159,7 +159,7 @@ const FigureCell: React.FC<FigureCellProps> = ({
 
   if (!editable) {
     return (
-      <span title={title} className={`block px-2 text-sm leading-8 tabular-nums text-slate-700 dark:text-slate-200 ${alignClass}`}>
+      <span title={title} className={`block px-2 text-[15px] leading-8 tabular-nums text-slate-700 dark:text-slate-200 ${alignClass}`}>
         {shown ?? <Dash />}
       </span>
     );
@@ -561,7 +561,7 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
                       scope="colgroup"
                       colSpan={y.months.length}
                       data-year-head={y.year}
-                      className={`h-9 px-0 text-left text-sm tabular-nums ${i > 0 ? YEAR_EDGE : ''} ${
+                      className={`h-9 px-0 text-left text-[15px] tabular-nums ${i > 0 ? YEAR_EDGE : ''} ${
                         selected
                           ? 'bg-blue-50/60 font-semibold text-blue-700 dark:bg-[color-mix(in_oklab,var(--color-slate-900),var(--color-blue-500)_7%)] dark:text-blue-300'
                           : 'font-medium text-slate-700 dark:text-slate-300'
@@ -581,7 +581,7 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
                       scope="col"
                       aria-current={now ? 'date' : undefined}
                       title={now ? t('tracker.thisMonth', 'This month') : undefined}
-                      className={`${HEAD} h-8 w-[56px] min-w-[56px] text-right font-normal tabular-nums ${
+                      className={`${HEAD} h-8 w-[60px] min-w-[60px] text-right font-normal tabular-nums ${
                         slot.opensYear ? YEAR_EDGE : ''
                       } ${slot.year === currentYear ? CELL_SELECTED : ''} ${
                         now ? 'font-medium text-orange-600! dark:text-orange-400!' : ''
@@ -606,14 +606,14 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
                       <th
                         scope="rowgroup"
                         rowSpan={totalRows.length}
-                        className={`${TOTALS} ${STICKY_LICENSE} ${LICENSE_WIDTH} border-b border-slate-200 px-3 py-2 text-left align-top text-sm font-semibold text-slate-900 dark:border-slate-700 dark:text-white`}
+                        className={`${TOTALS} ${STICKY_LICENSE} ${LICENSE_WIDTH} border-b border-slate-200 px-3 py-2 text-left align-top text-[15px] font-semibold text-slate-900 dark:border-slate-700 dark:text-white`}
                       >
                         {t('catia.allLicenses', 'All licenses')}
                       </th>
                     )}
                     <th
                       scope="row"
-                      className={`${TOTALS} ${STICKY_KIND} ${KIND_WIDTH} ${KIND_EDGE} ${edge} text-left text-xs sm:text-[13px] font-medium text-slate-500 dark:text-slate-400`}
+                      className={`${TOTALS} ${STICKY_KIND} ${KIND_WIDTH} ${KIND_EDGE} ${edge} text-left text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400`}
                     >
                       {row.label}
                     </th>
@@ -644,13 +644,13 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
                         <th
                           scope="rowgroup"
                           rowSpan={2}
-                          className={`${SURFACE} ${STICKY_LICENSE} ${LICENSE_WIDTH} ${ROW_END} px-3 py-2 text-left align-top text-sm font-medium text-slate-900 dark:text-white`}
+                          className={`${SURFACE} ${STICKY_LICENSE} ${LICENSE_WIDTH} ${ROW_END} px-3 py-2 text-left align-top text-[15px] font-medium text-slate-900 dark:text-white`}
                         >
                           {name}
                         </th>
                         <th
                           scope="row"
-                          className={`${SURFACE} ${STICKY_KIND} ${KIND_WIDTH} ${KIND_EDGE} text-left text-xs sm:text-[13px] font-normal text-slate-500 dark:text-slate-400`}
+                          className={`${SURFACE} ${STICKY_KIND} ${KIND_WIDTH} ${KIND_EDGE} text-left text-xs sm:text-sm font-normal text-slate-500 dark:text-slate-400`}
                         >
                           {costMonthLabel}
                         </th>
@@ -674,7 +674,7 @@ export const CatiaLicenseView: React.FC<CatiaLicenseViewProps> = ({ currentYear 
                       <tr>
                         <th
                           scope="row"
-                          className={`${SURFACE} ${STICKY_KIND} ${KIND_WIDTH} ${KIND_EDGE} ${ROW_END} text-left text-xs sm:text-[13px] font-normal text-slate-500 dark:text-slate-400`}
+                          className={`${SURFACE} ${STICKY_KIND} ${KIND_WIDTH} ${KIND_EDGE} ${ROW_END} text-left text-xs sm:text-sm font-normal text-slate-500 dark:text-slate-400`}
                         >
                           {revenueYearLabel}
                         </th>

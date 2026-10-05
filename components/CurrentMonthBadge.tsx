@@ -6,12 +6,12 @@ export const CurrentMonthBadge = ({ viewBox, label, color }: {
 }) => {
   const x = viewBox?.x ?? 0;
   const y = viewBox?.y ?? 0;
-  const height = 18;
-  const width = Math.max(52, label.length * 7.5 + 16);
+  const height = 20;
+  const width = Math.max(52, label.length * 8.2 + 18);
   return (
     <g transform={`translate(${x - width / 2}, ${y - height - 6})`}>
       <rect width={width} height={height} rx={height / 2} fill={color} />
-      <text x={width / 2} y={height / 2} textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight="bold" fill="#ffffff">
+      <text x={width / 2} y={height / 2} textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight="bold" fill="#ffffff">
         {label}
       </text>
     </g>

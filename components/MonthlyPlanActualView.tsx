@@ -22,30 +22,37 @@ import { useGrowIn } from '../hooks/useGrowIn';
 import { useMonthKeys } from '../hooks/useMonthKeys';
 import { useMonthlyPlanActualData } from '../hooks/useMonthlyPlanActualData';
 import type { MonthlyPlanActualData } from '../hooks/useMonthlyPlanActualData';
-import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
+import { useChartPref, upgradeLabelSize, CHART_PALETTE, LABEL_SIZES } from '../utils/chartColorPrefs';
 import { chartTheme, type ChartTheme } from '../utils/chartTheme';
-import { textWidth } from '../utils/textWidth';
+import { fittingFontSize, textWidth } from '../utils/textWidth';
 
-interface MonthlyChartColors {
-  capacityLine: SeriesStyle;
-  workingHoursPlan: SeriesStyle;
-  salesPlan: SeriesStyle;
-  salesActual: SeriesStyle;
-  workingHoursActual: SeriesStyle;
-}
+type SeriesKey = 'capacityLine' | 'workingHoursPlan' | 'salesPlan' | 'salesActual' | 'workingHoursActual';
 
-type SeriesKey = keyof MonthlyChartColors;
+type MonthlyChartColors = Record<SeriesKey, SeriesStyle> & {
+  /** See LABEL_SIZES. */
+  labelSizes?: number;
+};
 
 /**
  * The report's own colours, kept because this chart is pasted into the monthly
  * report next to earlier months; every one of them can be changed.
  */
 const DEFAULT_CHART_COLORS: MonthlyChartColors = {
-  capacityLine: { color: CHART_PALETTE.neutral, opacity: 1, labelColor: CHART_PALETTE.neutral, fontSize: 10, bold: false, stroke: false },
-  workingHoursPlan: { color: '#FFB3B3', opacity: 1, labelColor: CHART_PALETTE.plan, fontSize: 10, bold: true, stroke: false, barSize: 60 },
-  salesPlan: { color: '#00BFFF', opacity: 1, labelColor: CHART_PALETTE.actual, fontSize: 10, bold: false, stroke: false },
-  salesActual: { color: CHART_PALETTE.plan2, opacity: 1, labelColor: CHART_PALETTE.plan2, fontSize: 11, bold: true, stroke: true, barSize: 40 },
-  workingHoursActual: { color: '#CC0000', opacity: 1, labelColor: '#ffffff', fontSize: 10, bold: true, stroke: false, barSize: 30 },
+  labelSizes: LABEL_SIZES,
+  capacityLine: { color: CHART_PALETTE.neutral, opacity: 1, labelColor: CHART_PALETTE.neutral, fontSize: 12, bold: false, stroke: false },
+  workingHoursPlan: { color: '#FFB3B3', opacity: 1, labelColor: CHART_PALETTE.plan, fontSize: 12, bold: true, stroke: false, barSize: 60 },
+  salesPlan: { color: '#00BFFF', opacity: 1, labelColor: CHART_PALETTE.actual, fontSize: 12, bold: false, stroke: false },
+  salesActual: { color: CHART_PALETTE.plan2, opacity: 1, labelColor: CHART_PALETTE.plan2, fontSize: 13, bold: true, stroke: true, barSize: 40 },
+  workingHoursActual: { color: '#CC0000', opacity: 1, labelColor: '#ffffff', fontSize: 12, bold: true, stroke: false, barSize: 30 },
+};
+
+/** The figures' default sizes before LABEL_SIZES. */
+const PREVIOUS_FONT_SIZE: Record<SeriesKey, number> = {
+  capacityLine: 10,
+  workingHoursPlan: 10,
+  salesPlan: 10,
+  salesActual: 11,
+  workingHoursActual: 10,
 };
 
 /** In the order the legend and the style panel list them: sales first, then hours. */
@@ -64,7 +71,8 @@ const SERIES_SHAPE: Record<SeriesKey, 'line' | 'dash' | 'bar'> = {
  * Migration for the stored `monthly_chartColors` preference:
  *  - the oldest format stored a bare colour string per series,
  *  - later formats stored a partial SeriesStyle, merged over the defaults so fields added
- *    since the preference was written are picked up.
+ *    since the preference was written are picked up,
+ *  - a figure still at the size it had by default before LABEL_SIZES takes today's default.
  */
 const migrateChartColors = (raw: unknown): MonthlyChartColors | null => {
   if (raw === null || typeof raw !== 'object') return null;
@@ -74,12 +82,14 @@ const migrateChartColors = (raw: unknown): MonthlyChartColors | null => {
     const value = parsed[key];
     if (typeof value === 'string') return { ...DEFAULT_CHART_COLORS[key], color: value };
     if (value !== null && typeof value === 'object') {
-      return { ...DEFAULT_CHART_COLORS[key], ...(value as Partial<SeriesStyle>) };
+      const style = { ...DEFAULT_CHART_COLORS[key], ...(value as Partial<SeriesStyle>) };
+      return upgradeLabelSize(style, raw, PREVIOUS_FONT_SIZE[key], DEFAULT_CHART_COLORS[key].fontSize);
     }
     return DEFAULT_CHART_COLORS[key];
   };
 
   return {
+    labelSizes: LABEL_SIZES,
     capacityLine: mergeSeries('capacityLine'),
     workingHoursPlan: mergeSeries('workingHoursPlan'),
     salesPlan: mergeSeries('salesPlan'),
@@ -137,7 +147,7 @@ const MonthDetailCard = ({ data, chartColors, labels, nf, hoursUnit, salesUnit, 
   );
 
   return (
-    <div className="min-w-[248px] rounded-xl bg-white p-3 text-sm shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/10 dark:bg-slate-900 dark:shadow-black/40 dark:ring-white/10">
+    <div className="min-w-[264px] rounded-xl bg-white p-3 text-[15px] shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/10 dark:bg-slate-900 dark:shadow-black/40 dark:ring-white/10">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="font-semibold text-slate-900 dark:text-white">{data.monthLabel}</span>
         {onClose && (
@@ -281,9 +291,27 @@ const labelBacking = (style: SeriesStyle | undefined, color: string, theme: Char
   return { halo, plateFill };
 };
 
-/** A figure's plate: as wide as the figure, never narrower than a short one's. */
-const plateWidthFor = (text: string, fontSize: number): number =>
-  Math.max(24, Math.ceil(text.length * fontSize * 0.62) + 8);
+/**
+ * A figure's plate: as wide as the figure, never narrower than a short one's.
+ * Measured, not guessed per character: at 12 px the guess ran 6 px wide, and
+ * the hours-actual plate covered the sales figure beside it.
+ */
+const plateWidthFor = (text: string, fontSize: number, bold: boolean): number =>
+  Math.max(24, Math.ceil(textWidth(text, fontSize, bold)) + 8);
+
+/** How far a figure reaches either side of its middle: its halo, drawn bold and 3 px wide, or its plate. */
+const figureHalf = (text: string, style: SeriesStyle | undefined, theme: ChartTheme): number => {
+  const fontSize = style?.fontSize || 12;
+  const { halo } = labelBacking(style, style?.labelColor || CHART_PALETTE.labelNeutral, theme);
+  return halo ? textWidth(text, fontSize, true) / 2 + 1.5 : plateWidthFor(text, fontSize, style?.bold !== false) / 2;
+};
+
+/**
+ * A figure's middle, moved in from the plot's sides. A figure wider than its
+ * column, over January's first column or December's last, ran over the axis.
+ */
+const insidePlot = (middle: number, half: number, plot: { x: number; width: number } | undefined): number =>
+  plot ? Math.max(plot.x + half + 1, Math.min(plot.x + plot.width - half - 1, middle)) : middle;
 
 const labelText = (value: number | string, nf: (value: number) => string, suffix = ''): string =>
   `${typeof value === 'number' && value > 1000 ? nf(value) : value}${suffix}`;
@@ -302,12 +330,13 @@ const ValueLabel = ({ x = 0, y = 0, value, width = 0, dataKey, chartColors, nf, 
   position?: 'top' | 'insideTop' | 'left';
   suffix?: string;
 }) => {
+  const plot = usePlotArea();
   if (value === 0 || !value) return null;
 
   const formatted = labelText(value, nf, suffix);
   const style = chartColors[dataKey];
   const color = style?.labelColor || CHART_PALETTE.labelNeutral;
-  const fontSize = style?.fontSize || 10;
+  const fontSize = style?.fontSize || 12;
   const isBold = style?.bold !== false;
 
   let textX = x;
@@ -323,7 +352,8 @@ const ValueLabel = ({ x = 0, y = 0, value, width = 0, dataKey, chartColors, nf, 
   }
 
   const { halo, plateFill } = labelBacking(style, color, theme);
-  const plateWidth = plateWidthFor(formatted, fontSize);
+  const plateWidth = plateWidthFor(formatted, fontSize, isBold);
+  textX = insidePlot(textX, figureHalf(formatted, style, theme), plot);
 
   return (
     <g>
@@ -376,65 +406,104 @@ const INSIDE_TOP_DROP = 15;
 /** The offset LabelList hands its content: a top figure sits this far above its column. */
 const LABEL_LIST_OFFSET = 5;
 
+const CHART_MARGIN = { top: 28, right: 16, left: 8, bottom: 4 };
+const Y_AXIS_WIDTH = 72;
+/** Month names, largest first: the chart uses the largest that fits. */
+const MONTH_TICK_SIZES = [14, 13, 12] as const;
+
 /** How far a line of figures reaches above and below its middle, as a share of its font size. */
 const HALF_LINE = 0.6;
 
 /**
- * The planned hours' figure, kept clear of the sales actual's. The two sit
- * over neighbouring columns, and where the chart is at its narrowest a figure
- * is wider than its column, so when they also stood at the same height the
- * sales figure's outline covered the last digit of the planned hours. Then
- * the planned hours move left, just far enough, but not under the previous
- * month's sales figure. Where that one stands level too and there is no room
- * between them, the planned hours sit halfway, so neither covers much.
+ * The planned hours' figure, kept clear of the sales actual figures beside it:
+ * this month's on the right and last month's on the left. Where the chart is at
+ * its narrowest a figure is wider than its column, so a sales figure standing
+ * at the same height covered the planned hours' last or first digit.
+ *
+ * The planned hours first move sideways, just far enough, no further than
+ * their column's edge and never past the axis. Where both sales figures stand
+ * level there is no room between them: at 61 px a month, a 12 px "1,400" and a
+ * 13 px "2,508" on each side need 76. Then the planned hours drop down their
+ * own column, below the sales figures, if the actual hours' figure leaves
+ * room. Failing that, they sit halfway, so neither side covers much.
  */
-const HoursPlanLabel = ({ index = 0, x = 0, y = 0, width = 0, value, sales, ...label }: React.ComponentProps<typeof ValueLabel> & {
+const HoursPlanLabel = ({ index = 0, x = 0, y = 0, width = 0, value, sales, actualHours, ...label }: React.ComponentProps<typeof ValueLabel> & {
   index?: number;
-  /** Sales actual per month, in the chart's order. */
+  /** Sales actual and actual hours per month, in the chart's order. */
   sales: number[];
+  actualHours: number[];
 }) => {
   const plot = usePlotArea();
   const top = Number(useYAxisDomain('left')?.[1]);
-  let shift = 0;
+  const hoursTop = Number(useYAxisDomain('right')?.[1]);
+  const column = x + width / 2;
+  let middle = column;
+  let drop = 0;
   if (plot && top > 0 && typeof value === 'number' && value > 0) {
     const { chartColors, nf, theme } = label;
     const own = chartColors.workingHoursPlan;
-    const ownFontSize = own.fontSize || 10;
+    const text = labelText(value, nf);
+    const ownFontSize = own.fontSize || 12;
+    const ownHalf = textWidth(text, ownFontSize, own.bold !== false) / 2;
+    const ownSide = figureHalf(text, own, theme);
+    const ownReach = ownFontSize * HALF_LINE;
     const ownY = y + INSIDE_TOP_DROP;
     const other = chartColors.salesActual;
-    const otherFontSize = other.fontSize || 10;
+    const otherFontSize = other.fontSize || 12;
     const { halo } = labelBacking(other, other.labelColor || CHART_PALETTE.labelNeutral, theme);
     // A halo is drawn bold and 3 px wide, so it reaches 1.5 px past its figure
     // all round. A plate reaches 12 px above its figure's middle and 4 below.
     const [above, below] = halo
       ? [otherFontSize * HALF_LINE + 1.5, otherFontSize * HALF_LINE + 1.5]
       : [12, LABEL_PLATE_HEIGHT - 12];
-    /** Half the width a month's sales figure covers, if it stands level with this figure. */
-    const salesCover = (month: number): number | null => {
+    // Each column is centred in an equal share of the month.
+    const band = plot.width / sales.length;
+    const share = Math.floor((band * (1 - 2 * BAR_CATEGORY_GAP) - BAR_GAP) / 2);
+    const apart = Math.max(width, share) + BAR_GAP;
+    /** A month's sales figure: where its middle stands, and how close this figure's middle may come to it. */
+    const salesFigure = (month: number, over: number) => {
       const sale = sales[month] ?? 0;
       if (!(sale > 0)) return null;
-      const salesY = plot.y + plot.height * (1 - sale / top) - LABEL_LIST_OFFSET;
-      if (ownY + ownFontSize * HALF_LINE <= salesY - above || ownY - ownFontSize * HALF_LINE >= salesY + below) return null;
-      const text = labelText(sale, nf);
-      return halo ? textWidth(text, otherFontSize, true) / 2 + 1.5 : plateWidthFor(text, otherFontSize) / 2;
+      const half = figureHalf(labelText(sale, nf), other, theme);
+      return { x: insidePlot(over, half, plot), y: plot.y + plot.height * (1 - sale / top) - LABEL_LIST_OFFSET, reach: ownHalf + half + 1 };
     };
-    const cover = salesCover(index);
-    if (cover !== null) {
-      // Each column is centred in an equal share of the month.
-      const band = plot.width / sales.length;
-      const share = Math.floor((band * (1 - 2 * BAR_CATEGORY_GAP) - BAR_GAP) / 2);
-      const apart = Math.max(width, share) + BAR_GAP;
-      const ownHalf = textWidth(labelText(value, nf), ownFontSize, own.bold !== false) / 2;
-      const needed = ownHalf + cover + 1 - apart;
-      if (needed > 0) {
-        // The previous month's sales figure stands one month to the left of this month's.
-        const previous = index > 0 ? salesCover(index - 1) : null;
-        const room = previous === null ? Infinity : band - apart - ownHalf - previous - 1;
-        shift = Math.max(-width / 2, Math.min(width / 2, room >= needed ? needed : (needed + room) / 2));
+    const level = (figure: { y: number }, atY: number) => atY + ownReach > figure.y - above && atY - ownReach < figure.y + below;
+    const next = salesFigure(index, column + apart);
+    const previous = index > 0 ? salesFigure(index - 1, column + apart - band) : null;
+    const start = insidePlot(column, ownSide, plot);
+    // Where this figure's middle may stand: over its column, inside the plot,
+    // and clear of the level sales figures.
+    const lowest = Math.max(column - width / 2, plot.x + ownSide + 1);
+    const highest = Math.min(column + width / 2, plot.x + plot.width - ownSide - 1);
+    const after = previous && level(previous, ownY) ? previous.x + previous.reach : -Infinity;
+    const before = next && level(next, ownY) ? next.x - next.reach : Infinity;
+    middle = start;
+    if (start < after || start > before) {
+      const from = Math.max(lowest, after);
+      const to = Math.min(highest, before);
+      if (from <= to) {
+        middle = Math.max(from, Math.min(to, start));
+      } else {
+        // Below every sales figure in the way, the higher first.
+        let droppedY = ownY;
+        const inTheWay = [next, previous].filter((f): f is NonNullable<typeof f> => f !== null && Math.abs(f.x - start) < f.reach);
+        for (const figure of inTheWay.sort((a, b) => a.y - b.y)) {
+          if (level(figure, droppedY)) droppedY = figure.y + below + ownReach + 1;
+        }
+        // The actual hours' figure sits on a plate from 3 px below its column's top.
+        const actual = actualHours[index] ?? 0;
+        const actualY = hoursTop > 0 && actual > 0 ? plot.y + plot.height * (1 - actual / hoursTop) : Infinity;
+        const floor = Math.min(plot.y + plot.height, actualY + INSIDE_TOP_DROP - 12) - 1;
+        if (droppedY + ownReach <= floor) {
+          drop = droppedY - ownY;
+        } else {
+          const halfway = Number.isFinite(after) && Number.isFinite(before) ? (after + before) / 2 : Number.isFinite(after) ? after : before;
+          middle = Math.max(lowest, Math.min(highest, halfway));
+        }
       }
     }
   }
-  return <ValueLabel {...label} x={x - shift} y={y} width={width} value={value} />;
+  return <ValueLabel {...label} x={middle - width / 2} y={y + drop} width={width} value={value} />;
 };
 
 /**
@@ -542,10 +611,16 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
   const thisYear = new Date().getFullYear();
   const finishedMonths = currentYear < thisYear ? 12 : currentYear > thisYear ? 0 : new Date().getMonth();
   const salesActuals = monthlyData.map(d => d.salesActual || 0);
+  const hoursActuals = monthlyData.map(d => d.workingHoursActual || 0);
   const [showCurrentMonth, setShowCurrentMonth] = useState(true);
   // Off by default: twelve near-identical figures sat on top of the columns. The
   // month card and the exports carry them; this is for a slide that needs them.
   const [showCapacityValues, setShowCapacityValues] = useState(false);
+  const [chartWidth, setChartWidth] = useState(0);
+  // Month names take the largest size that keeps them apart: at the chart's
+  // narrowest a month is 61 px wide, and "Tháng 10" is 62 px at 14 px.
+  const monthBand = (chartWidth - CHART_MARGIN.left - CHART_MARGIN.right - 2 * Y_AXIS_WIDTH) / monthlyData.length;
+  const monthTickSize = chartWidth > 0 ? fittingFontSize(monthlyData.map(d => d.monthLabel), monthBand, MONTH_TICK_SIZES, true) : MONTH_TICK_SIZES[0];
 
   const hasData = monthlyData.some(d => d.workingHoursPlan || d.workingHoursActual || d.salesPlan || d.salesActual);
 
@@ -681,7 +756,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
         {loading && <RefreshBar className="mt-4" />}
 
         <div className={`transition-opacity duration-200 ${loading ? 'opacity-40' : ''}`}>
-          <ul className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] text-slate-600 dark:text-slate-300">
+          <ul className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-600 dark:text-slate-300">
             {SERIES_KEYS.map(key => (
               <li key={key} className="flex items-center gap-2">
                 <Swatch style={chartColors[key]} shape={SERIES_SHAPE[key]} />
@@ -709,10 +784,10 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                 );
               })()}
 
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" onResize={width => setChartWidth(width)}>
                 <ComposedChart
                   data={monthlyData}
-                  margin={{ top: 28, right: 16, left: 8, bottom: 4 }}
+                  margin={CHART_MARGIN}
                   aria-label={`${t('monthlyPlanActual.chartTitle', 'OS contract work: plan vs actual')} ${currentYear}`}
                   onClick={state => {
                     // recharts 3 `MouseHandlerDataParam` has no `activePayload` — recover the
@@ -748,7 +823,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                     xAxisId="main"
                     dataKey="monthLabel"
                     interval={0}
-                    tick={{ fontSize: 12, fontWeight: 600, fill: theme.text }}
+                    tick={{ fontSize: monthTickSize, fontWeight: 600, fill: theme.text }}
                     tickLine={false}
                     axisLine={{ stroke: theme.line }}
                     height={28}
@@ -762,32 +837,32 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                     yAxisId="left"
                     orientation="left"
                     domain={[0, maxSales]}
-                    width={64}
+                    width={Y_AXIS_WIDTH}
                     tickLine={false}
                     axisLine={{ stroke: theme.line }}
-                    tick={{ fontSize: 11, fill: theme.muted }}
+                    tick={{ fontSize: 13, fill: theme.muted }}
                     tickFormatter={nf}
                     label={{
                       value: t('monthlyPlanActual.axis.sales', 'Sales (10k JPY)'),
                       angle: -90,
                       position: 'insideLeft',
-                      style: { fontSize: 12, fontWeight: 600, fill: chartColors.salesActual.color, textAnchor: 'middle' },
+                      style: { fontSize: 14, fontWeight: 600, fill: chartColors.salesActual.color, textAnchor: 'middle' },
                     }}
                   />
                   <YAxis
                     yAxisId="right"
                     orientation="right"
                     domain={[0, maxWorkingHours]}
-                    width={64}
+                    width={Y_AXIS_WIDTH}
                     tickLine={false}
                     axisLine={{ stroke: theme.line }}
-                    tick={{ fontSize: 11, fill: theme.muted }}
+                    tick={{ fontSize: 13, fill: theme.muted }}
                     tickFormatter={nf}
                     label={{
                       value: t('monthlyPlanActual.axis.workingHours', 'Working hours per month'),
                       angle: 90,
                       position: 'insideRight',
-                      style: { fontSize: 12, fontWeight: 600, fill: chartColors.workingHoursActual.color, textAnchor: 'middle' },
+                      style: { fontSize: 14, fontWeight: 600, fill: chartColors.workingHoursActual.color, textAnchor: 'middle' },
                     }}
                   />
 
@@ -826,7 +901,7 @@ export const MonthlyPlanActualView: React.FC<MonthlyPlanActualViewProps> = ({ cu
                     fillOpacity={chartColors.workingHoursPlan.opacity}
                     maxBarSize={chartColors.workingHoursPlan.barSize ?? 60}
                   >
-                    <LabelList dataKey="workingHoursPlan" zIndex={LABEL_Z.workingHoursPlan} position="insideTop" content={<HoursPlanLabel position="insideTop" dataKey="workingHoursPlan" chartColors={chartColors} nf={nf} theme={theme} sales={salesActuals} />} />
+                    <LabelList dataKey="workingHoursPlan" zIndex={LABEL_Z.workingHoursPlan} position="insideTop" content={<HoursPlanLabel position="insideTop" dataKey="workingHoursPlan" chartColors={chartColors} nf={nf} theme={theme} sales={salesActuals} actualHours={hoursActuals} />} />
                   </Bar>
 
                   <Line

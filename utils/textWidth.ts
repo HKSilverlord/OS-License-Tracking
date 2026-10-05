@@ -15,3 +15,10 @@ export const textWidth = (text: string, fontSize: number, bold: boolean): number
   context.font = `${bold ? 'bold' : 'normal'} ${fontSize}px ${family}`;
   return context.measureText(text).width;
 };
+
+/**
+ * The first of `sizes` at which every label fits in `room` px and keeps `gap`
+ * px from the next; the last size if none does.
+ */
+export const fittingFontSize = (labels: string[], room: number, sizes: readonly number[], bold: boolean, gap = 8): number =>
+  sizes.find(size => labels.every(label => textWidth(label, size, bold) + gap <= room)) ?? sizes[sizes.length - 1];

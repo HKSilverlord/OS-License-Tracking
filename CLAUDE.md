@@ -109,7 +109,7 @@ Like the harness, this kit is not in the repo (see the top of this file). The ki
   - `t-home.mjs` checks that the app opens on the report. It covers `#/`, unknown addresses, the sidebar and drawer order in each language, a viewer, signing in, and Back.
   - Every test that meant the Dashboard by `#/` now uses `#/dashboard`.
 
-Expected results at PR #6. The counts assume the clock is in September 2026:
+Expected results, last run in full at PR #10. The counts assume the clock is in September 2026:
 - From 1 October, September counts as a finished month. Monthly then gets one more figure: `t-overlap` 41, `t-growin` 49.
 - `t-report` fails 4 checks that assume September.
 - `qa-report/t-report-sep.mjs`, `t-overlap-sep.mjs` and `t-growin-sep.mjs` pin the clock to 2026-09-30 and still give the figures below.
@@ -125,11 +125,11 @@ Expected results at PR #6. The counts assume the clock is in September 2026:
 | `t-dashgrow` | Cumulative: `exported: 2, curves: 2` (the monthly chart shows bar figures only from 1920 px) |
 | `t-zorder` | Label order unchanged after toggling capacity figures |
 | `t-back`, `guard`, `t-note` | Unsaved-changes dialog appears; Stay and Leave both work; the note is saved; no console logs |
-| `t-tableexp` | `yearly-data-table` 1492×562, `catia-license-table` 3176×834 (taller since the larger text of #8; 1492×551 and 3176×820 before) |
+| `t-tableexp` | `yearly-data-table` 1492×600, `catia-license-table` 3384×834 (since the larger tables of #10; 1492×562 and 3176×834 after #8, 1492×551 and 3176×820 before) |
 | `t-pngexport` | Every card exports; charts that scroll sideways export at full width |
 | `perf/ptime` | About 2–4 s per PNG export at 1440, light and dark alike, on a loaded machine |
 | `font/slowfont` | `DELAY=1500`: Inter, no warning. `DELAY=6000`: system font, words spaced, one warning |
-| `qa/q-crafted` | 0 covered at 1440 and for `d4`, `d5` and `lvl3`. At 390, `lvl4` covers 0.3–0.8 px each side and `lvl5` 1.2–3.6 px (see Known limitations) |
+| `qa/q-crafted` | 0 covered for every set (`d4`, `d5`, `lvl3`, `lvl4`, `lvl5`, `d5flat`) at 390, 1024 and 1440. Since #10 the planned hours drop below level sales figures; before, `lvl4` and `lvl5` covered up to 3.6 px at 390 |
 | `t-report` | 114 passed, 0 failed. For 2026 the report equals the Dashboard: 10,120 h, ¥32,384,000, plans 17,400 h and ¥52,200,000 |
 | `qa-report/t-home` | 27 passed, 0 failed |
 | `report-pptx/run.sh` | Six decks, each 5 slides; every one opens in PowerPoint, with 0 overflows, 0 shrunk boxes, and `validate.py` passing |
@@ -146,11 +146,15 @@ Expected results at PR #6. The counts assume the clock is in September 2026:
 - `utils/chartTheme.ts`: halo and plate colours for each theme.
 - `components/MonthlyPlanActualView.tsx`:
   - `labelBacking` decides between plate and halo, and their colour: whatever stands apart from the figure (a contrast of at least 2).
-  - `ValueLabel` draws a figure.
+  - `ValueLabel` draws a figure. `insidePlot` keeps it inside the plot, so January's and December's figures, wider than their columns, do not run over the axes.
   - `SalesPlanLabel` lifts the plan figure above the actual's.
-  - `HoursPlanLabel` moves the planned hours left, clear of the sales figure's halo but not under the previous month's. Where both stand level and there is no room between them, it sits halfway.
+  - `HoursPlanLabel` keeps the planned hours clear of this month's sales figure (on the right) and last month's (on the left).
+    - First it moves sideways, no further than its column's edge, and never past the axis.
+    - Where both stand level there is no room between them (at 61 px a month the three figures need 76), so it drops down its own column, below them and above the actual hours' figure.
+    - Where the actual hours leave no room for that either, it sits halfway.
   - `LABEL_Z` fixes the stacking order of labels.
 - `components/TotalView.tsx`: the Cumulative hours chart. `OutlinedLabel` does the lifting.
+- `components/LongTermPlanView.tsx`: `SalesPlanFigure` lifts the sales plan's figure above the actual's where the two would touch (narrow charts, columns of about the same height). It measures by the text's box (Inter's ascent and descent), as the overlap tests do.
 - `utils/textWidth.ts`: measures a figure's width on a canvas, for both charts.
 - `components/Dashboard.tsx`: `lastRealMonth` counts the current month only once it has actual revenue.
 - The business report, `/report`. The spec and its decisions are in `docs/business-report.md`.
@@ -183,7 +187,18 @@ In October 2026 every page's text was raised one step, so the screen reads from 
   - Buttons: sm 14px, md 15px, lg 16px.
   - Fields: sm 14px, md 15px, lg 16px. The sizes live in `HEIGHT` and `TEXTAREA_SIZE` in `components/ui/Field.tsx` (see Tailwind v4 below).
 - `/report` runs a size above all this (see the report above).
-- Charts: axis ticks and value labels are SVG sizes and did not change. The Dashboard's legends are 13px and its tooltip 14px, like the other cards.
+- Tables and charts were raised again in October 2026, after users said they were still small on a shared screen and on small laptops:
+  - Tables (Tracking, Annual data, CATIA): figures and names 15px, headings and Plan/Actual 14px, project codes and units 13px. CATIA's month columns are 60 px, so "136.6" fits at 15px.
+  - Metric: label and sub-line 15px, footnote 14px. The Dashboard's small print is 14px.
+  - Charts:
+    - Value axis 13px. Axis titles 14px.
+    - Month and year names 14px. Monthly and Cumulative step down to 13 or 12px when a name would touch the next (`fittingFontSize` in `utils/textWidth.ts`). "Tháng 10" is 62 px at 14px, and at Monthly's 900 px minimum a month is 61 px wide.
+    - Figures 12px, the actual's figure 13px (Monthly, Cumulative, Long-term).
+    - The Dashboard's bar figures stay 10px, shown from a chart 640 px wide. The chart is at most 658 px wide, and 11px figures need about 700.
+    - The Dashboard's value axes size themselves (`width="auto"`, no negative margin): at 13px a fixed 60 px cut "6,000万" to ".000万".
+    - Cumulative has an 8 px left margin: without it, the 14px axis title lost the tops of its letters and its Vietnamese accents.
+    - Legends 14px, hover cards 15px, the "This month" badge 12px.
+  - Monthly and Cumulative store each series' figure size in localStorage. A stored size still at the old default (10, or 11 and 12 for the actuals) moves to the new one; a size someone picked stays (`LABEL_SIZES` and `upgradeLabelSize` in `utils/chartColorPrefs.ts`).
 - Page header (`components/ui/Page.tsx`): the description asks for at most 24rem, through an invisible copy of itself. A long description wraps to two lines instead of pushing the page's controls onto a line of their own.
 - Grids inside cards switch on the card's width (`@container`), not the window's. The sidebar takes 248 px from `md`, so a 768 px window leaves a card about 470 px wide. This applies to the CATIA figures and the Dashboard's plan-vs-actual table.
 - Vietnamese is the longest language.
@@ -228,7 +243,7 @@ In October 2026 every page's text was raised one step, so the screen reads from 
 - Worktrees: unlink the `node_modules` junction before `git worktree remove` (see memory).
 - Other Claude sessions on this machine run heavy jobs. If Vite takes 30 s or more to start, the disk is saturated; the app is not at fault.
 
-## State (2026-10-01)
+## State (2026-10-05)
 
 - PRs:
   - #1 Redesign, every screen, for desktop, tablet and phone.
@@ -240,6 +255,7 @@ In October 2026 every page's text was raised one step, so the screen reads from 
   - #7 `/report` in larger text, headings and figures, for reading on a shared screen.
   - #8 Every other page one step larger, with bold titles (see Type scale).
   - #9 The app opens on the business report, first in the sidebar. The Dashboard moved to `/dashboard`.
+  - #10 Tables and charts one step larger again, after users said they were still small on a shared screen and on small laptops (see Type scale). Monthly's planned hours drop down their column when level sales figures leave no room beside them.
 - `db/migration_business_reports.sql` was run on the production Supabase on 2026-10-01. A read-only check confirmed the table, RLS, its 4 policies, the stamp trigger and both constraints.
 - The sample deck `OS設計チーム_事業状況報告_2026年9月28日.pptx` in the repo root is the template. It is untracked, and `*.pptx` is ignored. Its last slide holds a login, so never commit it, copy it or quote it.
 - The branches merged through #1–#8 are deleted. The older branches (`chore/cleanup`, `feat/ux-pass`, `feature/redesign`, `fix/export-input-and-race-bugs`, `fix/ux-and-architecture-repair`) predate this work; ask before touching them.
@@ -248,10 +264,8 @@ In October 2026 every page's text was raised one step, so the screen reads from 
 
 - If the web font is more than 3 s late or fails to load, the image comes out in the system font instead of Inter. The spacing is right, and a console warning says why.
 - With crafted data, a figure's corner can sit under the hours-actual plate, and the sales plan can overlap hours actual. Both were there before this work and are better than they were.
-- At Monthly's 900 px minimum, several months in a row can have sales figures level with the planned hours. The planned hours then have no room between this month's sales figure and last month's, so they sit halfway.
-  - With sales in the thousands, each side covers under 1 px; before, one side covered 5–6 px.
-  - With sales in the tens of thousands, each side covers up to 3.6 px.
-  - Clearing both would mean moving the figure up or down its column. A version of that was tried in `75fc275` (branch deleted; the commit is still reachable by hash) and left out as too involved.
+- At Monthly's 900 px minimum, the planned hours can stand level with both this month's and last month's sales figures. They then drop down their column (see `HoursPlanLabel`). Only where the actual hours are so close to the plan that their figure leaves no room do the planned hours sit halfway, covering a few px on each side.
+- Chart figures are measured on a canvas when the chart draws. If Inter arrives later, the measurement used the fallback font, and a figure can sit up to 1 px off until the chart draws again. `t-plates` caught this once on a cold first load (0.8 px); reruns gave 0.
 - The contrast check covers `ValueLabel` on Monthly only.
   - Cumulative hours' outlined figures and Monthly's "0" plate still use the theme's colours whatever the figure's colour. In dark mode, a dark figure there would disappear.
   - The axis titles take the bar's colour, so a pale bar gives a pale title.
