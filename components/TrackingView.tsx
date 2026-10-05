@@ -82,7 +82,7 @@ const NAME_WIDTH = 'w-[128px] min-w-[128px] max-w-[128px] lg:w-[224px] lg:min-w-
 const STICKY_KIND = 'sticky left-[128px] z-10 lg:left-[224px] xl:left-[360px]';
 
 const HEAD =
-  'sticky top-0 z-20 h-10 border-b border-slate-200 bg-white px-2 text-[13px] font-medium text-slate-500 ' +
+  'sticky top-0 z-20 h-10 border-b border-slate-200 bg-white px-2 text-sm font-medium text-slate-500 ' +
   'dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400';
 /* Header cells frozen both ways sit above the rest. HEAD is already sticky
    to the top, so a left offset is all it takes to freeze one sideways. */
@@ -98,7 +98,7 @@ const ROW_END = 'border-b border-slate-100 dark:border-slate-800';
 
 /** Editable cell text: a spreadsheet cell that shows it can be typed into on hover. */
 const CELL_INPUT =
-  'block w-full rounded-md border-0 bg-transparent px-2 text-sm text-slate-900 outline-none ' +
+  'block w-full rounded-md border-0 bg-transparent px-2 text-[15px] text-slate-900 outline-none ' +
   'transition-[background-color,box-shadow] duration-100 placeholder:text-slate-300 ' +
   'hover:bg-slate-100/70 focus:bg-white focus:ring-2 focus:ring-blue-500/50 ' +
   'dark:text-slate-100 dark:placeholder:text-slate-600 dark:hover:bg-slate-800 dark:focus:bg-slate-950 dark:focus:ring-blue-400/50';
@@ -183,7 +183,7 @@ const HourCell: React.FC<{
   const tone = kind === 'actual' ? 'font-medium' : 'text-slate-500! dark:text-slate-400!';
   if (!editable) {
     return (
-      <span className={`block px-2 text-right text-sm tabular-nums text-slate-900 dark:text-slate-100 ${tone}`}>
+      <span className={`block px-2 text-right text-[15px] tabular-nums text-slate-900 dark:text-slate-100 ${tone}`}>
         {value === 0 ? <span className="text-slate-300 dark:text-slate-600">–</span> : format(value)}
       </span>
     );
@@ -224,7 +224,7 @@ const TextCell: React.FC<{
       onChange={event => onChange(event.target.value)}
     />
   ) : (
-    <p className="whitespace-pre-line px-2 py-1.5 text-sm leading-5 text-slate-600 dark:text-slate-300">
+    <p className="whitespace-pre-line px-2 py-1.5 text-[15px] leading-5 text-slate-600 dark:text-slate-300">
       {value || <span className="text-slate-300 dark:text-slate-600">–</span>}
     </p>
   );
@@ -1017,7 +1017,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
                 )}
                 <th scope="col" style={{ width: W.rate, minWidth: W.rate }} className={`${HEAD} text-right`}>
                   {t('tracker.rate', 'Rate')}
-                  <span className="block text-xs font-normal text-slate-500 dark:text-slate-400">{t('unit.yenPerHour', 'JPY/h')}</span>
+                  <span className="block text-[13px] font-normal text-slate-500 dark:text-slate-400">{t('unit.yenPerHour', 'JPY/h')}</span>
                 </th>
                 <th scope="col" data-col="kind" style={{ width: W.kind, minWidth: W.kind }} className={`${HEAD} ${HEAD_KIND} border-r`}>
                   <span className="sr-only">{t('tracker.rowKind', 'Plan or actual')}</span>
@@ -1080,7 +1080,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
                   <SortableRow key={project.id} id={project.id} disabled={!isEditMode || !canReorder} className="group">
                     {/* Plan */}
                     <tr data-project={project.id}>
-                      <td rowSpan={2} style={{ width: W.no, minWidth: W.no }} className={`${SURFACE} ${STICKY_NO} ${ROW_END} px-1 py-2 text-center align-top text-sm tabular-nums text-slate-500 dark:text-slate-400`}>
+                      <td rowSpan={2} style={{ width: W.no, minWidth: W.no }} className={`${SURFACE} ${STICKY_NO} ${ROW_END} px-1 py-2 text-center align-top text-[15px] tabular-nums text-slate-500 dark:text-slate-400`}>
                         {isEditMode && canReorder
                           ? <DragHandleCell label={t('tracker.dragToReorder', 'Drag to reorder')} />
                           : <span className="inline-block pt-1.5">{index + 1}</span>}
@@ -1096,16 +1096,16 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
                             placeholder="–"
                           />
                         ) : (
-                          <span className="block pt-1.5 text-center text-sm text-slate-600 dark:text-slate-300">
+                          <span className="block pt-1.5 text-center text-[15px] text-slate-600 dark:text-slate-300">
                             {project.exclusion_mark || <span className="text-slate-300 dark:text-slate-600">–</span>}
                           </span>
                         )}
                       </td>
                       <th scope="rowgroup" rowSpan={2} className={`${SURFACE} ${STICKY_NAME} ${NAME_WIDTH} ${ROW_END} border-r border-r-slate-200 px-3 py-2 text-left align-top font-normal dark:border-r-slate-800`}>
-                        <span className="line-clamp-2 text-sm font-medium leading-5 text-slate-900 dark:text-white" title={project.name}>
+                        <span className="line-clamp-2 text-[15px] font-medium leading-5 text-slate-900 dark:text-white" title={project.name}>
                           {project.name}
                         </span>
-                        <span className="mt-0.5 block font-mono text-xs text-slate-500 dark:text-slate-400">{project.code}</span>
+                        <span className="mt-0.5 block font-mono text-[13px] text-slate-500 dark:text-slate-400">{project.code}</span>
                       </th>
                       {showDetails && (
                         <>
@@ -1136,14 +1136,14 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
                           </td>
                         </>
                       )}
-                      <td className={`${SURFACE} px-2 py-1 text-right text-sm tabular-nums text-slate-500 dark:text-slate-400`}>
+                      <td className={`${SURFACE} px-2 py-1 text-right text-[15px] tabular-nums text-slate-500 dark:text-slate-400`}>
                         {nf(prices.plan)}
                       </td>
-                      <td className={`${SURFACE} ${STICKY_KIND} whitespace-nowrap border-r border-slate-100 px-2 py-1 text-[13px] text-slate-500 dark:border-slate-800 dark:text-slate-400`}>
+                      <td className={`${SURFACE} ${STICKY_KIND} whitespace-nowrap border-r border-slate-100 px-2 py-1 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400`}>
                         {planLabel}
                       </td>
                       {months.map(m => hourCell(m, 'planned_hours'))}
-                      <td className={`${SURFACE} border-l border-slate-100 px-2 py-1 text-right text-sm tabular-nums text-slate-500 dark:border-slate-800 dark:text-slate-400`}>
+                      <td className={`${SURFACE} border-l border-slate-100 px-2 py-1 text-right text-[15px] tabular-nums text-slate-500 dark:border-slate-800 dark:text-slate-400`}>
                         {planTotal === 0 ? <span className="text-slate-300 dark:text-slate-600">–</span> : nf(planTotal)}
                       </td>
                       {isAdmin && (
@@ -1164,14 +1164,14 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentYear }) => {
 
                     {/* Actual */}
                     <tr>
-                      <td className={`${SURFACE} ${ROW_END} px-2 py-1 text-right text-sm tabular-nums text-slate-600 dark:text-slate-300`}>
+                      <td className={`${SURFACE} ${ROW_END} px-2 py-1 text-right text-[15px] tabular-nums text-slate-600 dark:text-slate-300`}>
                         {nf(prices.actual)}
                       </td>
-                      <td className={`${SURFACE} ${STICKY_KIND} ${ROW_END} whitespace-nowrap border-r border-r-slate-100 px-2 py-1 text-[13px] font-medium text-slate-900 dark:border-r-slate-800 dark:text-white`}>
+                      <td className={`${SURFACE} ${STICKY_KIND} ${ROW_END} whitespace-nowrap border-r border-r-slate-100 px-2 py-1 text-sm font-medium text-slate-900 dark:border-r-slate-800 dark:text-white`}>
                         {actualLabel}
                       </td>
                       {months.map(m => hourCell(m, 'actual_hours'))}
-                      <td className={`${SURFACE} ${ROW_END} border-l border-l-slate-100 px-2 py-1 text-right text-sm font-semibold tabular-nums text-slate-900 dark:border-l-slate-800 dark:text-white`}>
+                      <td className={`${SURFACE} ${ROW_END} border-l border-l-slate-100 px-2 py-1 text-right text-[15px] font-semibold tabular-nums text-slate-900 dark:border-l-slate-800 dark:text-white`}>
                         {actualTotal === 0 ? <span className="font-normal text-slate-300 dark:text-slate-600">–</span> : nf(actualTotal)}
                       </td>
                     </tr>

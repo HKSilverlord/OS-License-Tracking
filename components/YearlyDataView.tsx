@@ -58,11 +58,11 @@ const STICKY_KIND = 'sticky left-[128px] z-10 lg:left-[224px] xl:left-[272px]';
 const KIND_WIDTH = 'w-[80px] min-w-[80px] lg:w-[96px] lg:min-w-[96px]';
 
 const HEAD =
-  'h-10 border-b border-slate-200 bg-white px-2 text-[13px] font-medium text-slate-500 ' +
+  'h-10 border-b border-slate-200 bg-white px-2 text-sm font-medium text-slate-500 ' +
   'dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400';
 
 const ROW_END = 'border-b border-slate-100 dark:border-slate-800';
-const NUM = 'px-2 py-1.5 text-right text-sm tabular-nums';
+const NUM = 'px-2 py-1.5 text-right text-[15px] tabular-nums';
 
 const Dash = () => <span className="font-normal text-slate-300 dark:text-slate-600">–</span>;
 
@@ -418,7 +418,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
                 </th>
                 <th scope="col" style={{ width: W.revenue, minWidth: W.revenue }} className={`${HEAD} border-l text-right`}>
                   {t('yearly.revenue', 'Revenue')}
-                  <span className="block text-xs font-normal text-slate-500 dark:text-slate-400">{t('csv.unitCurrency', 'JPY')}</span>
+                  <span className="block text-[13px] font-normal text-slate-500 dark:text-slate-400">{t('csv.unitCurrency', 'JPY')}</span>
                 </th>
               </tr>
 
@@ -431,15 +431,15 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
                   <tr key={row.key}>
                     {i === 0 && (
                       <>
-                        <td rowSpan={totalRows.length} className={`${TOTALS} ${STICKY_NO} border-b border-slate-200 px-1 py-2 text-center align-top text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400`}>
+                        <td rowSpan={totalRows.length} className={`${TOTALS} ${STICKY_NO} border-b border-slate-200 px-1 py-2 text-center align-top text-[15px] text-slate-500 dark:border-slate-700 dark:text-slate-400`}>
                           <span aria-hidden="true">Σ</span>
                         </td>
-                        <th scope="rowgroup" rowSpan={totalRows.length} className={`${TOTALS} ${STICKY_NAME} ${NAME_WIDTH} border-b border-r border-slate-200 px-3 py-2 text-left align-top text-sm font-semibold text-slate-900 dark:border-slate-700 dark:text-white`}>
+                        <th scope="rowgroup" rowSpan={totalRows.length} className={`${TOTALS} ${STICKY_NAME} ${NAME_WIDTH} border-b border-r border-slate-200 px-3 py-2 text-left align-top text-[15px] font-semibold text-slate-900 dark:border-slate-700 dark:text-white`}>
                           {t('yearly.allProjects', 'All projects')}
                         </th>
                       </>
                     )}
-                    <th scope="row" className={`${TOTALS} ${STICKY_KIND} ${edge} border-r border-r-slate-200 px-2 py-1.5 text-left text-[13px] font-medium leading-4 text-slate-500 dark:border-r-slate-700 dark:text-slate-400`}>
+                    <th scope="row" className={`${TOTALS} ${STICKY_KIND} ${edge} border-r border-r-slate-200 px-2 py-1.5 text-left text-sm font-medium leading-[18px] text-slate-500 dark:border-r-slate-700 dark:text-slate-400`}>
                       {row.label}
                     </th>
                     {row.values.map((value, idx) => (
@@ -475,16 +475,16 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
               return (
                 <tbody key={project.id} className="group">
                   <tr>
-                    <td rowSpan={2} style={{ width: W.no, minWidth: W.no }} className={`${SURFACE} ${STICKY_NO} ${ROW_END} px-1 py-2 text-center align-top text-sm tabular-nums text-slate-500 dark:text-slate-400`}>
+                    <td rowSpan={2} style={{ width: W.no, minWidth: W.no }} className={`${SURFACE} ${STICKY_NO} ${ROW_END} px-1 py-2 text-center align-top text-[15px] tabular-nums text-slate-500 dark:text-slate-400`}>
                       <span className="inline-block pt-0.5">{index + 1}</span>
                     </td>
                     <th scope="rowgroup" rowSpan={2} className={`${SURFACE} ${STICKY_NAME} ${NAME_WIDTH} ${ROW_END} border-r border-r-slate-200 px-3 py-2 text-left align-top font-normal dark:border-r-slate-800`}>
-                      <span className="line-clamp-2 text-sm font-medium leading-5 text-slate-900 dark:text-white" title={project.name}>
+                      <span className="line-clamp-2 text-[15px] font-medium leading-5 text-slate-900 dark:text-white" title={project.name}>
                         {project.name}
                       </span>
-                      <span className="mt-0.5 block font-mono text-xs text-slate-500 dark:text-slate-400">{project.code}</span>
+                      <span className="mt-0.5 block font-mono text-[13px] text-slate-500 dark:text-slate-400">{project.code}</span>
                     </th>
-                    <th scope="row" className={`${SURFACE} ${STICKY_KIND} whitespace-nowrap border-r border-slate-100 px-2 py-1.5 text-left text-[13px] font-normal text-slate-500 dark:border-slate-800 dark:text-slate-400`}>
+                    <th scope="row" className={`${SURFACE} ${STICKY_KIND} whitespace-nowrap border-r border-slate-100 px-2 py-1.5 text-left text-sm font-normal text-slate-500 dark:border-slate-800 dark:text-slate-400`}>
                       {planLabel}
                     </th>
                     {monthlyData.map((d, idx) => (
@@ -503,7 +503,7 @@ export const YearlyDataView: React.FC<YearlyDataViewProps> = ({ currentYear }) =
                     </td>
                   </tr>
                   <tr>
-                    <th scope="row" className={`${SURFACE} ${STICKY_KIND} ${ROW_END} whitespace-nowrap border-r border-r-slate-100 px-2 py-1.5 text-left text-[13px] font-medium text-blue-700 dark:border-r-slate-800 dark:text-blue-300`}>
+                    <th scope="row" className={`${SURFACE} ${STICKY_KIND} ${ROW_END} whitespace-nowrap border-r border-r-slate-100 px-2 py-1.5 text-left text-sm font-medium text-blue-700 dark:border-r-slate-800 dark:text-blue-300`}>
                       {actualLabel}
                     </th>
                     {monthlyData.map((d, idx) => (

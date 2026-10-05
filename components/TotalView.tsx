@@ -19,14 +19,14 @@ import { Skeleton } from './ui/Skeleton';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { TranslateFn } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
-import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
+import { useChartPref, upgradeLabelSize, CHART_PALETTE, LABEL_SIZES } from '../utils/chartColorPrefs';
 import { formatVariance } from '../utils/variance';
 import { useNumberFormat } from '../hooks/useNumberFormat';
 import { useIsDarkTheme } from '../hooks/useDarkMode';
 import { useMonthKeys } from '../hooks/useMonthKeys';
 import { chartTheme } from '../utils/chartTheme';
 import { createLogger } from '../utils/logger';
-import { textWidth } from '../utils/textWidth';
+import { fittingFontSize, textWidth } from '../utils/textWidth';
 
 const log = createLogger('TotalView');
 
@@ -38,7 +38,10 @@ interface TotalViewProps {
 const PLOTTED_SERIES = ['accPlan', 'accActual'] as const;
 type PlottedSeries = (typeof PLOTTED_SERIES)[number];
 
-type ChartColors = Record<PlottedSeries, SeriesStyle>;
+type ChartColors = Record<PlottedSeries, SeriesStyle> & {
+  /** See LABEL_SIZES. */
+  labelSizes?: number;
+};
 
 /** One point of the monthly chart. */
 interface TotalChartRow {
@@ -56,9 +59,13 @@ interface TotalChartRow {
 
 /** Theme-safe mid-tones, legible on both bg-white and bg-slate-900. */
 const DEFAULT_CHART_COLORS: ChartColors = {
-  accPlan: { color: CHART_PALETTE.labelNeutral, opacity: 1, labelColor: CHART_PALETTE.labelNeutral, fontSize: 10, bold: false, stroke: false },
-  accActual: { color: CHART_PALETTE.actual, opacity: 1, labelColor: CHART_PALETTE.actual, fontSize: 12, bold: true, stroke: true },
+  labelSizes: LABEL_SIZES,
+  accPlan: { color: CHART_PALETTE.labelNeutral, opacity: 1, labelColor: CHART_PALETTE.labelNeutral, fontSize: 12, bold: false, stroke: false },
+  accActual: { color: CHART_PALETTE.actual, opacity: 1, labelColor: CHART_PALETTE.actual, fontSize: 13, bold: true, stroke: true },
 };
+
+/** The figures' default sizes before LABEL_SIZES. */
+const PREVIOUS_FONT_SIZE: Record<PlottedSeries, number> = { accPlan: 10, accActual: 12 };
 
 /** A forecast month is drawn as an outline at this opacity rather than solid. */
 const FORECAST_OPACITY = 0.3;
@@ -82,7 +89,8 @@ const BAR_ANIMATION_MS = 650;
  *  - later formats stored a partial SeriesStyle, merged over the defaults so
  *    fields added since the preference was written are picked up,
  *  - older versions also stored styles for the monthly plan and actual, which
- *    were never drawn; they are dropped.
+ *    were never drawn; they are dropped,
+ *  - a figure still at the size it had by default before LABEL_SIZES takes today's default.
  */
 const migrateChartColors = (raw: unknown): ChartColors | null => {
   if (raw === null || typeof raw !== 'object') return null;
@@ -92,12 +100,13 @@ const migrateChartColors = (raw: unknown): ChartColors | null => {
     const value = parsed[key];
     if (typeof value === 'string') return { ...DEFAULT_CHART_COLORS[key], color: value };
     if (value !== null && typeof value === 'object') {
-      return { ...DEFAULT_CHART_COLORS[key], ...(value as Partial<SeriesStyle>) };
+      const style = { ...DEFAULT_CHART_COLORS[key], ...(value as Partial<SeriesStyle>) };
+      return upgradeLabelSize(style, raw, PREVIOUS_FONT_SIZE[key], DEFAULT_CHART_COLORS[key].fontSize);
     }
     return DEFAULT_CHART_COLORS[key];
   };
 
-  return { accPlan: mergeSeries('accPlan'), accActual: mergeSeries('accActual') };
+  return { labelSizes: LABEL_SIZES, accPlan: mergeSeries('accPlan'), accActual: mergeSeries('accActual') };
 };
 
 /** Referentially stable so hooks that map over it can list it as a dependency. */
@@ -124,6 +133,12 @@ const signed = (delta: number, language: string, format: (value: number) => stri
 
 /** Recharts' default gap between the two bars of a month. */
 const BAR_GAP = 4;
+
+/** The left margin keeps the axis title whole: at 14 px with no margin, its accents were cut. */
+const CHART_MARGIN = { top: 34, right: 16, left: 8, bottom: 4 };
+const Y_AXIS_WIDTH = 78;
+/** Month names, largest first: the chart uses the largest that fits. */
+const MONTH_TICK_SIZES = [14, 13, 12] as const;
 
 /** A figure's width with its outline, if it has one. */
 const figureWidth = (text: string, style: SeriesStyle): number =>
@@ -170,8 +185,10 @@ const OutlinedLabel = ({ x, y, value, dataKey, width = 0, chartColors, index, ro
     const otherText = nf(otherValue);
     const touching = (figureWidth(formatted, style) + figureWidth(otherText, otherStyle)) / 2 + 2 > width + BAR_GAP;
     const otherTy = plot.y + plot.height * (1 - otherValue / top) - 6;
-    // Baselines: this figure's descent must clear the other's cap height.
-    const highest = otherTy - otherStyle.fontSize * 0.75 - style.fontSize * 0.25 - 2;
+    // Baselines: this figure's descent must clear the other's cap height, and
+    // an outline reaches 1.5 px past its figure.
+    const outlines = (style.stroke ? 1.5 : 0) + (otherStyle.stroke ? 1.5 : 0);
+    const highest = otherTy - otherStyle.fontSize * 0.75 - style.fontSize * 0.25 - outlines - 2;
     if (touching && ty > highest) ty = highest;
   }
   return (
@@ -220,7 +237,7 @@ const AccumulatedSummary = ({ row, t, language, nf, nfPct, unit }: {
 }) => {
   const { timeGap, percentGap } = accumulatedGap(row);
   return (
-    <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm text-slate-500 dark:text-slate-400">
+    <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[15px] text-slate-500 dark:text-slate-400">
       <span className="font-medium text-slate-700 dark:text-slate-200">
         {t('totalView.summary.through', 'Through {month}').replace('{month}', row.fullName)}
       </span>
@@ -274,7 +291,7 @@ const MonthDetailCard = ({ data, chartColors, t, language, nf, nfPct, unit, onUn
   const { timeGap, percentGap } = accumulatedGap(data);
 
   return (
-    <div className="min-w-[232px] rounded-xl bg-white p-3 text-sm shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/10 dark:bg-slate-900 dark:shadow-black/40 dark:ring-white/10">
+    <div className="min-w-[248px] rounded-xl bg-white p-3 text-[15px] shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/10 dark:bg-slate-900 dark:shadow-black/40 dark:ring-white/10">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="font-semibold text-slate-900 dark:text-white">{data.fullName}</span>
         <span className="flex items-center gap-1">
@@ -377,7 +394,7 @@ const SeriesLegend = ({ chartColors, hidden, onToggle, labels, hint }: {
           onClick={() => onToggle(key)}
           title={hint}
           aria-pressed={shown}
-          className={`inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[13px] font-medium transition-colors ${
+          className={`inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-sm font-medium transition-colors ${
             shown
               ? 'bg-slate-100 text-slate-700 hover:bg-slate-200/70 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
               : 'text-slate-400 line-through ring-1 ring-inset ring-slate-200 hover:text-slate-600 dark:text-slate-500 dark:ring-slate-700 dark:hover:text-slate-300'
@@ -530,6 +547,7 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
 
   const currentMonth = new Date().getFullYear() === currentYear ? new Date().getMonth() + 1 : null;
   const [showCurrentMonth, setShowCurrentMonth] = useState(true);
+  const [chartWidth, setChartWidth] = useState(0);
 
   // Years can change faster than a request completes; the sequence number
   // drops any response that is no longer for the year on screen. `t` is read
@@ -626,6 +644,11 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
     [chartData]
   );
   const forecastMonths = chartData.filter(row => row.isFuture).length;
+
+  // Month names take the largest size that keeps them apart: at the chart's
+  // narrowest a month is 67 px wide, and "Tháng 10" is 62 px at 14 px.
+  const monthBand = (chartWidth - CHART_MARGIN.left - CHART_MARGIN.right - Y_AXIS_WIDTH) / chartData.length;
+  const monthTickSize = chartWidth > 0 ? fittingFontSize(chartData.map(row => row.name), monthBand, MONTH_TICK_SIZES, true) : MONTH_TICK_SIZES[0];
 
   chartDataRef.current = chartData;
 
@@ -870,10 +893,10 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                 </div>
               )}
 
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" onResize={width => setChartWidth(width)}>
                 <ComposedChart
                   data={chartData}
-                  margin={{ top: 34, right: 16, left: 0, bottom: 4 }}
+                  margin={CHART_MARGIN}
                   aria-label={`${t('totalView.chartTitle', 'Cumulative plan and actual')} ${currentYear}`}
                   onClick={state => {
                     const clicked = monthAtIndex(state?.activeIndex);
@@ -916,24 +939,24 @@ export const TotalView: React.FC<TotalViewProps> = ({ currentYear }) => {
                     tickMargin={8}
                     tickLine={false}
                     axisLine={{ stroke: axis.line }}
-                    tick={{ fontSize: 13, fontWeight: 600, fill: axis.text }}
+                    tick={{ fontSize: monthTickSize, fontWeight: 600, fill: axis.text }}
                   />
                   <YAxis
                     yAxisId="left"
                     orientation="left"
                     domain={[0, yAxisMax]}
                     ticks={yAxisTicks}
-                    width={78}
+                    width={Y_AXIS_WIDTH}
                     tickMargin={6}
                     tickLine={false}
                     axisLine={{ stroke: axis.line }}
-                    tick={{ fontSize: 12, fontWeight: 500, fill: axis.text }}
+                    tick={{ fontSize: 13, fontWeight: 500, fill: axis.text }}
                     tickFormatter={nf}
                     label={{
                       value: `${t('totalView.axis.accumulated', 'Cumulative')} (${unit})`,
                       angle: -90,
                       position: 'insideLeft',
-                      style: { fontSize: 13, fontWeight: 600, fill: axis.muted, textAnchor: 'middle' },
+                      style: { fontSize: 14, fontWeight: 600, fill: axis.muted, textAnchor: 'middle' },
                     }}
                   />
                   {/* Stands in for a tooltip cursor: the month the card is about. */}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, ClipboardList } from 'lucide-react';
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, TooltipContentProps, LabelList } from 'recharts';
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, TooltipContentProps, LabelList, usePlotArea, useYAxisDomain } from 'recharts';
 import { ChartColorButton } from './ChartColorButton';
 import { ExportButton } from './ExportButton';
 import { buttonClasses } from './ui/buttonClasses';
@@ -18,6 +18,7 @@ import { useGrowIn } from '../hooks/useGrowIn';
 import { dbService } from '../services/dbService';
 import { useChartPref, CHART_PALETTE } from '../utils/chartColorPrefs';
 import { chartTheme } from '../utils/chartTheme';
+import { textWidth } from '../utils/textWidth';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger('LongTermPlanView');
@@ -140,11 +141,54 @@ const RateLabel = ({ x = 0, y = 0, value, index = 0, other, color, bold = false,
       x={Number(x)}
       y={Number(y) + (below ? 18 : -10)}
       textAnchor="middle"
-      fontSize={bold ? 11 : 10}
+      fontSize={bold ? 13 : 12}
       fontWeight={bold ? 'bold' : undefined}
       fill={color}
     >
       {nf(value)}
+    </text>
+  );
+};
+
+/** How far a line of text reaches above and below its baseline, as shares of its font size: Inter's ascent and descent. */
+const ASCENT = 0.97;
+const DESCENT = 0.24;
+
+/**
+ * The sales plan's figure, kept clear of the actual's beside it. Where the
+ * chart is narrow both figures are wider than their columns, so when the two
+ * columns stood at about the same height the figures touched. Then the plan's
+ * moves up, above the actual's.
+ */
+const SalesPlanFigure = ({ x = 0, y = 0, width = 0, value, index = 0, actuals, color, nf }: {
+  x?: number | string;
+  y?: number | string;
+  width?: number | string;
+  value?: unknown;
+  index?: number;
+  /** Sales actual per year, in the chart's order. */
+  actuals: (number | undefined)[];
+  /** Not `fill`: Recharts overwrites that prop when it clones the label. */
+  color: string;
+  nf: (value: number) => string;
+}) => {
+  const plot = usePlotArea();
+  const top = Number(useYAxisDomain('left')?.[1]);
+  if (typeof value !== 'number') return null;
+  const text = nf(value);
+  // LabelList sets a top figure's baseline 5 px above its column.
+  let baseline = Number(y) - 5;
+  const actual = actuals[index];
+  if (plot && top > 0 && typeof actual === 'number' && actual > 0) {
+    const actualBaseline = plot.y + plot.height * (1 - actual / top) - 5;
+    // The two columns are equally wide and 4 px apart.
+    const touching = (textWidth(text, 12, false) + textWidth(nf(actual), 13, true)) / 2 + 1 > Number(width) + 4;
+    const clear = actualBaseline - 13 * ASCENT - 12 * DESCENT - 1;
+    if (touching && baseline > clear && baseline - 12 * ASCENT < actualBaseline + 13 * DESCENT + 1) baseline = clear;
+  }
+  return (
+    <text x={Number(x) + Number(width) / 2} y={baseline} textAnchor="middle" fontSize={12} fill={color}>
+      {text}
     </text>
   );
 };
@@ -182,7 +226,7 @@ const HoverCard = ({ active, payload, chartColors, labels, units, nf }: Partial<
   const hasRates = data.hourlyRatePlan !== undefined || data.hourlyRateActual !== undefined;
 
   return (
-    <div className="min-w-[240px] rounded-xl bg-white p-3 text-sm shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/10 dark:bg-slate-900 dark:shadow-black/40 dark:ring-white/10">
+    <div className="min-w-[256px] rounded-xl bg-white p-3 text-[15px] shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/10 dark:bg-slate-900 dark:shadow-black/40 dark:ring-white/10">
       <p className="mb-2 font-semibold tabular-nums text-slate-900 dark:text-white">{data.year}</p>
       <div className="space-y-1">
         {row('salesPlan')}
@@ -288,6 +332,7 @@ export const LongTermPlanView: React.FC = () => {
 
   const planRates = useMemo(() => chartData.map(d => d.hourlyRatePlan), [chartData]);
   const actualRates = useMemo(() => chartData.map(d => d.hourlyRateActual), [chartData]);
+  const salesActuals = useMemo(() => chartData.map(d => d.salesActual), [chartData]);
 
   const salesAxis = useMemo(
     () => niceAxis(chartData.flatMap(d => [d.salesPlan ?? 0, d.salesActual ?? 0]), 8000),
@@ -397,7 +442,7 @@ export const LongTermPlanView: React.FC = () => {
         {loading && <RefreshBar className="mt-4" />}
 
         <div className={`transition-opacity duration-200 ${loading ? 'opacity-40' : ''}`}>
-          <ul className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] text-slate-600 dark:text-slate-300">
+          <ul className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-600 dark:text-slate-300">
             {SERIES_KEYS.map(key => (
               <li key={key} className="flex items-center gap-2">
                 <Swatch color={chartColors[key]} shape={SERIES_SHAPE[key]} />
@@ -416,7 +461,7 @@ export const LongTermPlanView: React.FC = () => {
                     dataKey="year"
                     tickLine={false}
                     axisLine={{ stroke: theme.line }}
-                    tick={{ fontSize: 12, fontWeight: 600, fill: theme.text }}
+                    tick={{ fontSize: 14, fontWeight: 600, fill: theme.text }}
                     tickMargin={8}
                   />
                   <YAxis
@@ -424,16 +469,16 @@ export const LongTermPlanView: React.FC = () => {
                     orientation="left"
                     domain={[0, salesAxis.max]}
                     ticks={salesAxis.ticks}
-                    width={72}
+                    width={80}
                     tickLine={false}
                     axisLine={{ stroke: theme.line }}
-                    tick={{ fontSize: 11, fill: theme.muted }}
+                    tick={{ fontSize: 13, fill: theme.muted }}
                     tickFormatter={nf}
                     label={{
                       value: t('longTermPlan.axis.sales', 'Sales (10k JPY)'),
                       angle: -90,
                       position: 'insideLeft',
-                      style: { fontSize: 12, fontWeight: 600, fill: chartColors.salesActual, textAnchor: 'middle' },
+                      style: { fontSize: 14, fontWeight: 600, fill: chartColors.salesActual, textAnchor: 'middle' },
                     }}
                   />
                   <YAxis
@@ -441,16 +486,16 @@ export const LongTermPlanView: React.FC = () => {
                     orientation="right"
                     domain={[0, rateAxis.max]}
                     ticks={rateAxis.ticks}
-                    width={72}
+                    width={80}
                     tickLine={false}
                     axisLine={{ stroke: theme.line }}
-                    tick={{ fontSize: 11, fill: theme.muted }}
+                    tick={{ fontSize: 13, fill: theme.muted }}
                     tickFormatter={nf}
                     label={{
                       value: t('longTermPlan.axis.hourlyRate', 'Avg. hourly rate (JPY/h)'),
                       angle: 90,
                       position: 'insideRight',
-                      style: { fontSize: 12, fontWeight: 600, fill: chartColors.hourlyRateActual, textAnchor: 'middle' },
+                      style: { fontSize: 14, fontWeight: 600, fill: chartColors.hourlyRateActual, textAnchor: 'middle' },
                     }}
                   />
 
@@ -460,10 +505,10 @@ export const LongTermPlanView: React.FC = () => {
                   />
 
                   <Bar yAxisId="left" dataKey="salesPlan" name={labels.salesPlan} isAnimationActive={seriesAnimating} fill={chartColors.salesPlan} radius={[4, 4, 0, 0]} maxBarSize={60}>
-                    <LabelList dataKey="salesPlan" position="top" formatter={formatLabel} fontSize={10} fill={chartColors.salesPlan} />
+                    <LabelList dataKey="salesPlan" content={<SalesPlanFigure actuals={salesActuals} color={chartColors.salesPlan} nf={nf} />} />
                   </Bar>
                   <Bar yAxisId="left" dataKey="salesActual" name={labels.salesActual} isAnimationActive={seriesAnimating} fill={chartColors.salesActual} radius={[4, 4, 0, 0]} maxBarSize={60}>
-                    <LabelList dataKey="salesActual" position="top" formatter={formatLabel} fontSize={11} fill={chartColors.salesActual} fontWeight="bold" />
+                    <LabelList dataKey="salesActual" position="top" formatter={formatLabel} fontSize={13} fill={chartColors.salesActual} fontWeight="bold" />
                   </Bar>
                   <Line
                     yAxisId="right"

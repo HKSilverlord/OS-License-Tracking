@@ -108,7 +108,7 @@ const EndLabel = ({ x = 0, y = 0, value, index, lastIndex, other, color, bold = 
       y={below ? y + 18 : y - 10}
       textAnchor={index === other.length - 1 ? 'end' : 'middle'}
       fill={color}
-      fontSize={11}
+      fontSize={13}
       fontWeight={bold ? 700 : 500}
     >
       {format(value)}
@@ -123,7 +123,7 @@ const TOOLTIP_STYLE = {
     borderRadius: '10px',
     border: 'none',
     boxShadow: '0 8px 24px rgba(15, 23, 42, 0.18)',
-    fontSize: '14px',
+    fontSize: '15px',
   },
   itemStyle: { color: '#fff' },
   labelStyle: { color: '#fff', fontWeight: 600 },
@@ -143,9 +143,17 @@ function seriesRank(item: { dataKey?: unknown }): number {
 /** Legend text in grey: the dot carries the series colour, and a pale colour as text is hard to read. */
 const legendText = (value: string) => <span className="text-slate-500 dark:text-slate-400">{value}</span>;
 
-const AXIS_TICK = { fill: CHART_PALETTE.labelNeutral, fontSize: 11 };
+/**
+ * Axis figures. The value axes size themselves to them (`width="auto"`): at
+ * 13 px, "6,000万" outgrew the default 60 px and lost its first digit.
+ */
+const AXIS_TICK = { fill: CHART_PALETTE.labelNeutral, fontSize: 13 };
 
-/** Below this chart width, a figure over each of the 24 bars runs into the next. */
+/**
+ * Below this chart width, a figure over each of the 24 bars runs into the next.
+ * The figures stay 10 px: the chart is at most 658 px wide, and 11 px figures
+ * need about 700.
+ */
 const BAR_LABELS_MIN_WIDTH = 640;
 
 /**
@@ -187,7 +195,7 @@ const Assumption: React.FC<{
           {suffix && <span className="text-sm font-normal text-slate-500 dark:text-slate-400">{suffix}</span>}
         </p>
       )}
-      {hint && <p className="mt-1 text-[13px] leading-5 text-slate-500 dark:text-slate-400">{hint}</p>}
+      {hint && <p className="mt-1 text-sm leading-5 text-slate-500 dark:text-slate-400">{hint}</p>}
     </dd>
   </div>
 );
@@ -539,7 +547,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
             card's width; with the sidebar open, a 768 px window is too narrow for it. */}
         <table className="mt-5 hidden w-full text-[15px] @[40rem]:table">
           <thead>
-            <tr className="border-b border-slate-200 text-left text-[13px] font-medium text-slate-500 dark:border-slate-800 dark:text-slate-400">
+            <tr className="border-b border-slate-200 text-left text-sm font-medium text-slate-500 dark:border-slate-800 dark:text-slate-400">
               <th scope="col" className="w-[22%] py-2.5 pr-4 font-medium"><span className="sr-only">{t('dashboard.planActual.measure', 'Measure')}</span></th>
               <th scope="col" className="py-2.5 pr-4 text-right font-medium">{planShort}</th>
               <th scope="col" className="py-2.5 pr-4 text-right font-medium">{actualShort}</th>
@@ -552,15 +560,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
               <tr key={row.key}>
                 <th scope="row" className="py-3.5 pr-4 text-left align-top font-medium text-slate-900 dark:text-white">
                   {row.label}
-                  {row.hint && <span className="block text-[13px] font-normal text-slate-500 dark:text-slate-400">{row.hint}</span>}
+                  {row.hint && <span className="block text-sm font-normal text-slate-500 dark:text-slate-400">{row.hint}</span>}
                 </th>
                 <td className="py-3.5 pr-4 text-right align-top tabular-nums text-slate-600 dark:text-slate-300">
                   {row.format(row.plan)}
-                  {row.man && <span className="block text-[13px] text-slate-500 dark:text-slate-400">{toMan(row.plan)}</span>}
+                  {row.man && <span className="block text-sm text-slate-500 dark:text-slate-400">{toMan(row.plan)}</span>}
                 </td>
                 <td className="py-3.5 pr-4 text-right align-top font-semibold tabular-nums text-slate-900 dark:text-white">
                   {row.format(row.actual)}
-                  {row.man && <span className="block text-[13px] font-normal text-slate-500 dark:text-slate-400">{toMan(row.actual)}</span>}
+                  {row.man && <span className="block text-sm font-normal text-slate-500 dark:text-slate-400">{toMan(row.actual)}</span>}
                 </td>
                 <td className={`py-3.5 pr-4 text-right align-top font-medium tabular-nums ${varianceTone(row.delta)}`}>
                   {row.variance.arrow && <span className="mr-0.5" title={arrowHint}>{row.variance.arrow}</span>}
@@ -596,11 +604,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
               </div>
               <dl className="mt-2 grid grid-cols-2 gap-3 text-[15px]">
                 <div>
-                  <dt className="text-[13px] text-slate-500 dark:text-slate-400">{planShort}</dt>
+                  <dt className="text-sm text-slate-500 dark:text-slate-400">{planShort}</dt>
                   <dd className="tabular-nums text-slate-600 dark:text-slate-300">{row.format(row.plan)}</dd>
                 </div>
                 <div>
-                  <dt className="text-[13px] text-slate-500 dark:text-slate-400">{actualShort}</dt>
+                  <dt className="text-sm text-slate-500 dark:text-slate-400">{actualShort}</dt>
                   <dd className="font-semibold tabular-nums text-slate-900 dark:text-white">{row.format(row.actual)}</dd>
                 </div>
               </dl>
@@ -614,7 +622,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
           ))}
         </div>
 
-        {showsArrow && <p className="mt-4 text-[13px] text-slate-500 dark:text-slate-400">{arrowHint}</p>}
+        {showsArrow && <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">{arrowHint}</p>}
       </Card>
 
       {/* Charts. Each card is its own export, title and year included. */}
@@ -644,12 +652,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
           />
           <div className="mt-5 h-72">
             <ResponsiveContainer width="100%" height="100%" onResize={width => setBarChartWidth(width)}>
-              <BarChart data={monthlyChart} margin={{ top: 16, right: 4, left: -8, bottom: 0 }} aria-label={`${t('dashboard.chart.monthly', 'Monthly revenue')} ${currentYear}`}>
+              <BarChart data={monthlyChart} margin={{ top: 16, right: 4, left: 0, bottom: 0 }} aria-label={`${t('dashboard.chart.monthly', 'Monthly revenue')} ${currentYear}`}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_PALETTE.grid} />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={AXIS_TICK} />
-                <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} tickFormatter={(val: number) => `${nf(Math.round(val / 10000))}${manYen}`} />
+                <YAxis width="auto" axisLine={false} tickLine={false} tick={AXIS_TICK} tickFormatter={(val: number) => `${nf(Math.round(val / 10000))}${manYen}`} />
                 <Tooltip formatter={val => (typeof val === 'number' ? fmt(val) : '–')} cursor={{ fill: 'rgba(148,163,184,0.12)' }} {...TOOLTIP_STYLE} />
-                <Legend iconType="circle" iconSize={8} itemSorter={seriesRank} formatter={legendText} wrapperStyle={{ fontSize: '13px', color: CHART_PALETTE.labelNeutral }} />
+                <Legend iconType="circle" iconSize={8} itemSorter={seriesRank} formatter={legendText} wrapperStyle={{ fontSize: '14px', color: CHART_PALETTE.labelNeutral }} />
                 <Bar dataKey="plannedRevenue" name={planShort} isAnimationActive={seriesAnimating} fill={chartColors.planRevenue} radius={[4, 4, 0, 0]}>
                   {roomForBarLabels && (
                     <LabelList dataKey="plannedRevenue" position="top" formatter={manLabel} fontSize={10} fill={chartColors.planRevenue} />
@@ -690,7 +698,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
           />
           <div className="mt-5 h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={cumulativeChart} margin={{ top: 16, right: 8, left: -8, bottom: 0 }} aria-label={`${t('dashboard.charts.cumulative', 'Cumulative revenue')} ${currentYear}`}>
+              <ComposedChart data={cumulativeChart} margin={{ top: 16, right: 8, left: 0, bottom: 0 }} aria-label={`${t('dashboard.charts.cumulative', 'Cumulative revenue')} ${currentYear}`}>
                 <defs>
                   <linearGradient id="dashboardAccActual" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor={chartColors.accActual} stopOpacity={0.16} />
@@ -699,9 +707,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_PALETTE.grid} />
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={AXIS_TICK} />
-                <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} tickFormatter={(val: number) => `${nf(Math.round(val / 10000))}${manYen}`} />
+                <YAxis width="auto" axisLine={false} tickLine={false} tick={AXIS_TICK} tickFormatter={(val: number) => `${nf(Math.round(val / 10000))}${manYen}`} />
                 <Tooltip formatter={val => (typeof val === 'number' ? fmt(val) : '–')} {...TOOLTIP_STYLE} />
-                <Legend iconType="circle" iconSize={8} itemSorter={seriesRank} formatter={legendText} wrapperStyle={{ fontSize: '13px', color: CHART_PALETTE.labelNeutral }} />
+                <Legend iconType="circle" iconSize={8} itemSorter={seriesRank} formatter={legendText} wrapperStyle={{ fontSize: '14px', color: CHART_PALETTE.labelNeutral }} />
                 <Area
                   type="monotone"
                   dataKey="accActualRevenue"
@@ -780,7 +788,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentYear }) => {
           <h3 className="text-[15px] font-bold text-slate-900 dark:text-white">
             {t('dashboard.assumptions.title', 'Settings')}
           </h3>
-          <p className="mt-0.5 text-[13px] leading-5 text-slate-500 dark:text-slate-400">
+          <p className="mt-0.5 text-sm leading-5 text-slate-500 dark:text-slate-400">
             {isAdmin
               ? t('dashboard.assumptions.descAdmin', 'Shared with everyone. Changes save as you type.')
               : t('dashboard.assumptions.descViewer', 'Set by an administrator.')}
