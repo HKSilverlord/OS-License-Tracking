@@ -26,6 +26,7 @@ The mock harness files and `harness-tests/` are **not in the repo**. They exist 
 ## Commands
 
 - `npm run verify` runs, in order: typecheck, lint, `check:locales` (ja/en/vn must hold the same keys), and build. The build's warning about a chunk over 500 kB was there before this work.
+  - Run it in the background, without a `timeout`. On a saturated disk, and beside browser tests, it once ran past 15 minutes. Run alone, the steps took 18 s, 16 s, 2 s and 164 s.
 - **Mock harness:** `npx vite --config vite.harness.config.ts`, then open `http://127.0.0.1:4190/chart-harness.html?lang=en&theme=light#/monthly-plan-actual`.
   - It runs the real app on fixture data. `#/` opens the business report, like the app; the Dashboard is `#/dashboard`.
     - `harness-db.ts`: planned and actual hours, with actuals for Jan–Aug and none for Sep–Dec.
@@ -64,6 +65,8 @@ The mock harness files and `harness-tests/` are **not in the repo**. They exist 
     - serve the bundle on another port, with `npx vite preview --config vite.harness-bundle.config.ts --port 4191 --strictPort`;
     - set `HARNESS=http://127.0.0.1:4191/chart-harness.html` (`cdp.mjs` reads it).
 
+    On a saturated disk even the bundle can take 20–40 s for a fresh browser's first chart. Then copy the test to the scratchpad with its wait raised (`i < 200` to `i < 1000`, and its import made absolute), as was done for #10. A Recharts warning, "The width(-1) and height(-1) of chart should be greater than 0", appears on the Dashboard's first render. It was there before #10 and is harmless.
+
 ## Browser test kit (`harness-tests/`)
 
 Like the harness, this kit is not in the repo (see the top of this file). The kit drives headless Chrome over CDP directly, without Playwright. It uses the Chrome at `C:/Program Files/Google/Chrome/Application/chrome.exe`. Each browser gets a temporary profile at `%TEMP%\cdp-*`. A run that is killed leaves its profile behind, so delete leftovers afterwards.
@@ -84,6 +87,7 @@ Like the harness, this kit is not in the repo (see the top of this file). The ki
   - `pgeo.mjs`: Monthly's column geometry.
   - `pshot.mjs`: a screenshot of Monthly with stored colours (`PREFS` holds the JSON).
 - `qa/` holds the QA agent's checks for PR #5. They use their own `lib.mjs`, and write their output to `qa/out/`.
+  - Their browser comes from `font/cdp7.mjs`, which gives Chrome 15 s to start. On a saturated disk it fails with "chrome did not start". Run one set and width at a time, and retry.
   - `q-crafted.mjs`: Monthly with crafted data. The bundled harness's monthly fixture is patched in the test browser only, so it needs the bundled harness. `SETS=lvl4,lvl5 WS=390` runs the level-months case.
   - `q-colors.mjs`: Monthly with stored series styles.
   - `q-exp.mjs`: exports in ja and vn.
@@ -212,6 +216,7 @@ In October 2026 every page's text was raised one step, so the screen reads from 
 - `LabelList` passes `offset = 5` to custom content.
 - With an explicit domain, `useYAxisDomain` returns that exact domain; it is not rounded ("niced").
 - Labels render into a z-index portal layer (`DefaultZIndexes.label` = 2000), in mount order unless they are given a `zIndex`.
+- `YAxis width="auto"` measures its tick labels and sizes the axis to fit. The Dashboard uses it. It draws once and then settles: 0 DOM changes once the grow-in ends.
 - Bars without a fixed `barSize` share a month equally:
   - Each share is `floor((band × 0.8 − 4 × (bars − 1)) / bars)` wide, where `band = plot width / months`, 10 % stays clear at each side, and bars are 4 px apart.
   - Each bar is centred in its share, and `maxBarSize` only narrows the bar.
@@ -238,7 +243,7 @@ In October 2026 every page's text was raised one step, so the screen reads from 
 - Keep sizes in the variant maps only.
 
 **Windows and Git Bash**
-- Set `MSYS_NO_PATHCONV=1` when passing `/routes` through environment variables.
+- Set `MSYS_NO_PATHCONV=1` when passing `/routes` through environment variables. On the same command, give node its script as `C:/...`: a `/c/Users/...` path then reaches node unconverted and resolves to `C:\c\Users\...`.
 - An empty `.git/index.lock` was left behind several times by git processes that were killed. If no `git.exe` is running, delete it.
 - Worktrees: unlink the `node_modules` junction before `git worktree remove` (see memory).
 - Other Claude sessions on this machine run heavy jobs. If Vite takes 30 s or more to start, the disk is saturated; the app is not at fault.
@@ -258,7 +263,8 @@ In October 2026 every page's text was raised one step, so the screen reads from 
   - #10 Tables and charts one step larger again, after users said they were still small on a shared screen and on small laptops (see Type scale). Monthly's planned hours drop down their column when level sales figures leave no room beside them.
 - `db/migration_business_reports.sql` was run on the production Supabase on 2026-10-01. A read-only check confirmed the table, RLS, its 4 policies, the stamp trigger and both constraints.
 - The sample deck `OS設計チーム_事業状況報告_2026年9月28日.pptx` in the repo root is the template. It is untracked, and `*.pptx` is ignored. Its last slide holds a login, so never commit it, copy it or quote it.
-- The branches merged through #1–#8 are deleted. The older branches (`chore/cleanup`, `feat/ux-pass`, `feature/redesign`, `fix/export-input-and-race-bugs`, `fix/ux-and-architecture-repair`) predate this work; ask before touching them.
+- #10 was merged on 2026-10-05 as `3830dcf`. Nothing from it is left open. Next steps, if any, come from the Known limitations below or from new user feedback.
+- The branches merged through #1–#10 are deleted. The older branches (`chore/cleanup`, `feat/ux-pass`, `feature/redesign`, `fix/export-input-and-race-bugs`, `fix/ux-and-architecture-repair`) predate this work; ask before touching them.
 
 ## Known limitations and possible next steps
 
